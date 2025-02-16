@@ -21,7 +21,7 @@ The Kubescape Headlamp plugin provides views in Headlamp for configuration and v
 
 - [Headlamp](https://github.com/headlamp-k8s/headlamp) should be installed in the k8s cluster or workstation. For a quick test the desktop version is recommended.
 
-The plugin has been tested with Headlamp v0.25.0 (browser and desktop) and kubescape operator helm chart v1.22.0.
+The plugin has been tested with current versions of Headlamp (browser and desktop) and Kubescape operator.
 
 ## Functionality
 
