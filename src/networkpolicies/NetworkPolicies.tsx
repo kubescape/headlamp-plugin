@@ -9,7 +9,7 @@ import {
   Tabs as HeadlampTabs,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { useEffect, useState } from 'react';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { deepListQuery, generatedNetworkPolicyClass, knownServersClass, listQuery } from '../model';
 import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
 import { KnownServer } from '../softwarecomposition/KnownServer';
@@ -62,7 +62,7 @@ function NetworkPolicyList() {
               accessorFn: (networkPolicy: GeneratedNetworkPolicy) => {
                 return (
                   <HeadlampLink
-                    routeName={RoutingPath.KubescapeNetworkPolicyDiagram}
+                    routeName={RoutingName.KubescapeNetworkPolicyDiagram}
                     params={{
                       name: networkPolicy.metadata.name,
                       namespace: networkPolicy.metadata.namespace,

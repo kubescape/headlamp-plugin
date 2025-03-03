@@ -10,7 +10,7 @@ import {
 import { createRouteURL } from '@kinvolk/headlamp-plugin/lib/Router';
 import { Link } from '@mui/material';
 import { getURLSegments } from '../common/url';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { WorkloadScan } from './fetch-vulnerabilities';
 import { vulnerabilityContext } from './Vulnerabilities';
 
@@ -35,7 +35,7 @@ export default function KubescapeCVEResults() {
   }
   return (
     <>
-      <SectionBox title={cve} backLink={createRouteURL(RoutingPath.KubescapeVulnerabilities)}>
+      <SectionBox title={cve} backLink={createRouteURL(RoutingName.KubescapeVulnerabilities)}>
         <NameValueTable
           rows={[
             {
@@ -71,7 +71,7 @@ function Workloads(props: { cve: string; workloads: WorkloadScan[] }) {
             header: 'Workload',
             accessorFn: (workload: WorkloadScan) => (
               <HeadlampLink
-                routeName={RoutingPath.KubescapeVulnerabilityDetails}
+                routeName={RoutingName.KubescapeVulnerabilityDetails}
                 params={{
                   name: workload.manifestName,
                   namespace: workload.namespace,

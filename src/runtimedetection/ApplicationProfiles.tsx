@@ -8,7 +8,7 @@ import {
 import { localeDate } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { applicationProfileClass } from '../model';
 import { ApplicationProfile } from '../softwarecomposition/ApplicationProfile';
 import { AlertMessagePopup } from './AlertMessagePopup';
@@ -40,7 +40,7 @@ export function ApplicationProfiles() {
                 profile.metadata.labels['kubescape.io/workload-name'],
               Cell: ({ cell, row }: any) => (
                 <HeadlampLink
-                  routeName={RoutingPath.RuntimeDetection}
+                  routeName={RoutingName.RuntimeDetection}
                   params={{
                     name: row.original.metadata.name,
                     namespace: row.original.metadata.namespace,

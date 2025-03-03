@@ -1,31 +1,24 @@
 /* 
   Show workload configuration scans. This view is part of the main Vulnerabilities page.  
 */
-import { K8s } from '@kinvolk/headlamp-plugin/lib';
 import {
   Link,
   SectionBox,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { KubeObject } from '@kinvolk/headlamp-plugin/lib/lib/k8s/cluster';
 import { Box, Stack, Tooltip } from '@mui/material';
-import { useState } from 'react';
 import { makeNamespaceLink } from '../common/Namespace';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { WorkloadScan } from './fetch-vulnerabilities';
+import { vulnerabilityContext } from './Vulnerabilities';
 
 export default function WorkloadScanListView(props: { workloadScans: WorkloadScan[] | null }) {
-  // Get the Kubescape pods to detect the installed namespace
-  const [kubescapePods, setKubescapePods] = useState<KubeObject[]>([]);
-
-  K8s.ResourceClasses.Pod.useApiList(setKubescapePods, {
-    labelSelector: 'app.kubernetes.io/component=kubescape,app.kubernetes.io/instance=kubescape',
-  });
-
   const { workloadScans } = props;
-  if (!workloadScans || !kubescapePods) {
+
+  if (!workloadScans) {
     return <></>;
   }
+
   return (
     <>
       <h5>{workloadScans.length} resources</h5>
@@ -39,7 +32,7 @@ export default function WorkloadScanListView(props: { workloadScans: WorkloadSca
               Cell: ({ cell }: any) => {
                 return (
                   <Link
-                    routeName={RoutingPath.KubescapeVulnerabilityDetails}
+                    routeName={RoutingName.KubescapeVulnerabilityDetails}
                     params={{
                       name: cell.row.original.manifestName,
                       namespace: cell.row.original.namespace,
@@ -104,21 +97,20 @@ export default function WorkloadScanListView(props: { workloadScans: WorkloadSca
               header: 'SBOM',
               accessorFn: (workloadScan: WorkloadScan) => {
                 if (workloadScan.imageScan?.manifestName) {
-                  if (kubescapePods.length > 0)
-                    return (
-                      <Link
-                        routeName={RoutingPath.KubescapeSBOMDetails}
-                        params={{
-                          name:
-                            workloadScan.relevant?.manifestName ??
-                            workloadScan.imageScan?.manifestName,
-                          namespace: kubescapePods[0].jsonData.metadata.namespace, //  namespace in vulnerabilitiesRef is wrong in refering to workload namespace
-                        }}
-                        search={workloadScan.relevant ? '?filtered' : ''}
-                      >
-                        SBOM
-                      </Link>
-                    );
+                  return (
+                    <Link
+                      routeName={RoutingName.KubescapeSBOMDetails}
+                      params={{
+                        name:
+                          workloadScan.relevant?.manifestName ??
+                          workloadScan.imageScan?.manifestName,
+                        namespace: vulnerabilityContext.kubescapeNamespace, //  namespace in vulnerabilitiesRef is wrong in refering to workload namespace
+                      }}
+                      search={workloadScan.relevant ? '?filtered' : ''}
+                    >
+                      SBOM
+                    </Link>
+                  );
                 }
               },
               gridTemplate: 'min-content',

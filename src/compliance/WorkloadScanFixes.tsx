@@ -10,7 +10,7 @@ import * as yaml from 'js-yaml';
 import { cloneDeep } from 'lodash';
 import { useEffect, useState } from 'react';
 import { getURLSegments } from '../common/url';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { fetchObject, proxyRequest, workloadConfigurationScanClass } from '../model';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
 import controlLibrary from './controlLibrary';
@@ -38,7 +38,7 @@ export default function KubescapeWorkloadConfigurationScanFixes() {
     <>
       <SectionBox
         title={control?.name}
-        backLink={createRouteURL(RoutingPath.KubescapeWorkloadConfigurationScanDetails, {
+        backLink={createRouteURL(RoutingName.KubescapeWorkloadConfigurationScanDetails, {
           name: workloadConfigurationScan.metadata.name,
           namespace: workloadConfigurationScan.metadata.namespace,
         })}

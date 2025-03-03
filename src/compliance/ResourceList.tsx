@@ -4,7 +4,7 @@
 import { Link, Table } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, FormControlLabel, Stack, Switch, Tooltip } from '@mui/material';
 import { useState } from 'react';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import controlLibrary from './controlLibrary';
 
@@ -41,7 +41,7 @@ export default function KubescapeWorkloadConfigurationScanList(props: {
                 workloadScan.metadata.labels['kubescape.io/workload-name'],
               Cell: ({ cell, row }: any) => (
                 <Link
-                  routeName={RoutingPath.KubescapeWorkloadConfigurationScanDetails}
+                  routeName={RoutingName.KubescapeWorkloadConfigurationScanDetails}
                   params={{
                     name: row.original.metadata.name,
                     namespace: row.original.metadata.namespace,

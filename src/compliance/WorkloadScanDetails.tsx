@@ -13,7 +13,7 @@ import { createRouteURL } from '@kinvolk/headlamp-plugin/lib/Router';
 import { Link } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { getURLSegments } from '../common/url';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
 import { controlLibrary } from './controlLibrary';
@@ -39,7 +39,7 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
     <>
       <SectionBox
         title="Workload Configuration Scan"
-        backLink={createRouteURL(RoutingPath.ComplianceView)}
+        backLink={createRouteURL(RoutingName.ComplianceView)}
       >
         <NameValueTable
           rows={[
@@ -146,7 +146,7 @@ function Controls(props: { workloadConfigurationScan: WorkloadConfigurationScan 
               if (control.rules.some(rule => rule.paths)) {
                 return (
                   <HeadlampLink
-                    routeName={RoutingPath.KubescapeWorkloadConfigurationScanFixes}
+                    routeName={RoutingName.KubescapeWorkloadConfigurationScanFixes}
                     params={{
                       name: workloadConfigurationScan.metadata.name,
                       namespace: workloadConfigurationScan.metadata.namespace,

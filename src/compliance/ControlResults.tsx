@@ -11,7 +11,7 @@ import { createRouteURL } from '@kinvolk/headlamp-plugin/lib/Router';
 import { Link } from '@mui/material';
 import { makeNamespaceLink } from '../common/Namespace';
 import { getLastURLSegment } from '../common/url';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';
 import controlLibrary from './controlLibrary';
@@ -33,7 +33,7 @@ export default function KubescapeControlResults() {
     <>
       <SectionBox
         title={`${controlID}: ${control.name}`}
-        backLink={createRouteURL(RoutingPath.ComplianceView)}
+        backLink={createRouteURL(RoutingName.ComplianceView)}
       >
         <NameValueTable
           rows={[
@@ -85,7 +85,7 @@ export default function KubescapeControlResults() {
               header: 'Name',
               Cell: ({ cell }: any) => (
                 <HeadlampLink
-                  routeName={RoutingPath.KubescapeWorkloadConfigurationScanDetails}
+                  routeName={RoutingName.KubescapeWorkloadConfigurationScanDetails}
                   params={{
                     name: cell.row.original.metadata.name,
                     namespace: cell.row.original.metadata.namespace,
@@ -125,7 +125,7 @@ export default function KubescapeControlResults() {
                 //if (control.rules.some(rule => rule.paths)) {
                 return (
                   <HeadlampLink
-                    routeName={RoutingPath.KubescapeWorkloadConfigurationScanFixes}
+                    routeName={RoutingName.KubescapeWorkloadConfigurationScanFixes}
                     params={{
                       name: workloadScan.metadata.name,
                       namespace: workloadScan.metadata.namespace,

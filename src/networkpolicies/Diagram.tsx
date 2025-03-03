@@ -13,7 +13,7 @@ import { Edge, MarkerType, Node, ReactFlow, ReactFlowInstance } from '@xyflow/re
 import * as yaml from 'js-yaml';
 import { useEffect, useState } from 'react';
 import { getURLSegments } from '../common/url';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { generatedNetworkPolicyClass } from '../model';
 import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
 import { nodeTypes } from './nodes';
@@ -31,7 +31,7 @@ export default function KubescapeNetworkPolicyDiagram() {
     <>
       <SectionBox
         title="Generated Network Policy"
-        backLink={createRouteURL(RoutingPath.KubescapeNetworkPolicies)}
+        backLink={createRouteURL(RoutingName.KubescapeNetworkPolicies)}
       >
         <HeadlampTabs
           tabs={[

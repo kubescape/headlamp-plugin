@@ -5,7 +5,7 @@ import Editor from '@monaco-editor/react';
 import * as yaml from 'js-yaml';
 import { useState } from 'react';
 import { getURLSegments } from '../common/url';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { applicationProfileClass } from '../model';
 import { ApplicationProfile } from '../softwarecomposition/ApplicationProfile';
 
@@ -25,7 +25,7 @@ export function RuntimeDetection() {
     <>
       <SectionBox
         title="Application Profile"
-        backLink={createRouteURL(RoutingPath.ApplicationProfiles)}
+        backLink={createRouteURL(RoutingName.ApplicationProfiles)}
       >
         <NameValueTable
           rows={[

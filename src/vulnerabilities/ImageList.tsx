@@ -8,7 +8,7 @@ import {
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, Stack, Tooltip } from '@mui/material';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { ImageScan, WorkloadScan } from './fetch-vulnerabilities';
 
 export default function ImageListView(props: { workloadScans: WorkloadScan[] | null }) {
@@ -32,7 +32,7 @@ export default function ImageListView(props: { workloadScans: WorkloadScan[] | n
               Cell: ({ cell, row }: any) => {
                 return (
                   <HeadlampLink
-                    routeName={RoutingPath.ImageVulnerabilityDetails}
+                    routeName={RoutingName.ImageVulnerabilityDetails}
                     params={{
                       name: cell.getValue(),
                       namespace: row.original.namespace,
@@ -74,7 +74,7 @@ export default function ImageListView(props: { workloadScans: WorkloadScan[] | n
               accessorFn: (imageScan: ImageScan) => {
                 return (
                   <HeadlampLink
-                    routeName={RoutingPath.KubescapeSBOMDetails}
+                    routeName={RoutingName.KubescapeSBOMDetails}
                     params={{
                       name: imageScan.manifestName,
                       namespace: imageScan.namespace,

@@ -10,7 +10,7 @@ import {
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/lib/k8s/cluster';
 import { useState } from 'react';
 import { getLastURLSegment } from '../common/url';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { vulnerabilitySummaryClass } from '../model';
 import { VulnerabilitySummary } from '../softwarecomposition/VulnerabilitySummary';
 
@@ -59,7 +59,7 @@ function VulnerabilityScans(props: {
             Cell: ({ cell }: any) => {
               return (
                 <HeadlampLink
-                  routeName={RoutingPath.KubescapeVulnerabilityDetails}
+                  routeName={RoutingName.KubescapeVulnerabilityDetails}
                   params={{
                     name: cell.row.original.name,
                     namespace: cell.row.original.namespace,

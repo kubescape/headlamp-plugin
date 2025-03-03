@@ -10,7 +10,7 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { useState } from 'react';
 import { getLastURLSegment } from '../common/url';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { configurationScanSummariesClass } from '../model';
 import { ConfigurationScanSummary } from '../softwarecomposition/ConfigurationScanSummary';
 
@@ -55,7 +55,7 @@ function ConfigurationScans(props: { configurationScans: ConfigurationScanSummar
             accessorKey: 'name',
             Cell: ({ cell }: any) => (
               <HeadlampLink
-                routeName={RoutingPath.KubescapeWorkloadConfigurationScanDetails}
+                routeName={RoutingName.KubescapeWorkloadConfigurationScanDetails}
                 params={{
                   name: cell.row.original.name,
                   namespace: cell.row.original.namespace,

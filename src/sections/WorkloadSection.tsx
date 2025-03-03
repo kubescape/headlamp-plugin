@@ -9,7 +9,7 @@ import {
 import { Link, NameValueTable, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { useEffect, useState } from 'react';
 import { getControlsSummary } from '../compliance/ControlsSummary';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import {
   fetchObject,
   vulnerabilityManifestSummaryClass,
@@ -99,7 +99,7 @@ function KubescapeInfo(props: { resource: KubeObject }) {
       name: (
         <>
           <Link
-            routeName={RoutingPath.KubescapeWorkloadConfigurationScanDetails}
+            routeName={RoutingName.KubescapeWorkloadConfigurationScanDetails}
             params={{
               name: scanName,
               namespace: namespace,
@@ -129,7 +129,7 @@ function KubescapeInfo(props: { resource: KubeObject }) {
         name: (
           <>
             <Link
-              routeName={RoutingPath.KubescapeVulnerabilityDetails}
+              routeName={RoutingName.KubescapeVulnerabilityDetails}
               params={{
                 name: vulnerabilityScan.metadata.name,
                 namespace: namespace,

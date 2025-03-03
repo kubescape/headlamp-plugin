@@ -11,7 +11,7 @@ const kubescape = 'kubescape';
 const vulnerabilities: string = 'vulnerabilities';
 const compliance: string = 'compliance';
 
-export namespace RoutingPath {
+namespace RoutingPath {
   export const ComplianceView = '/kubescape/compliance';
   export const KubescapeConfigurationScanNamespaceSummary = '/kubescape/compliance/:namespace';
   export const KubescapeWorkloadConfigurationScanDetails =
@@ -31,6 +31,25 @@ export namespace RoutingPath {
   export const VAP = '/kubescape/vap';
   export const ApplicationProfiles = '/kubescape/applicationprofiles';
   export const RuntimeDetection = '/kubescape/runtimedetection/:namespace/:name';
+}
+
+export namespace RoutingName {
+  export const ComplianceView = 'Compliance';
+  export const KubescapeConfigurationScanNamespaceSummary = 'Namespace Configuration Scan';
+  export const KubescapeWorkloadConfigurationScanDetails = 'Configuration Scan';
+  export const KubescapeControlResults = 'Control Configuration Scan';
+  export const KubescapeWorkloadConfigurationScanFixes = 'Workload Configuration Fixes';
+  export const VulnerabilitiesNamespaceSummary = 'Namespace Vulnerabilities';
+  export const KubescapeVulnerabilityDetails = 'Vulnerability';
+  export const KubescapeCVEResults = 'CVE Vulnerabilities';
+  export const ImageVulnerabilityDetails = 'Image Vulnerabilities';
+  export const KubescapeVulnerabilities = 'Vulnerabilities';
+  export const KubescapeNetworkPolicies = 'Network Policies';
+  export const KubescapeNetworkPolicyDiagram = 'Network Policy Diagram';
+  export const KubescapeSBOMDetails = 'Software Bill of Materials';
+  export const VAP = 'Validation Admission Policies';
+  export const ApplicationProfiles = 'Application Profile';
+  export const RuntimeDetection = 'Runtime Detection';
 }
 
 // Kubescape main sidebar
@@ -85,7 +104,7 @@ registerRoute({
   sidebar: compliance,
   component: () => <ComplianceView />,
   exact: true,
-  name: 'Compliance',
+  name: RoutingName.ComplianceView,
 });
 
 import KubescapeConfigurationScanNamespaceSummary from './compliance/NamespaceSummary';
@@ -96,7 +115,7 @@ registerRoute({
   sidebar: compliance,
   component: () => <KubescapeConfigurationScanNamespaceSummary />,
   exact: true,
-  name: 'Namespace Configuration Scan',
+  name: RoutingName.KubescapeConfigurationScanNamespaceSummary,
 });
 
 import KubescapeWorkloadConfigurationScanDetails from './compliance/WorkloadScanDetails';
@@ -107,7 +126,7 @@ registerRoute({
   sidebar: compliance,
   component: () => <KubescapeWorkloadConfigurationScanDetails />,
   exact: true,
-  name: 'Configuration Scan',
+  name: RoutingName.KubescapeWorkloadConfigurationScanDetails,
 });
 
 import KubescapeControlResults from './compliance/ControlResults';
@@ -118,7 +137,7 @@ registerRoute({
   sidebar: compliance,
   component: () => <KubescapeControlResults />,
   exact: true,
-  name: 'Control Configuration Scan',
+  name: RoutingName.KubescapeControlResults,
 });
 
 import KubescapeWorkloadConfigurationScanFixes from './compliance/WorkloadScanFixes';
@@ -129,7 +148,7 @@ registerRoute({
   sidebar: compliance,
   component: () => <KubescapeWorkloadConfigurationScanFixes />,
   exact: true,
-  name: 'Workload Configuration Fixes',
+  name: RoutingName.KubescapeWorkloadConfigurationScanFixes,
 });
 
 import KubescapeVulnerabilities from './vulnerabilities/Vulnerabilities';
@@ -140,7 +159,7 @@ registerRoute({
   sidebar: vulnerabilities,
   component: () => <KubescapeVulnerabilities />,
   exact: true,
-  name: 'Vulnerabilities',
+  name: RoutingName.KubescapeVulnerabilities,
 });
 
 import VulnerabilitiesNamespaceSummary from './vulnerabilities/NamespaceSummary';
@@ -151,7 +170,7 @@ registerRoute({
   sidebar: vulnerabilities,
   component: () => <VulnerabilitiesNamespaceSummary />,
   exact: true,
-  name: 'Namespace Vulnerabilities',
+  name: RoutingName.VulnerabilitiesNamespaceSummary,
 });
 
 import KubescapeVulnerabilityDetails from './vulnerabilities/WorkloadScanDetails';
@@ -162,7 +181,7 @@ registerRoute({
   sidebar: vulnerabilities,
   component: () => <KubescapeVulnerabilityDetails />,
   exact: true,
-  name: 'Vulnerability',
+  name: RoutingName.KubescapeVulnerabilityDetails,
 });
 
 import KubescapeCVEResults from './vulnerabilities/CVEResults';
@@ -173,7 +192,7 @@ registerRoute({
   sidebar: vulnerabilities,
   component: () => <KubescapeCVEResults />,
   exact: true,
-  name: 'CVE Vulnerabilities',
+  name: RoutingName.KubescapeCVEResults,
 });
 
 import ImageVulnerabilityDetails from './vulnerabilities/ImageDetails';
@@ -184,7 +203,7 @@ registerRoute({
   sidebar: vulnerabilities,
   component: () => <ImageVulnerabilityDetails />,
   exact: true,
-  name: 'Image Vulnerabilities',
+  name: RoutingName.ImageVulnerabilityDetails,
 });
 
 import SBOMDetail from './vulnerabilities/SBOMDetail';
@@ -195,7 +214,7 @@ registerRoute({
   sidebar: vulnerabilities,
   component: () => <SBOMDetail />,
   exact: true,
-  name: 'Software Bill of Materials',
+  name: RoutingName.KubescapeSBOMDetails,
 });
 
 import KubescapeNetworkPolicies from './networkpolicies/NetworkPolicies';
@@ -206,7 +225,7 @@ registerRoute({
   sidebar: 'networkpolicies',
   component: () => <KubescapeNetworkPolicies />,
   exact: true,
-  name: 'Network Policies',
+  name: RoutingName.KubescapeNetworkPolicies,
 });
 
 import KubescapeNetworkPolicyDiagram from './networkpolicies/Diagram';
@@ -217,7 +236,7 @@ registerRoute({
   sidebar: 'networkpolicies',
   component: () => <KubescapeNetworkPolicyDiagram />,
   exact: true,
-  name: 'Network Policy Diagram',
+  name: RoutingName.KubescapeNetworkPolicyDiagram,
 });
 
 import { ValidatingAdmissionPolicyEditor } from './validating-admission/ValidatingAdmissionPolicy';
@@ -228,7 +247,7 @@ registerRoute({
   sidebar: 'vap-policies',
   component: () => <ValidatingAdmissionPolicyEditor />,
   exact: true,
-  name: 'Validation Admission Policies',
+  name: RoutingName.VAP,
 });
 
 import { ApplicationProfiles } from './runtimedetection/ApplicationProfiles';
@@ -239,7 +258,7 @@ registerRoute({
   sidebar: 'runtime-detection',
   component: () => <ApplicationProfiles />,
   exact: true,
-  name: 'Runtime Detection',
+  name: RoutingName.ApplicationProfiles,
 });
 
 import { RuntimeDetection } from './runtimedetection/RuntimeDetection';
@@ -250,7 +269,7 @@ registerRoute({
   sidebar: 'runtime-detection',
   component: () => <RuntimeDetection />,
   exact: true,
-  name: 'Application Profile',
+  name: RoutingName.RuntimeDetection,
 });
 
 // Detail panel for workloads

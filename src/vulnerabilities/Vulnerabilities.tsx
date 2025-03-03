@@ -15,7 +15,7 @@ import { Box, Button, FormControlLabel, Stack, Switch, Typography } from '@mui/m
 import { useEffect, useState } from 'react';
 import { RotatingLines } from 'react-loader-spinner';
 import makeSeverityLabel from '../common/SeverityLabel';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { listQuery, vulnerabilityManifestSummaryClass } from '../model';
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
 import { fetchVulnerabilityManifests, WorkloadScan } from './fetch-vulnerabilities';
@@ -200,7 +200,7 @@ function CVEListView(props: { loading: boolean; workloadScans: WorkloadScan[] | 
               accessorFn: (item: CVEScan) => item.CVE,
               Cell: ({ cell }: any) => (
                 <HeadlampLink
-                  routeName={RoutingPath.KubescapeCVEResults}
+                  routeName={RoutingName.KubescapeCVEResults}
                   params={{
                     cve: cell.getValue(),
                   }}
@@ -246,7 +246,7 @@ function CVEListView(props: { loading: boolean; workloadScans: WorkloadScan[] | 
               accessorFn: (item: CVEScan) => item.workloads.size,
               Cell: ({ cell, row }: any) => (
                 <HeadlampLink
-                  routeName={RoutingPath.KubescapeCVEResults}
+                  routeName={RoutingName.KubescapeCVEResults}
                   params={{
                     cve: row.original.CVE,
                   }}

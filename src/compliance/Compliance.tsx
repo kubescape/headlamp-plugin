@@ -22,7 +22,7 @@ import {
 import { useEffect, useState } from 'react';
 import { RotatingLines } from 'react-loader-spinner';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { fetchObject, listQuery } from '../model';
 import { workloadConfigurationScanSummaryClass } from '../model';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
@@ -309,7 +309,7 @@ function makeResultsLabel(workloadScanData: WorkloadConfigurationScanSummary[], 
   if (failCount > 0) {
     return (
       <HeadlampLink
-        routeName={RoutingPath.KubescapeControlResults}
+        routeName={RoutingName.KubescapeControlResults}
         params={{
           control: control.controlID,
         }}

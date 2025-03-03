@@ -6,7 +6,7 @@ import {
   SectionBox,
   Table,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 class NamespaceResult {
   namespace: string;
@@ -42,7 +42,7 @@ export default function NamespaceView(props: {
             accessorKey: 'namespace',
             Cell: ({ cell }: any) => (
               <HeadlampLink
-                routeName={RoutingPath.KubescapeConfigurationScanNamespaceSummary}
+                routeName={RoutingName.KubescapeConfigurationScanNamespaceSummary}
                 params={{
                   namespace: cell.getValue(),
                 }}

@@ -13,7 +13,7 @@ import { FormControlLabel, Link, Switch } from '@mui/material';
 import { useEffect, useState } from 'react';
 import makeSeverityLabel from '../common/SeverityLabel';
 import { getURLSegments } from '../common/url';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
 import { getCVESummary } from './CVESummary';
@@ -38,7 +38,7 @@ export default function KubescapeVulnerabilityDetails() {
       <>
         <SectionBox
           title="Vulnerabilities"
-          backLink={createRouteURL(RoutingPath.KubescapeVulnerabilities)}
+          backLink={createRouteURL(RoutingName.KubescapeVulnerabilities)}
         >
           <NameValueTable
             rows={[

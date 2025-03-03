@@ -13,7 +13,7 @@ import { Link } from '@mui/material';
 import { useState } from 'react';
 import makeSeverityLabel from '../common/SeverityLabel';
 import { getURLSegments } from '../common/url';
-import { RoutingPath } from '../index';
+import { RoutingName } from '../index';
 import { vulnerabilityManifestClass } from '../model';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 
@@ -29,7 +29,7 @@ export default function ImageVulnerabilityDetails() {
         <>
           <SectionBox
             title="Image Vulnerabilities"
-            backLink={createRouteURL(RoutingPath.KubescapeVulnerabilities)}
+            backLink={createRouteURL(RoutingName.KubescapeVulnerabilities)}
           >
             <NameValueTable
               rows={[
