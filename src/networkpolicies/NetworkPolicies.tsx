@@ -52,57 +52,65 @@ function NetworkPolicyList() {
   }
 
   return (
-    <>
-      <SectionBox>
-        <HeadlampTable
-          data={networkPolicies}
-          columns={[
-            {
-              header: 'Name',
-              accessorFn: (networkPolicy: GeneratedNetworkPolicy) => {
-                return (
-                  <HeadlampLink
-                    routeName={RoutingName.KubescapeNetworkPolicyDiagram}
-                    params={{
-                      name: networkPolicy.metadata.name,
-                      namespace: networkPolicy.metadata.namespace,
-                    }}
-                  >
-                    {networkPolicy.metadata.labels['kubescape.io/workload-name']}
-                  </HeadlampLink>
-                );
-              },
-              gridTemplate: 'auto',
+    <SectionBox>
+      <HeadlampTable
+        data={networkPolicies}
+        columns={[
+          {
+            header: 'Name',
+            accessorFn: (networkPolicy: GeneratedNetworkPolicy) => {
+              return (
+                <HeadlampLink
+                  routeName={RoutingName.KubescapeNetworkPolicyDiagram}
+                  params={{
+                    name: networkPolicy.metadata.name,
+                    namespace: networkPolicy.metadata.namespace,
+                  }}
+                >
+                  {networkPolicy.metadata.labels['kubescape.io/workload-name']}
+                </HeadlampLink>
+              );
             },
-            {
-              header: 'Kind',
-              accessorFn: (networkPolicy: GeneratedNetworkPolicy) =>
-                networkPolicy.metadata.labels['kubescape.io/workload-kind'],
-              gridTemplate: 'auto',
-            },
-            {
-              header: 'Namespace',
-              accessorFn: (networkPolicy: GeneratedNetworkPolicy) =>
-                networkPolicy.metadata.labels['kubescape.io/workload-namespace'],
-              gridTemplate: 'auto',
-            },
-            {
-              header: 'Ingresses',
-              accessorFn: (networkPolicy: GeneratedNetworkPolicy) =>
-                networkPolicy.spec.spec.ingress?.length,
-              gridTemplate: 'min-content',
-            },
-            {
-              header: 'Egresses',
-              accessorFn: (networkPolicy: GeneratedNetworkPolicy) =>
-                networkPolicy.spec.spec.egress?.length,
-              gridTemplate: 'min-content',
-            },
-          ]}
-        />
-      </SectionBox>
-    </>
+            gridTemplate: 'auto',
+          },
+          {
+            header: 'Kind',
+            accessorFn: (networkPolicy: GeneratedNetworkPolicy) =>
+              networkPolicy.metadata.labels['kubescape.io/workload-kind'],
+            gridTemplate: 'auto',
+          },
+          {
+            header: 'Namespace',
+            accessorFn: (networkPolicy: GeneratedNetworkPolicy) =>
+              networkPolicy.metadata.labels['kubescape.io/workload-namespace'],
+            gridTemplate: 'auto',
+          },
+          {
+            header: 'Ingresses',
+            accessorFn: (networkPolicy: GeneratedNetworkPolicy) =>
+              networkPolicy.spec.spec.ingress?.length,
+            gridTemplate: 'min-content',
+          },
+          {
+            header: 'Egresses',
+            accessorFn: (networkPolicy: GeneratedNetworkPolicy) =>
+              networkPolicy.spec.spec.egress?.length,
+            gridTemplate: 'min-content',
+          },
+        ]}
+      />
+    </SectionBox>
   );
+}
+
+class KnownServerEntry {
+  knownServer: KnownServer;
+  entry: KnownServer.Entry;
+
+  constructor(knownServer: KnownServer, entry: KnownServer.Entry) {
+    this.knownServer = knownServer;
+    this.entry = entry;
+  }
 }
 
 function KnownServerList() {
@@ -118,48 +126,37 @@ function KnownServerList() {
     return <></>;
   }
 
-  class KnownServerEntry {
-    knownServer: KnownServer;
-    entry: KnownServer.Entry;
-
-    constructor(knownServer: KnownServer, entry: KnownServer.Entry) {
-      this.knownServer = knownServer;
-      this.entry = entry;
-    }
-  }
   const serverEntries = knownServers.flatMap(ks =>
     ks.spec.map(entry => new KnownServerEntry(ks, entry))
   );
 
   return (
-    <>
-      <SectionBox>
-        <HeadlampTable
-          data={serverEntries}
-          columns={[
-            {
-              header: 'Item',
-              accessorFn: (item: KnownServerEntry) => item.knownServer.metadata.name,
-              gridTemplate: 'auto',
-            },
-            {
-              header: 'Name',
-              accessorFn: (item: KnownServerEntry) => item.entry.name,
-              gridTemplate: 'auto',
-            },
-            {
-              header: 'Server',
-              accessorFn: (item: KnownServerEntry) => item.entry.server,
-              gridTemplate: 'auto',
-            },
-            {
-              header: 'IPBlock',
-              accessorFn: (item: KnownServerEntry) => item.entry.ipBlock,
-              gridTemplate: 'auto',
-            },
-          ]}
-        />
-      </SectionBox>
-    </>
+    <SectionBox>
+      <HeadlampTable
+        data={serverEntries}
+        columns={[
+          {
+            header: 'Item',
+            accessorFn: (item: KnownServerEntry) => item.knownServer.metadata.name,
+            gridTemplate: 'auto',
+          },
+          {
+            header: 'Name',
+            accessorFn: (item: KnownServerEntry) => item.entry.name,
+            gridTemplate: 'auto',
+          },
+          {
+            header: 'Server',
+            accessorFn: (item: KnownServerEntry) => item.entry.server,
+            gridTemplate: 'auto',
+          },
+          {
+            header: 'IPBlock',
+            accessorFn: (item: KnownServerEntry) => item.entry.ipBlock,
+            gridTemplate: 'auto',
+          },
+        ]}
+      />
+    </SectionBox>
   );
 }

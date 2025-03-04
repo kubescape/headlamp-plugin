@@ -24,9 +24,11 @@ class NamespaceResult {
   }
 }
 
-export default function NamespaceView(props: {
-  workloadScanData: WorkloadConfigurationScanSummary[] | null;
-}) {
+export default function NamespaceView(
+  props: Readonly<{
+    workloadScanData: WorkloadConfigurationScanSummary[] | null;
+  }>
+) {
   const { workloadScanData } = props;
   if (!workloadScanData) {
     return <></>;

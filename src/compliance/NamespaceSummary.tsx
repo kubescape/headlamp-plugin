@@ -34,15 +34,13 @@ export default function KubescapeConfigurationScanNamespaceSummary() {
           configurationScans={configurationScanSummary.jsonData.spec.summaryRef}
         />
       )}
-
-      {/* <SectionBox title="Details">
-        <pre>{YAML.stringify(cr?.jsonData)}</pre>
-      </SectionBox> */}
     </>
   );
 }
 
-function ConfigurationScans(props: { configurationScans: ConfigurationScanSummary.SummaryRef[] }) {
+function ConfigurationScans(
+  props: Readonly<{ configurationScans: ConfigurationScanSummary.SummaryRef[] }>
+) {
   const { configurationScans } = props;
 
   return (

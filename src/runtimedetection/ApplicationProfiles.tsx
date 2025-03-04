@@ -90,85 +90,83 @@ function NodeAgentLogging() {
   }
 
   return (
-    <>
-      <SectionBox title="Runtime Detection">
-        {nodeAgents.map((nodeAgent: KubeObject) => (
-          <NodeLog nodeAgent={nodeAgent} setNodeAgentAlerts={setNodeAgentAlerts} />
-        ))}
-        <HeadlampTable
-          data={alerts}
-          columns={[
+    <SectionBox title="Runtime Detection">
+      {nodeAgents.map((nodeAgent: KubeObject) => (
+        <NodeLog nodeAgent={nodeAgent} setNodeAgentAlerts={setNodeAgentAlerts} />
+      ))}
+      <HeadlampTable
+        data={alerts}
+        columns={[
+          {
+            id: 'time',
+            header: 'Time',
+            accessorKey: 'time',
+            gridTemplate: '1fr',
+            Cell: ({ cell }: any) => {
+              const startOfToday = new Date().setUTCHours(0, 0, 0, 0);
+              if (new Date(cell.getValue()) < new Date(startOfToday)) {
+                return localeDate(cell.getValue());
+              } else {
+                return new Date(cell.getValue()).toLocaleTimeString();
+              }
+            },
+          },
+          {
+            header: 'Message',
+            accessorKey: 'message',
+            gridTemplate: '2fr',
+          },
+          {
+            header: 'Pod',
+            accessorKey: 'RuntimeK8sDetails.podName',
+            gridTemplate: '1fr',
+          },
+          {
+            header: 'Workload',
+            accessorKey: 'RuntimeK8sDetails.workloadName',
+            gridTemplate: '1fr',
+          },
+          {
+            header: 'Namespace',
+            accessorKey: 'RuntimeK8sDetails.workloadNamespace',
+            gridTemplate: '1fr',
+          },
+          {
+            header: 'Node',
+            accessorKey: 'nodeName',
+            gridTemplate: '1fr',
+          },
+          {
+            header: 'Fix',
+            accessorKey: 'BaseRuntimeMetadata.fixSuggestions',
+            Cell: ({ cell }: any) => <ShowHideLabel>{cell.getValue()}</ShowHideLabel>,
+            gridTemplate: '4fr',
+          },
+          {
+            header: '',
+            accessorFn: () => '...',
+            Cell: ({ row }: any) => (
+              <AlertMessagePopup
+                content={JSON.stringify(row.original, null, 2)}
+              ></AlertMessagePopup>
+            ),
+            gridTemplate: '0.1fr',
+          },
+        ]}
+        initialState={{
+          sorting: [
             {
               id: 'time',
-              header: 'Time',
-              accessorKey: 'time',
-              gridTemplate: '1fr',
-              Cell: ({ cell }: any) => {
-                const startOfToday = new Date().setUTCHours(0, 0, 0, 0);
-                if (new Date(cell.getValue()) < new Date(startOfToday)) {
-                  return localeDate(cell.getValue());
-                } else {
-                  return new Date(cell.getValue()).toLocaleTimeString();
-                }
-              },
+              desc: true,
             },
-            {
-              header: 'Message',
-              accessorKey: 'message',
-              gridTemplate: '2fr',
-            },
-            {
-              header: 'Pod',
-              accessorKey: 'RuntimeK8sDetails.podName',
-              gridTemplate: '1fr',
-            },
-            {
-              header: 'Workload',
-              accessorKey: 'RuntimeK8sDetails.workloadName',
-              gridTemplate: '1fr',
-            },
-            {
-              header: 'Namespace',
-              accessorKey: 'RuntimeK8sDetails.workloadNamespace',
-              gridTemplate: '1fr',
-            },
-            {
-              header: 'Node',
-              accessorKey: 'nodeName',
-              gridTemplate: '1fr',
-            },
-            {
-              header: 'Fix',
-              accessorKey: 'BaseRuntimeMetadata.fixSuggestions',
-              Cell: ({ cell }: any) => <ShowHideLabel>{cell.getValue()}</ShowHideLabel>,
-              gridTemplate: '4fr',
-            },
-            {
-              header: '',
-              accessorFn: () => '...',
-              Cell: ({ row }: any) => (
-                <AlertMessagePopup
-                  content={JSON.stringify(row.original, null, 2)}
-                ></AlertMessagePopup>
-              ),
-              gridTemplate: '0.1fr',
-            },
-          ]}
-          initialState={{
-            sorting: [
-              {
-                id: 'time',
-                desc: true,
-              },
-            ],
-          }}
-        />
-      </SectionBox>
-    </>
+          ],
+        }}
+      />
+    </SectionBox>
   );
 }
 
-function NodeLog(props: { nodeAgent: KubeObject; setNodeAgentAlerts: any }) {
+function NodeLog(props: Readonly<{ nodeAgent: KubeObject; setNodeAgentAlerts: any }>) {
   const { nodeAgent, setNodeAgentAlerts } = props;
 
   useEffect(() => {

@@ -8,9 +8,11 @@ import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import controlLibrary from './controlLibrary';
 
-export default function KubescapeWorkloadConfigurationScanList(props: {
-  workloadScanData: WorkloadConfigurationScanSummary[] | null;
-}) {
+export default function KubescapeWorkloadConfigurationScanList(
+  props: Readonly<{
+    workloadScanData: WorkloadConfigurationScanSummary[] | null;
+  }>
+) {
   const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] = useState(true);
   const { workloadScanData } = props;
   if (!workloadScanData) {
@@ -185,7 +187,7 @@ function countResourceScans(workloadScan: WorkloadConfigurationScanSummary) {
   const counters: number[] = [];
   const severities = ['Critical', 'High', 'Medium', 'Low'];
 
-  severities.map(severity => {
+  severities.forEach(severity => {
     const count = Object.values(workloadScan.spec.controls).filter(
       scan =>
         scan.status.status === WorkloadConfigurationScanSummary.Status.Failed &&

@@ -146,13 +146,15 @@ function fixes(
   return fixes;
 }
 
-function Fix(props: {
-  control: WorkloadConfigurationScan.Control;
-  kind: string;
-  name: string;
-  namespace: string;
-  rulePathPrefix?: string; // to filter rules for relatedObjects
-}) {
+function Fix(
+  props: Readonly<{
+    control: WorkloadConfigurationScan.Control;
+    kind: string;
+    name: string;
+    namespace: string;
+    rulePathPrefix?: string; // to filter rules for relatedObjects
+  }>
+) {
   const { control, kind, name, namespace, rulePathPrefix } = props;
   const [resource, setResource] = useState<any>(null);
 

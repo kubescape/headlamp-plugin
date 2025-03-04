@@ -19,49 +19,45 @@ import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkP
 import { nodeTypes } from './nodes';
 
 export default function KubescapeNetworkPolicyDiagram() {
-  const [networkPolicyObject, setNetworkPolicy] = useState<KubeObject | null>(null);
+  const [networkPolicyObject, setNetworkPolicyObject] = useState<KubeObject | null>(null);
   const [policyName, policyNamespace] = getURLSegments(-1, -2);
 
-  generatedNetworkPolicyClass.useApiGet(setNetworkPolicy, policyName, policyNamespace);
+  generatedNetworkPolicyClass.useApiGet(setNetworkPolicyObject, policyName, policyNamespace);
 
   if (!networkPolicyObject) {
     return <></>;
   }
   return (
-    <>
-      <SectionBox
-        title="Generated Network Policy"
-        backLink={createRouteURL(RoutingName.KubescapeNetworkPolicies)}
-      >
-        <HeadlampTabs
-          tabs={[
-            {
-              label: 'Diagram',
-              component: (
-                <NetworkPolicyDiagram generatedNetworkPolicy={networkPolicyObject.jsonData} />
-              ),
-            },
-            {
-              label: 'NetworkPolicy',
-              component: (
-                <NetworkPolicyEditor yaml={yaml.dump(networkPolicyObject.jsonData.spec)} />
-              ),
-            },
-            {
-              label: 'IP Lookup',
-              component: (
-                <NetworkPolicyEditor yaml={yaml.dump(networkPolicyObject.jsonData.policyRef)} />
-              ),
-            },
-          ]}
-          ariaLabel="Navigation Tabs"
-        />
-      </SectionBox>
-    </>
+    <SectionBox
+      title="Generated Network Policy"
+      backLink={createRouteURL(RoutingName.KubescapeNetworkPolicies)}
+    >
+      <HeadlampTabs
+        tabs={[
+          {
+            label: 'Diagram',
+            component: (
+              <NetworkPolicyDiagram generatedNetworkPolicy={networkPolicyObject.jsonData} />
+            ),
+          },
+          {
+            label: 'NetworkPolicy',
+            component: <NetworkPolicyEditor yaml={yaml.dump(networkPolicyObject.jsonData.spec)} />,
+          },
+          {
+            label: 'IP Lookup',
+            component: (
+              <NetworkPolicyEditor yaml={yaml.dump(networkPolicyObject.jsonData.policyRef)} />
+            ),
+          },
+        ]}
+        ariaLabel="Navigation Tabs"
+      />
+    </SectionBox>
   );
 }
 
-function NetworkPolicyEditor(props: { yaml: string }) {
+function NetworkPolicyEditor(props: Readonly<{ yaml: string }>) {
   const { yaml } = props;
 
   return (
@@ -76,7 +72,7 @@ function NetworkPolicyEditor(props: { yaml: string }) {
   );
 }
 
-function NetworkPolicyDiagram(props: { generatedNetworkPolicy: GeneratedNetworkPolicy }) {
+function NetworkPolicyDiagram(props: Readonly<{ generatedNetworkPolicy: GeneratedNetworkPolicy }>) {
   const { generatedNetworkPolicy } = props;
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance>();
   const [dimensions, setDimensions] = useState({
@@ -101,22 +97,20 @@ function NetworkPolicyDiagram(props: { generatedNetworkPolicy: GeneratedNetworkP
   }
 
   return (
-    <>
-      <SectionBox>
-        <div style={{ height: dimensions.height * 0.8, width: dimensions.width * 0.8 }}>
-          <ReactFlow
-            onInit={(instance: any) => setReactFlowInstance(instance)}
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            colorMode={localStorage.headlampThemePreference}
-            fitView
-            fitViewOptions={{ maxZoom: 1 }}
-            proOptions={{ hideAttribution: true }}
-          ></ReactFlow>
-        </div>
-      </SectionBox>
-    </>
+    <SectionBox>
+      <div style={{ height: dimensions.height * 0.8, width: dimensions.width * 0.8 }}>
+        <ReactFlow
+          onInit={(instance: any) => setReactFlowInstance(instance)}
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          colorMode={localStorage.headlampThemePreference}
+          fitView
+          fitViewOptions={{ maxZoom: 1 }}
+          proOptions={{ hideAttribution: true }}
+        ></ReactFlow>
+      </div>
+    </SectionBox>
   );
 }
 

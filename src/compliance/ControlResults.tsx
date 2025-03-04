@@ -122,7 +122,6 @@ export default function KubescapeControlResults() {
                   )?.status.status === WorkloadConfigurationScanSummary.Status.Passed
                 )
                   return;
-                //if (control.rules.some(rule => rule.paths)) {
                 return (
                   <HeadlampLink
                     routeName={RoutingName.KubescapeWorkloadConfigurationScanFixes}

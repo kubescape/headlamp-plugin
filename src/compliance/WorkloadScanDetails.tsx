@@ -72,7 +72,7 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
   );
 }
 
-function Controls(props: { workloadConfigurationScan: WorkloadConfigurationScan }) {
+function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigurationScan }>) {
   const { workloadConfigurationScan } = props;
   const controls = workloadConfigurationScan.spec.controls;
   const entries = Object.keys(controls).map(key => controls[key]);
@@ -123,11 +123,6 @@ function Controls(props: { workloadConfigurationScan: WorkloadConfigurationScan 
             accessorKey: 'severity.severity',
             gridTemplate: 'min-content',
           },
-          // {
-          //   header: 'Score',
-          //   accessorKey: 'severity.scoreFactor',
-          //   gridTemplate: 'min-content',
-          // },
           {
             header: 'Explain',
             accessorFn: (control: WorkloadConfigurationScan.Control) =>

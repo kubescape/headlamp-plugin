@@ -44,11 +44,7 @@ export default function addKubescapeNamespaceSection(
   // We place our custom section before the EVENTS.
   sections.splice(detailsHeaderIdx, 0, {
     id: customSectionId,
-    section: (
-      <>
-        <KubescapeInfo resource={resource} />
-      </>
-    ),
+    section: <KubescapeInfo resource={resource} />,
   });
 
   return sections;
@@ -67,40 +63,38 @@ function KubescapeInfo(props: { resource: KubeObject }) {
   return (
     configurationScanSummary &&
     vulnerabilitySummary && (
-      <>
-        <SectionBox title="Kubescape">
-          <NameValueTable
-            rows={[
-              {
-                name: (
-                  <Link
-                    routeName={RoutingName.KubescapeConfigurationScanNamespaceSummary}
-                    params={{
-                      namespace: resourceName,
-                    }}
-                  >
-                    Configuration scan
-                  </Link>
-                ),
-                value: getControlsSummary(configurationScanSummary.jsonData),
-              },
-              {
-                name: (
-                  <Link
-                    routeName={RoutingName.VulnerabilitiesNamespaceSummary}
-                    params={{
-                      namespace: resourceName,
-                    }}
-                  >
-                    Vulnerabilities
-                  </Link>
-                ),
-                value: getCVESummary(vulnerabilitySummary.jsonData, false, false),
-              },
-            ]}
-          />
-        </SectionBox>
-      </>
+      <SectionBox title="Kubescape">
+        <NameValueTable
+          rows={[
+            {
+              name: (
+                <Link
+                  routeName={RoutingName.KubescapeConfigurationScanNamespaceSummary}
+                  params={{
+                    namespace: resourceName,
+                  }}
+                >
+                  Configuration scan
+                </Link>
+              ),
+              value: getControlsSummary(configurationScanSummary.jsonData),
+            },
+            {
+              name: (
+                <Link
+                  routeName={RoutingName.VulnerabilitiesNamespaceSummary}
+                  params={{
+                    namespace: resourceName,
+                  }}
+                >
+                  Vulnerabilities
+                </Link>
+              ),
+              value: getCVESummary(vulnerabilitySummary.jsonData, false, false),
+            },
+          ]}
+        />
+      </SectionBox>
     )
   );
 }

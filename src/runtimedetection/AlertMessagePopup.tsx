@@ -3,7 +3,7 @@ import Editor from '@monaco-editor/react';
 import { IconButton, Popover, Toolbar, Typography } from '@mui/material';
 import { useState } from 'react';
 
-export function AlertMessagePopup(props: { content: string }) {
+export function AlertMessagePopup(props: Readonly<{ content: string }>) {
   const { content } = props;
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 

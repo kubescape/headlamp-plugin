@@ -23,8 +23,7 @@ import { useEffect, useState } from 'react';
 import { RotatingLines } from 'react-loader-spinner';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { RoutingName } from '../index';
-import { fetchObject, listQuery } from '../model';
-import { workloadConfigurationScanSummaryClass } from '../model';
+import { fetchObject, listQuery, workloadConfigurationScanSummaryClass } from '../model';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { Control, controlLibrary } from './controlLibrary';
 import NamespaceView from './NamespaceView';
@@ -141,11 +140,15 @@ export default function ComplianceView() {
   );
 }
 
-function ConfigurationScanningListView(props: {
-  loading: boolean;
-  workloadScanData: WorkloadConfigurationScanSummary[] | null;
-}) {
+function ConfigurationScanningListView(
+  props: Readonly<{
+    loading: boolean;
+    workloadScanData: WorkloadConfigurationScanSummary[] | null;
+  }>
+) {
   const { loading, workloadScanData } = props;
+  const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] = useState(true);
+
   if (loading || !workloadScanData)
     return (
       <Box sx={{ padding: 2 }}>
@@ -161,21 +164,7 @@ function ConfigurationScanningListView(props: {
     )
   );
 
-  const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] = useState(true);
   const controls = isFailedControlSwitchChecked ? controlsWithFindings : controlLibrary;
-
-  // const scores = controls.map(control => {
-  //   const evaluated = workloadScanData
-  //     .flatMap(w => Object.values(w.spec.controls))
-  //     .filter(scan => scan.controlID === control.controlID).length;
-  //   const passed = workloadScanData
-  //     .flatMap(w => Object.values(w.spec.controls))
-  //     .filter(scan => scan.controlID === control.controlID)
-  //     .filter(scan => scan.status.status === 'passed').length;
-  //   return passed / evaluated;
-  // });
-  // const sumScore =
-  //   ((scores.reduce((sum, item) => sum + item, 0) / controls.length) * 100).toFixed(0) + '%';
 
   return (
     <>
@@ -355,12 +344,14 @@ export async function fetchConfigurationScanSummaries(
   );
 }
 
-function MoreButton(props: {
-  setLoading: any;
-  setWorkloadScans: any;
-  title: string;
-  readToEnd?: boolean;
-}) {
+function MoreButton(
+  props: Readonly<{
+    setLoading: any;
+    setWorkloadScans: any;
+    title: string;
+    readToEnd?: boolean;
+  }>
+) {
   const { setLoading, setWorkloadScans, title, readToEnd } = props;
 
   return (
