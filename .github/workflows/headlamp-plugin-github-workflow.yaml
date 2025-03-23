@@ -18,8 +18,8 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [21.x]
-        go-version: [1.23.x]
+        node-version: [22.x]
+        go-version: [1.24.x]
 
     steps:
       - uses: actions/checkout@v4
