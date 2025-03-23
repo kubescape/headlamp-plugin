@@ -7,7 +7,7 @@ import {
   SectionBox,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { KubeObject } from '@kinvolk/headlamp-plugin/lib/lib/k8s/cluster';
+import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { useState } from 'react';
 import { getLastURLSegment } from '../common/url';
 import { RoutingName } from '../index';

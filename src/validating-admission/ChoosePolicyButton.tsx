@@ -1,4 +1,4 @@
-import { FormControl, MenuItem, SelectChangeEvent, Stack, TextField } from '@mui/material';
+import { FormControl, MenuItem, Stack, TextField } from '@mui/material';
 import * as yaml from 'js-yaml';
 import { useContext, useEffect, useState } from 'react';
 import { getKubescapePluginUrl } from '../common/PluginHelper';
@@ -21,7 +21,7 @@ export function ChoosePolicyButton() {
       );
   }, []);
 
-  const handleChange = (event: SelectChangeEvent) => {
+  const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setSelectedValue(event.target.value);
     setValidatingAdmissionPolicy(
       policies?.find(policy => policy.metadata.name === event.target.value)

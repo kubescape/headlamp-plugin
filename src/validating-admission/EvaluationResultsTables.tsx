@@ -21,7 +21,7 @@ interface EvaluationResults {
   auditAnnotations: EvalResult[];
 }
 
-export function EvaluationResultsTables(props: { evaluationResult: EvaluationResults }) {
+export function EvaluationResultsTables(props: { evaluationResult: EvaluationResults | null }) {
   const { evaluationResult } = props;
   const [tabValue, setTabValue] = useState(3);
 

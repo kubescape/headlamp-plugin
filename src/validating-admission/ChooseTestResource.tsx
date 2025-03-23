@@ -1,4 +1,4 @@
-import { FormControl, MenuItem, SelectChangeEvent, Stack, TextField } from '@mui/material';
+import { FormControl, MenuItem, Stack, TextField } from '@mui/material';
 import * as yaml from 'js-yaml';
 import { useContext, useEffect, useState } from 'react';
 import { getKubescapePluginUrl } from '../common/PluginHelper';
@@ -20,7 +20,7 @@ export function ChooseTestResource() {
       .then(data => setTestFileNames(data.split(/\r?\n/)));
   }, []);
 
-  const handleChange = (event: SelectChangeEvent) => {
+  const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setSelectedValue(event.target.value);
 
     const indx = testFileNames.findIndex(testFile => testFile === event.target.value);

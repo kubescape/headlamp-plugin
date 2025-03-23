@@ -4,9 +4,9 @@
 import '@xyflow/react/dist/style.css';
 import './style.css';
 import dagre from '@dagrejs/dagre';
+import { Router } from '@kinvolk/headlamp-plugin/lib';
 import { SectionBox, Tabs as HeadlampTabs } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { KubeObject } from '@kinvolk/headlamp-plugin/lib/lib/k8s/cluster';
-import { createRouteURL } from '@kinvolk/headlamp-plugin/lib/Router';
+import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import Editor from '@monaco-editor/react';
 import { Box } from '@mui/material';
 import { Edge, MarkerType, Node, ReactFlow, ReactFlowInstance } from '@xyflow/react';
@@ -17,6 +17,8 @@ import { RoutingName } from '../index';
 import { generatedNetworkPolicyClass } from '../model';
 import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
 import { nodeTypes } from './nodes';
+
+const { createRouteURL } = Router;
 
 export default function KubescapeNetworkPolicyDiagram() {
   const [networkPolicyObject, setNetworkPolicyObject] = useState<KubeObject | null>(null);
@@ -98,7 +100,7 @@ function NetworkPolicyDiagram(props: Readonly<{ generatedNetworkPolicy: Generate
 
   return (
     <SectionBox>
-      <div style={{ height: dimensions.height * 0.8, width: dimensions.width * 0.8 }}>
+      <Box style={{ height: dimensions.height * 0.8, width: dimensions.width * 0.8 }}>
         <ReactFlow
           onInit={(instance: any) => setReactFlowInstance(instance)}
           nodes={nodes}
@@ -109,7 +111,7 @@ function NetworkPolicyDiagram(props: Readonly<{ generatedNetworkPolicy: Generate
           fitViewOptions={{ maxZoom: 1 }}
           proOptions={{ hideAttribution: true }}
         ></ReactFlow>
-      </div>
+      </Box>
     </SectionBox>
   );
 }

@@ -1,7 +1,7 @@
 /* 
   Overview page for vulnerability issues, workloads and images. 
 */
-import { ApiProxy } from '@kinvolk/headlamp-plugin/lib';
+import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   Link as HeadlampLink,
   SectionBox,
@@ -70,7 +70,7 @@ export default function KubescapeVulnerabilities() {
       !arraysEqual(getAllowedNamespaces(), vulnerabilityContext.allowedNamespaces) // check if user changed namespace selection
     ) {
       const fetchData = async () => {
-        const kubescapePods: any[0] = await ApiProxy.request(
+        const kubescapePods: any[0] = await request(
           `/api/v1/pods?labelSelector=${encodeURI(
             'app.kubernetes.io/component=kubescape,app.kubernetes.io/instance=kubescape'
           )}`

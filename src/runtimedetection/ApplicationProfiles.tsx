@@ -1,16 +1,17 @@
-import { K8s, KubeObject } from '@kinvolk/headlamp-plugin/lib';
+import { K8s } from '@kinvolk/headlamp-plugin/lib';
 import {
   Link as HeadlampLink,
   SectionBox,
   ShowHideLabel,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
+import Pod from '@kinvolk/headlamp-plugin/lib/k8s/pod';
 import { localeDate } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { RoutingName } from '../index';
 import { applicationProfileClass } from '../model';
-import { ApplicationProfile } from '../softwarecomposition/ApplicationProfile';
 import { AlertMessagePopup } from './AlertMessagePopup';
 import { NodeAgentLogLine } from './NodeAgentLogLine';
 
@@ -36,8 +37,8 @@ export function ApplicationProfiles() {
           columns={[
             {
               header: 'Name',
-              accessorFn: (profile: ApplicationProfile) =>
-                profile.metadata.labels['kubescape.io/workload-name'],
+              accessorFn: (profile: KubeObject) =>
+                profile.jsonData.metadata.labels['kubescape.io/workload-name'],
               Cell: ({ cell, row }: any) => (
                 <HeadlampLink
                   routeName={RoutingName.RuntimeDetection}
@@ -52,17 +53,17 @@ export function ApplicationProfiles() {
             },
             {
               header: 'Kind',
-              accessorFn: (profile: ApplicationProfile) =>
-                profile.metadata.labels['kubescape.io/workload-kind'],
+              accessorFn: (profile: KubeObject) =>
+                profile.jsonData.metadata.labels['kubescape.io/workload-kind'],
             },
             {
               header: 'Namespace',
-              accessorFn: (profile: ApplicationProfile) => profile.metadata.namespace,
+              accessorFn: (profile: KubeObject) => profile.metadata.namespace,
             },
             {
               header: 'Monitoring',
-              accessorFn: (profile: ApplicationProfile) =>
-                profile.metadata.annotations['kubescape.io/status'],
+              accessorFn: (profile: KubeObject) =>
+                profile.jsonData.metadata.annotations['kubescape.io/status'],
             },
           ]}
         />
@@ -91,7 +92,7 @@ function NodeAgentLogging() {
 
   return (
     <SectionBox title="Runtime Detection">
-      {nodeAgents.map((nodeAgent: KubeObject) => (
+      {nodeAgents.map(nodeAgent => (
         <NodeLog nodeAgent={nodeAgent} setNodeAgentAlerts={setNodeAgentAlerts} />
       ))}
       <HeadlampTable
@@ -166,7 +167,7 @@ function NodeAgentLogging() {
   );
 }
 
-function NodeLog(props: Readonly<{ nodeAgent: KubeObject; setNodeAgentAlerts: any }>) {
+function NodeLog(props: Readonly<{ nodeAgent: Pod; setNodeAgentAlerts: any }>) {
   const { nodeAgent, setNodeAgentAlerts } = props;
 
   useEffect(() => {
@@ -204,7 +205,7 @@ function parseLogChunks(nodeName: string, logChunks: string[]) {
   // join the chunks and split on newline
   const lines = logChunks.join('').split('\n');
 
-  lines.map(line => {
+  lines.forEach(line => {
     // throw away lines which are non-json
     if (!line.startsWith('{') || !line.endsWith('}')) {
       return;

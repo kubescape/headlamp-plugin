@@ -1,13 +1,13 @@
 /* 
   Information about a control and failed workloads. 
 */
+import { Router } from '@kinvolk/headlamp-plugin/lib';
 import {
   Link as HeadlampLink,
   NameValueTable,
   SectionBox,
   Table,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { createRouteURL } from '@kinvolk/headlamp-plugin/lib/Router';
 import { Link } from '@mui/material';
 import { makeNamespaceLink } from '../common/Namespace';
 import { getLastURLSegment } from '../common/url';
@@ -15,6 +15,8 @@ import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';
 import controlLibrary from './controlLibrary';
+
+const { createRouteURL } = Router;
 
 export default function KubescapeControlResults() {
   const controlID = getLastURLSegment();

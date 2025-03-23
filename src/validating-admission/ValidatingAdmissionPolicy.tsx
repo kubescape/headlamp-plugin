@@ -1,4 +1,4 @@
-import { ApiProxy } from '@kinvolk/headlamp-plugin/lib';
+import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import Editor from '@monaco-editor/react';
 import { TabContext, TabList } from '@mui/lab';
 import { Alert, Grid, Stack, Tab, Toolbar, Typography } from '@mui/material';
@@ -50,7 +50,7 @@ export function ValidatingAdmissionPolicyEditor() {
   // Get namespace, if defined in resource
   useEffect(() => {
     if (resourceForNamespace?.metadata?.namespace) {
-      ApiProxy.request(`/api/v1/namespaces/${resourceForNamespace.metadata.namespace}`).then(
+      request(`/api/v1/namespaces/${resourceForNamespace.metadata.namespace}`).then(
         (result: any) => {
           setNamespaceObject(result);
         }

@@ -1,13 +1,13 @@
 /* 
   Show the configuration findings for workloads in a single namespace.  
 */
-import { KubeObject } from '@kinvolk/headlamp-plugin/lib';
 import {
   Link as HeadlampLink,
   MainInfoSection,
   SectionBox,
   Table,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
 import { useState } from 'react';
 import { getLastURLSegment } from '../common/url';
 import { RoutingName } from '../index';
@@ -16,7 +16,7 @@ import { ConfigurationScanSummary } from '../softwarecomposition/ConfigurationSc
 
 export default function KubescapeConfigurationScanNamespaceSummary() {
   const namespace = getLastURLSegment();
-  const [configurationScanSummary, setConfigurationScanSummary] = useState<KubeObject>(null);
+  const [configurationScanSummary, setConfigurationScanSummary] = useState<KubeObject | null>(null);
 
   configurationScanSummariesClass.useApiGet(setConfigurationScanSummary, namespace);
 

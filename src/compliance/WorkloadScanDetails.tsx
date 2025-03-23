@@ -1,6 +1,7 @@
 /* 
   Show configuration scan results for a workload. 
 */
+import { Router } from '@kinvolk/headlamp-plugin/lib';
 import {
   Link as HeadlampLink,
   NameValueTable,
@@ -9,7 +10,6 @@ import {
   StatusLabelProps,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { createRouteURL } from '@kinvolk/headlamp-plugin/lib/Router';
 import { Link } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { getURLSegments } from '../common/url';
@@ -17,6 +17,8 @@ import { RoutingName } from '../index';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
 import { controlLibrary } from './controlLibrary';
+
+const { createRouteURL } = Router;
 
 export default function KubescapeWorkloadConfigurationScanDetails() {
   const [name, namespace] = getURLSegments(-1, -2);

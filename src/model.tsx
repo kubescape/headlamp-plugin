@@ -1,9 +1,10 @@
 /* 
   Kubescape definitions for resources with basic methods for querying. 
 */
-import { ApiProxy, KubeObject } from '@kinvolk/headlamp-plugin/lib';
-import { getAllowedNamespaces, KubeObjectClass } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
-import { makeCustomResourceClass } from '@kinvolk/headlamp-plugin/lib/lib/k8s/crd';
+import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
+import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
+import { makeCustomResourceClass } from '@kinvolk/headlamp-plugin/lib/k8s/crd';
+import { KubeObject, KubeObjectClass } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
 
 const spdxGroup = 'spdx.softwarecomposition.kubescape.io';
 const spdxVersion = 'v1beta1';
@@ -108,13 +109,13 @@ export function proxyRequest(
   pluralName: string
 ): Promise<any> {
   const api = group ? '/apis/' : '/api';
-  return ApiProxy.request(
+  return request(
     `${api}${group}/${version}/${namespace ? 'namespaces/' : ''}${namespace}/${pluralName}/${name}`
   );
 }
 
 export async function listQuery(objectClass: KubeObjectClass): Promise<any> {
-  const namespaces = getAllowedNamespaces();
+  const namespaces: string[] = getAllowedNamespaces();
   const group = objectClass.apiEndpoint.apiInfo[0].group;
   const version = objectClass.apiEndpoint.apiInfo[0].version;
   const pluralName = objectClass.pluralName;
@@ -122,12 +123,12 @@ export async function listQuery(objectClass: KubeObjectClass): Promise<any> {
   if (namespaces?.length > 0) {
     const listOfLists: any[] = await Promise.all(
       namespaces.map(namespace =>
-        ApiProxy.request(`/apis/${group}/${version}/namespaces/${namespace}/${pluralName}`)
+        request(`/apis/${group}/${version}/namespaces/${namespace}/${pluralName}`)
       )
     );
     return listOfLists.flatMap(list => list.items);
   } else {
-    const overviewList = await ApiProxy.request(`/apis/${group}/${version}/${pluralName}`);
+    const overviewList = await request(`/apis/${group}/${version}/${pluralName}`);
 
     return overviewList.items;
   }
@@ -151,7 +152,7 @@ export async function deepListQuery(objectClass: KubeObjectClass): Promise<any[]
 
   const detailList = await Promise.all(
     items.map((object: KubeObject) =>
-      fetchObject(object.metadata.name, object.metadata.namespace, objectClass)
+      fetchObject(object.metadata.name, object.jsonData.metadata.namespace, objectClass)
     )
   );
 

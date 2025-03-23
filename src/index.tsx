@@ -2,7 +2,7 @@
   Registration of menu and routes in headlamp. 
 */
 import {
-  registerDetailsViewSectionsProcessor,
+  registerDetailsViewSection,
   registerRoute,
   registerSidebarEntry,
 } from '@kinvolk/headlamp-plugin/lib';
@@ -100,7 +100,6 @@ import ComplianceView from './compliance/Compliance';
 
 registerRoute({
   path: RoutingPath.ComplianceView,
-  parent: kubescape,
   sidebar: compliance,
   component: () => <ComplianceView />,
   exact: true,
@@ -111,7 +110,6 @@ import KubescapeConfigurationScanNamespaceSummary from './compliance/NamespaceSu
 
 registerRoute({
   path: RoutingPath.KubescapeConfigurationScanNamespaceSummary,
-  parent: kubescape,
   sidebar: compliance,
   component: () => <KubescapeConfigurationScanNamespaceSummary />,
   exact: true,
@@ -122,7 +120,6 @@ import KubescapeWorkloadConfigurationScanDetails from './compliance/WorkloadScan
 
 registerRoute({
   path: RoutingPath.KubescapeWorkloadConfigurationScanDetails,
-  parent: kubescape,
   sidebar: compliance,
   component: () => <KubescapeWorkloadConfigurationScanDetails />,
   exact: true,
@@ -133,7 +130,6 @@ import KubescapeControlResults from './compliance/ControlResults';
 
 registerRoute({
   path: RoutingPath.KubescapeControlResults,
-  parent: kubescape,
   sidebar: compliance,
   component: () => <KubescapeControlResults />,
   exact: true,
@@ -144,7 +140,6 @@ import KubescapeWorkloadConfigurationScanFixes from './compliance/WorkloadScanFi
 
 registerRoute({
   path: RoutingPath.KubescapeWorkloadConfigurationScanFixes,
-  parent: kubescape,
   sidebar: compliance,
   component: () => <KubescapeWorkloadConfigurationScanFixes />,
   exact: true,
@@ -155,7 +150,6 @@ import KubescapeVulnerabilities from './vulnerabilities/Vulnerabilities';
 
 registerRoute({
   path: RoutingPath.KubescapeVulnerabilities,
-  parent: kubescape,
   sidebar: vulnerabilities,
   component: () => <KubescapeVulnerabilities />,
   exact: true,
@@ -166,7 +160,6 @@ import VulnerabilitiesNamespaceSummary from './vulnerabilities/NamespaceSummary'
 
 registerRoute({
   path: RoutingPath.VulnerabilitiesNamespaceSummary,
-  parent: kubescape,
   sidebar: vulnerabilities,
   component: () => <VulnerabilitiesNamespaceSummary />,
   exact: true,
@@ -177,7 +170,6 @@ import KubescapeVulnerabilityDetails from './vulnerabilities/WorkloadScanDetails
 
 registerRoute({
   path: RoutingPath.KubescapeVulnerabilityDetails,
-  parent: kubescape,
   sidebar: vulnerabilities,
   component: () => <KubescapeVulnerabilityDetails />,
   exact: true,
@@ -188,7 +180,6 @@ import KubescapeCVEResults from './vulnerabilities/CVEResults';
 
 registerRoute({
   path: RoutingPath.KubescapeCVEResults,
-  parent: kubescape,
   sidebar: vulnerabilities,
   component: () => <KubescapeCVEResults />,
   exact: true,
@@ -199,7 +190,6 @@ import ImageVulnerabilityDetails from './vulnerabilities/ImageDetails';
 
 registerRoute({
   path: RoutingPath.ImageVulnerabilityDetails,
-  parent: kubescape,
   sidebar: vulnerabilities,
   component: () => <ImageVulnerabilityDetails />,
   exact: true,
@@ -210,7 +200,6 @@ import SBOMDetail from './vulnerabilities/SBOMDetail';
 
 registerRoute({
   path: RoutingPath.KubescapeSBOMDetails,
-  parent: kubescape,
   sidebar: vulnerabilities,
   component: () => <SBOMDetail />,
   exact: true,
@@ -221,7 +210,6 @@ import KubescapeNetworkPolicies from './networkpolicies/NetworkPolicies';
 
 registerRoute({
   path: RoutingPath.KubescapeNetworkPolicies,
-  parent: kubescape,
   sidebar: 'networkpolicies',
   component: () => <KubescapeNetworkPolicies />,
   exact: true,
@@ -232,7 +220,6 @@ import KubescapeNetworkPolicyDiagram from './networkpolicies/Diagram';
 
 registerRoute({
   path: RoutingPath.KubescapeNetworkPolicyDiagram,
-  parent: kubescape,
   sidebar: 'networkpolicies',
   component: () => <KubescapeNetworkPolicyDiagram />,
   exact: true,
@@ -243,7 +230,6 @@ import { ValidatingAdmissionPolicyEditor } from './validating-admission/Validati
 
 registerRoute({
   path: RoutingPath.VAP,
-  parent: 'vap',
   sidebar: 'vap-policies',
   component: () => <ValidatingAdmissionPolicyEditor />,
   exact: true,
@@ -254,7 +240,6 @@ import { ApplicationProfiles } from './runtimedetection/ApplicationProfiles';
 
 registerRoute({
   path: RoutingPath.ApplicationProfiles,
-  parent: kubescape,
   sidebar: 'runtime-detection',
   component: () => <ApplicationProfiles />,
   exact: true,
@@ -265,7 +250,6 @@ import { RuntimeDetection } from './runtimedetection/RuntimeDetection';
 
 registerRoute({
   path: RoutingPath.RuntimeDetection,
-  parent: kubescape,
   sidebar: 'runtime-detection',
   component: () => <RuntimeDetection />,
   exact: true,
@@ -275,9 +259,9 @@ registerRoute({
 // Detail panel for workloads
 import addKubescapeWorkloadSection from './sections/WorkloadSection';
 
-registerDetailsViewSectionsProcessor(addKubescapeWorkloadSection);
+registerDetailsViewSection(addKubescapeWorkloadSection);
 
 // Detail panel for namespaces
 import addKubescapeNamespaceSection from './sections/NamespaceSection';
 
-registerDetailsViewSectionsProcessor(addKubescapeNamespaceSection);
+registerDetailsViewSection(addKubescapeNamespaceSection);

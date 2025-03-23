@@ -1,65 +1,65 @@
 /* 
   Provide information on a CVE and the workloads vulnerable for this CVE. 
 */
+import { Router } from '@kinvolk/headlamp-plugin/lib';
 import {
   Link as HeadlampLink,
   NameValueTable,
   SectionBox,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { createRouteURL } from '@kinvolk/headlamp-plugin/lib/Router';
 import { Link } from '@mui/material';
 import { getURLSegments } from '../common/url';
 import { RoutingName } from '../index';
 import { WorkloadScan } from './fetch-vulnerabilities';
 import { vulnerabilityContext } from './Vulnerabilities';
 
+const { createRouteURL } = Router;
+
 export default function KubescapeCVEResults() {
   const [cve] = getURLSegments(-1);
 
   if (!vulnerabilityContext.workloadScans) {
-    return <div></div>;
+    return <></>;
   }
   const workloadScansFiltered = vulnerabilityContext.workloadScans.filter(workloadScan =>
     workloadScan.imageScan?.matches.some(match => match.vulnerability.id === cve)
   );
   if (!workloadScansFiltered) {
-    return <div></div>;
+    return <></>;
   }
   const firstCVE = workloadScansFiltered[0].imageScan?.matches?.find(
     match => match.vulnerability.id === cve
   );
 
   if (!firstCVE) {
-    return <div></div>;
+    return <></>;
   }
   return (
-    <>
-      <SectionBox title={cve} backLink={createRouteURL(RoutingName.KubescapeVulnerabilities)}>
-        <NameValueTable
-          rows={[
-            {
-              name: 'CVE ID',
-              value: <Link href={firstCVE.vulnerability.dataSource}>{cve}</Link>,
-            },
-            {
-              name: 'Severity',
-              value: firstCVE.vulnerability.severity,
-            },
-            {
-              name: 'Description',
-              value: firstCVE.vulnerability.description,
-            },
-          ]}
-        />
+    <SectionBox title={cve} backLink={createRouteURL(RoutingName.KubescapeVulnerabilities)}>
+      <NameValueTable
+        rows={[
+          {
+            name: 'CVE ID',
+            value: <Link href={firstCVE.vulnerability.dataSource}>{cve}</Link>,
+          },
+          {
+            name: 'Severity',
+            value: firstCVE.vulnerability.severity,
+          },
+          {
+            name: 'Description',
+            value: firstCVE.vulnerability.description,
+          },
+        ]}
+      />
 
-        <Workloads cve={cve} workloads={workloadScansFiltered} />
-      </SectionBox>
-    </>
+      <Workloads cve={cve} workloads={workloadScansFiltered} />
+    </SectionBox>
   );
 }
 
-function Workloads(props: { cve: string; workloads: WorkloadScan[] }) {
+function Workloads(props: Readonly<{ cve: string; workloads: WorkloadScan[] }>) {
   const { cve, workloads } = props;
 
   return (

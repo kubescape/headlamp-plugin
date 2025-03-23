@@ -1,6 +1,6 @@
-import { KubeObject } from '@kinvolk/headlamp-plugin/lib';
+import { Router } from '@kinvolk/headlamp-plugin/lib';
 import { NameValueTable, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { createRouteURL } from '@kinvolk/headlamp-plugin/lib/Router';
+import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
 import Editor from '@monaco-editor/react';
 import * as yaml from 'js-yaml';
 import { useState } from 'react';
@@ -9,17 +9,19 @@ import { RoutingName } from '../index';
 import { applicationProfileClass } from '../model';
 import { ApplicationProfile } from '../softwarecomposition/ApplicationProfile';
 
+const { createRouteURL } = Router;
+
 export function RuntimeDetection() {
   const [name, namespace] = getURLSegments(-1, -2);
-  const [profileObject, setApplicationProfile] = useState<KubeObject | null>(null);
+  const [applicationProfile, setApplicationProfile] = useState<KubeObject | null>(null);
 
   applicationProfileClass.useApiGet(setApplicationProfile, name, namespace);
 
-  if (!profileObject) {
+  if (!applicationProfile) {
     return <></>;
   }
 
-  const profile: ApplicationProfile = profileObject.jsonData;
+  const profile: ApplicationProfile = applicationProfile.jsonData;
 
   return (
     <>

@@ -2,10 +2,9 @@
   Build a horizontack stack with seperate cells for critical, high, medium, low, negligible and unknown. 
 */
 import { Box, Stack, Tooltip } from '@mui/material';
-import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
 
 export function getCVESummary(
-  configurationScanSummary: VulnerabilityManifestSummary,
+  configurationScanSummary: any,
   showUnknown: boolean,
   showNegligible: boolean,
   relevant: boolean = false

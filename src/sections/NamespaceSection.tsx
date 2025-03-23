@@ -1,22 +1,17 @@
 /* 
   Provide a panel on the Headlamp namespace page. 
 */
-import {
-  DefaultDetailsViewSection,
-  DetailsViewSection,
-  KubeObject,
-} from '@kinvolk/headlamp-plugin/lib';
+
 import { Link, NameValueTable, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { DefaultDetailsViewSection } from '@kinvolk/headlamp-plugin/lib/components/DetailsViewSection/detailsViewSectionSlice';
+import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
 import { useState } from 'react';
 import { getControlsSummary } from '../compliance/ControlsSummary';
 import { RoutingName } from '../index';
 import { configurationScanSummariesClass, vulnerabilitySummaryClass } from '../model';
 import { getCVESummary } from '../vulnerabilities/CVESummary';
 
-export default function addKubescapeNamespaceSection(
-  resource: KubeObject,
-  sections: DetailsViewSection[]
-) {
+export default function addKubescapeNamespaceSection(resource: KubeObject, sections: any) {
   // Ignore if there is no resource.
   if (!resource) {
     return sections;
@@ -29,12 +24,12 @@ export default function addKubescapeNamespaceSection(
 
   // Check if we already have added our custom section (this function may be called multiple times).
   const customSectionId = 'kubescape-configuration-scan-summaries';
-  if (sections.findIndex(section => section.id === customSectionId) !== -1) {
+  if (sections.findIndex((section: any) => section.id === customSectionId) !== -1) {
     return sections;
   }
 
   const detailsHeaderIdx = sections.findIndex(
-    section => section.id === DefaultDetailsViewSection.EVENTS
+    (section: any) => section.id === DefaultDetailsViewSection.EVENTS
   );
   // There is no EVENTS section, so we do nothing.
   if (detailsHeaderIdx === -1) {

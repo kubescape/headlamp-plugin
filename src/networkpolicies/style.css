@@ -3,11 +3,11 @@
   border: 1px solid black;
   padding: 4px;
   border-radius: 5px;
-  width: 300px; 
+  width: 300px;
 }
 
 .network-node .text {
-  font-size: 12px; 
+  font-size: 12px;
 }
 
 .network-node .title {
@@ -22,5 +22,5 @@
 }
 
 .react-flow__handle {
-  visibility: hidden; /* hide handle as dragging nodes is not supported */ 
+  visibility: hidden; /* hide handle as dragging nodes is not supported */
 }

@@ -1,14 +1,14 @@
 /* 
   Show vulnerability scan results for a container image. 
 */
+import { Router } from '@kinvolk/headlamp-plugin/lib';
 import {
   NameValueTable,
   SectionBox,
   ShowHideLabel,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { KubeObject } from '@kinvolk/headlamp-plugin/lib/lib/k8s/cluster';
-import { createRouteURL } from '@kinvolk/headlamp-plugin/lib/Router';
+import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { Link } from '@mui/material';
 import { useState } from 'react';
 import makeSeverityLabel from '../common/SeverityLabel';
@@ -17,37 +17,39 @@ import { RoutingName } from '../index';
 import { vulnerabilityManifestClass } from '../model';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 
+const { createRouteURL } = Router;
+
 export default function ImageVulnerabilityDetails() {
   const [name, namespace] = getURLSegments(-1, -2);
-  const [manifestVulnerability, setVulnerabilityManifest] = useState<KubeObject | null>(null);
+  const [manifestVulnerability, setManifestVulnerability] = useState<KubeObject | null>(null);
 
-  vulnerabilityManifestClass.useApiGet(setVulnerabilityManifest, name, namespace);
+  vulnerabilityManifestClass.useApiGet(setManifestVulnerability, name, namespace);
 
   if (manifestVulnerability) {
     return (
-      manifestVulnerability && (
-        <>
-          <SectionBox
-            title="Image Vulnerabilities"
-            backLink={createRouteURL(RoutingName.KubescapeVulnerabilities)}
-          >
-            <NameValueTable
-              rows={[
-                {
-                  name: 'Image',
-                  value: manifestVulnerability.metadata.annotations['kubescape.io/image-tag'],
-                },
-                {
-                  name: 'Last scan',
-                  value: manifestVulnerability.metadata.creationTimestamp,
-                },
-              ]}
-            />
-          </SectionBox>
+      <>
+        <SectionBox
+          title="Image Vulnerabilities"
+          backLink={createRouteURL(RoutingName.KubescapeVulnerabilities)}
+        >
+          <NameValueTable
+            rows={[
+              {
+                name: 'Image',
+                value: manifestVulnerability.metadata.annotations
+                  ? manifestVulnerability.metadata.annotations['kubescape.io/image-tag']
+                  : '',
+              },
+              {
+                name: 'Last scan',
+                value: manifestVulnerability.metadata.creationTimestamp,
+              },
+            ]}
+          />
+        </SectionBox>
 
-          <Matches manifestVulnerability={manifestVulnerability.jsonData} />
-        </>
-      )
+        <Matches manifestVulnerability={manifestVulnerability.jsonData} />
+      </>
     );
   }
 }

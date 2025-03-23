@@ -1,14 +1,14 @@
 /* 
   Show vulnerability scan results for a workload. 
 */
-import { ApiProxy } from '@kinvolk/headlamp-plugin/lib';
+import { Router } from '@kinvolk/headlamp-plugin/lib';
+import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   NameValueTable,
   SectionBox,
   ShowHideLabel,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { createRouteURL } from '@kinvolk/headlamp-plugin/lib/Router';
 import { FormControlLabel, Link, Switch } from '@mui/material';
 import { useEffect, useState } from 'react';
 import makeSeverityLabel from '../common/SeverityLabel';
@@ -17,6 +17,8 @@ import { RoutingName } from '../index';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
 import { getCVESummary } from './CVESummary';
+
+const { createRouteURL } = Router;
 
 export default function KubescapeVulnerabilityDetails() {
   const [name, namespace] = getURLSegments(-1, -2);
@@ -206,7 +208,7 @@ function Matches(props: {
 // Fetch vulnerabilitymanifestsummary and then vulnerabilitymanifest (if available)
 async function fetchVulnerabilityManifest(name: string, namespace: string) {
   function getVulnerabilityManifestSummary(): Promise<any> {
-    return ApiProxy.request(
+    return request(
       `/apis/spdx.softwarecomposition.kubescape.io/v1beta1/namespaces/${namespace}/vulnerabilitymanifestsummaries/${name}`
     );
   }
@@ -215,7 +217,7 @@ async function fetchVulnerabilityManifest(name: string, namespace: string) {
     if (name === '') {
       return Promise.resolve();
     }
-    return ApiProxy.request(
+    return request(
       `/apis/spdx.softwarecomposition.kubescape.io/v1beta1/namespaces/kubescape/vulnerabilitymanifests/${name}`
     );
   }

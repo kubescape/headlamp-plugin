@@ -1,9 +1,8 @@
 /* 
   Show fix suggestion for a workload. 
 */
-import { K8s } from '@kinvolk/headlamp-plugin/lib';
+import { K8s, Router } from '@kinvolk/headlamp-plugin/lib';
 import { NameValueTable, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { createRouteURL } from '@kinvolk/headlamp-plugin/lib/Router';
 import { DiffEditor } from '@monaco-editor/react';
 import { Link } from '@mui/material';
 import * as yaml from 'js-yaml';
@@ -14,6 +13,8 @@ import { RoutingName } from '../index';
 import { fetchObject, proxyRequest, workloadConfigurationScanClass } from '../model';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
 import controlLibrary from './controlLibrary';
+
+const { createRouteURL } = Router;
 
 export default function KubescapeWorkloadConfigurationScanFixes() {
   const [controlID, name, namespace] = getURLSegments(-1, -2, -3);
@@ -159,6 +160,7 @@ function Fix(
   const [resource, setResource] = useState<any>(null);
 
   useEffect(() => {
+    // @ts-ignore
     const kubeObjectClass = K8s.ResourceClasses[kind];
     if (!kubeObjectClass) {
       console.log('Fix view is not supported yet for:' + kind);
