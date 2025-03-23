@@ -34,6 +34,12 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
+      - run: npx @kinvolk/headlamp-plugin lint .
+      - run: npx @kinvolk/headlamp-plugin format --check .
+      - run: npx @kinvolk/headlamp-plugin tsc .
+      - run: npx @kinvolk/headlamp-plugin test .
+      - run: npx @kinvolk/headlamp-plugin build .
+
       - name: Download WASM and Kubescape files
         run: |
           mkdir -p dist 
@@ -41,12 +47,6 @@ jobs:
 
       - name: Build Golang WASM
         run: make build
-
-      - run: npx @kinvolk/headlamp-plugin lint .
-      - run: npx @kinvolk/headlamp-plugin format --check .
-      - run: npx @kinvolk/headlamp-plugin tsc .
-      - run: npx @kinvolk/headlamp-plugin test .
-      - run: npx @kinvolk/headlamp-plugin build .
 
       - name: Create Plugin Archive
         run: |
