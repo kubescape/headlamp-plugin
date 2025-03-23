@@ -2,7 +2,8 @@
   Registration of menu and routes in headlamp. 
 */
 import {
-  registerDetailsViewSection,
+  // @ts-ignore
+  registerDetailsViewSectionsProcessor,
   registerRoute,
   registerSidebarEntry,
 } from '@kinvolk/headlamp-plugin/lib';
@@ -259,9 +260,9 @@ registerRoute({
 // Detail panel for workloads
 import addKubescapeWorkloadSection from './sections/WorkloadSection';
 
-registerDetailsViewSection(addKubescapeWorkloadSection);
+registerDetailsViewSectionsProcessor(addKubescapeWorkloadSection);
 
 // Detail panel for namespaces
 import addKubescapeNamespaceSection from './sections/NamespaceSection';
 
-registerDetailsViewSection(addKubescapeNamespaceSection);
+registerDetailsViewSectionsProcessor(addKubescapeNamespaceSection);
