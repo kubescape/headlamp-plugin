@@ -3,7 +3,6 @@
 */
 import { Link, NameValueTable, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
-import { DefaultDetailsViewSection } from '@kinvolk/headlamp-plugin/lib/plugin/registry';
 import { useEffect, useState } from 'react';
 import { getControlsSummary } from '../compliance/ControlsSummary';
 import { RoutingName } from '../index';
@@ -14,8 +13,7 @@ import {
 } from '../model';
 import { getCVESummary } from '../vulnerabilities/CVESummary';
 
-export default function addKubescapeWorkloadSection(resource: KubeObject, sections: any) {
-  // Ignore if there is no resource.
+export default function addKubescapeWorkloadSection(resource: any, sections: any) {
   if (!resource) {
     return sections;
   }
@@ -31,9 +29,8 @@ export default function addKubescapeWorkloadSection(resource: KubeObject, sectio
     return sections;
   }
 
-  const detailsHeaderIdx = sections.findIndex(
-    (section: any) => section.id === DefaultDetailsViewSection.MAIN_HEADER
-  ); // There is no header, so we do nothing.
+  const detailsHeaderIdx = sections.findIndex((section: any) => section.id === 'MAIN_HEADER');
+  // If there is no header, we do nothing.
   if (detailsHeaderIdx === -1) {
     return sections;
   }

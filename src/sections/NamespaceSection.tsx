@@ -3,7 +3,6 @@
 */
 
 import { Link, NameValueTable, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { DefaultDetailsViewSection } from '@kinvolk/headlamp-plugin/lib/components/DetailsViewSection/detailsViewSectionSlice';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
 import { useState } from 'react';
 import { getControlsSummary } from '../compliance/ControlsSummary';
@@ -11,7 +10,8 @@ import { RoutingName } from '../index';
 import { configurationScanSummariesClass, vulnerabilitySummaryClass } from '../model';
 import { getCVESummary } from '../vulnerabilities/CVESummary';
 
-export default function addKubescapeNamespaceSection(resource: KubeObject, sections: any) {
+export default function addKubescapeNamespaceSection(resource: any, sections: any) {
+  console.log(resource);
   // Ignore if there is no resource.
   if (!resource) {
     return sections;
@@ -28,14 +28,11 @@ export default function addKubescapeNamespaceSection(resource: KubeObject, secti
     return sections;
   }
 
-  const detailsHeaderIdx = sections.findIndex(
-    (section: any) => section.id === DefaultDetailsViewSection.EVENTS
-  );
+  const detailsHeaderIdx = sections.findIndex((section: any) => section.id === 'EVENTS');
   // There is no EVENTS section, so we do nothing.
   if (detailsHeaderIdx === -1) {
     return sections;
   }
-
   // We place our custom section before the EVENTS.
   sections.splice(detailsHeaderIdx, 0, {
     id: customSectionId,
