@@ -38,6 +38,6 @@
     "react-loader-spinner": "^6.1.6"
   },
   "overrides": {
-    "typescript": "5.8.2"
+    "typescript": "5.8.3"
   }
 }
