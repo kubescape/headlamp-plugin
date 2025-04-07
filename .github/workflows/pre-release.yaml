@@ -120,4 +120,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/kubebeam/kubescape-headlamp-plugin:${{ github.event.inputs.releaseName }}
+          tags: ghcr.io/${{ github.repository }}:${{ github.event.inputs.releaseName }}
