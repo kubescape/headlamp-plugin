@@ -7,7 +7,7 @@ homeURL: https://github.com/kubescape/headlamp-plugin
 logoURL: https://avatars.githubusercontent.com/u/100554170
 links:
   - name: Headlamp
-    url: https://github.com/headlamp-k8s/headlamp
+    url: https://headlamp.dev/
   - name: Kubescape operator
     url: https://kubescape.io/docs/operator/
 screenshots:
@@ -38,7 +38,7 @@ readme: |
 
     If the operator is working, custom resources are generated. You can test this with e.g. `kubectl get workloadconfigurationscans -A`.
 
-  - [Headlamp](https://github.com/headlamp-k8s/headlamp) should be installed in the k8s cluster or workstation. For a quick test the desktop version is recommended.
+  - [Headlamp](https://headlamp.dev/) should be installed in the k8s cluster or workstation. For a quick test the desktop version is recommended.
 
   The plugin has been tested with current versions of Headlamp (browser and desktop) and Kubescape operator.
 
