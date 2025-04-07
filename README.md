@@ -1,6 +1,6 @@
 # Kubescape Headlamp Plugin
 
-The Kubescape Headlamp plugin provides an open source plugin for Headlamp. It builds upon the work of [Kubescape](https://kubescape.io/) and [Headlamp](https://github.com/headlamp-k8s/headlamp).
+The Kubescape Headlamp plugin provides an open source plugin for Headlamp. It builds upon the work of [Kubescape](https://kubescape.io/) and [Headlamp](https://headlamp.dev/).
 
 Headlamp is a dashboard for Kubernetes, and is extensible with plugins. Kubescape is a security platform protecting against configuration issues and image vulnerabilities.
 
@@ -19,7 +19,7 @@ The Kubescape Headlamp plugin provides views in Headlamp for configuration and v
 
   If the operator is working, custom resources are generated. You can test this with e.g. `kubectl get workloadconfigurationscans -A`.
 
-- [Headlamp](https://github.com/headlamp-k8s/headlamp) should be installed in the k8s cluster or workstation. For a quick test the desktop version is recommended.
+- [Headlamp](https://headlamp.dev/) should be installed in the k8s cluster or workstation. For a quick test the desktop version is recommended.
 
 The plugin has been tested with current versions of Headlamp (browser and desktop) and Kubescape operator.
 
