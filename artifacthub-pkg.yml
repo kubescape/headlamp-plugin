@@ -3,7 +3,7 @@ name: headlamp_kubescape
 displayName: Kubescape Headlamp Plugin
 createdAt: '2025-03-27T09:26:50Z'
 description: Kubescape compliance and vulnerabilities in Headlamp.
-homeURL: https://github.com/Kubebeam/kubescape-headlamp-plugin
+homeURL: https://github.com/kubescape/headlamp-plugin
 logoURL: https://avatars.githubusercontent.com/u/100554170
 links:
   - name: Headlamp
@@ -12,11 +12,11 @@ links:
     url: https://kubescape.io/docs/operator/
 screenshots:
   - title: Compliance
-    url: https://raw.githubusercontent.com/kubebeam/kubescape-headlamp-plugin/693d664b433f3f3c03e7a8337cd665eb4be32b8e/demo/compliance.png
+    url: https://raw.githubusercontent.com/kubescape/headlamp-plugin/693d664b433f3f3c03e7a8337cd665eb4be32b8e/demo/compliance.png
   - title: Vulnerabilities
-    url: https://raw.githubusercontent.com/kubebeam/kubescape-headlamp-plugin/693d664b433f3f3c03e7a8337cd665eb4be32b8e/demo/vulnerabilities.png
+    url: https://raw.githubusercontent.com/kubescape/headlamp-plugin/693d664b433f3f3c03e7a8337cd665eb4be32b8e/demo/vulnerabilities.png
 annotations:
-  headlamp/plugin/archive-url: https://github.com/kubebeam/kubescape-headlamp-plugin/releases/download/v0.6.0/kubescape-headlamp-plugin-v0.6.0.tar.gz
+  headlamp/plugin/archive-url: https://github.com/kubescape/headlamp-plugin/releases/download/v0.6.0/kubescape-headlamp-plugin-v0.6.0.tar.gz
   headlamp/plugin/archive-checksum: SHA256:ce7a6c77277df96aa239a18affed7628e75d32cacb77f513b0ccb357583683bb
   headlamp/plugin/version-compat: '>=0.25'
   headlamp/plugin/distro-compat: in-cluster,web,docker-desktop,desktop
@@ -53,7 +53,7 @@ readme: |
 
   In-cluster Headlamp 
   - Install Headlamp (https://headlamp.dev/docs/latest/installation/in-cluster/)
-  - The installation files can be found on the release page in github. Here you can download the tarball. Add an initContainer to the headlamp install to download the plugin files. See [example helm values](https://github.com/Kubebeam/kubescape-headlamp-plugin/blob/main/examples/headlamp-helm-values.yaml).
+  - The installation files can be found on the release page in github. Here you can download the tarball. Add an initContainer to the headlamp install to download the plugin files. See [example helm values](https://github.com/kubescape/headlamp-plugin/blob/main/examples/headlamp-helm-values.yaml).
   - Alternatively follow the guidance from headlamp to create a container image with the plugin artifacts: https://headlamp.dev/blog/2022/10/20/best-practices-for-deploying-headlamp-with-plugins/.
 
   ## Functionality
@@ -74,4 +74,4 @@ install: |
 
   In-cluster Headlamp 
   - Install Headlamp (https://headlamp.dev/docs/latest/installation/in-cluster/)
-  - Add an initContainer to the headlamp deployment to download the kubescape-plugin files. See [example helm values](https://github.com/kubebeam/kubescape-headlamp-plugin/blob/main/examples/headlamp-helm-values.yaml).
+  - Add an initContainer to the headlamp deployment to download the kubescape-plugin files. See [example helm values](https://github.com/kubescape/headlamp-plugin/blob/main/examples/headlamp-helm-values.yaml).
