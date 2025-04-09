@@ -19,11 +19,12 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useEffect, useState } from 'react';
-import { RotatingLines } from 'react-loader-spinner';
+import React, { useEffect, useRef, useState } from 'react';
+import { isNewClusterContext } from '../common/clusterContext';
+import { ProgressIndicator } from '../common/ProgressIndicator';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { RoutingName } from '../index';
-import { fetchObject, listQuery, workloadConfigurationScanSummaryClass } from '../model';
+import { paginatedListQuery, workloadConfigurationScanSummaryClass } from '../model';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { Control, controlLibrary } from './controlLibrary';
 import NamespaceView from './NamespaceView';
@@ -32,10 +33,9 @@ import KubescapeWorkloadConfigurationScanList from './ResourceList';
 // workloadScans are cached in global scope because it is an expensive query for the API server
 type ConfigurationScanContext = {
   workloadScans: WorkloadConfigurationScanSummary[];
-  currentCluster: string | null;
-  summaries: WorkloadConfigurationScanSummary[];
-  indexSummary: number;
-  summaryFetchItems: number;
+  currentCluster: string;
+  continuation: number | undefined;
+  pageSize: number;
   allowedNamespaces: string[];
   selectedTab: number;
 };
@@ -43,9 +43,8 @@ type ConfigurationScanContext = {
 export const configurationScanContext: ConfigurationScanContext = {
   workloadScans: [],
   currentCluster: '',
-  summaries: [],
-  indexSummary: 0,
-  summaryFetchItems: 20,
+  continuation: 0,
+  pageSize: 50,
   allowedNamespaces: [],
   selectedTab: 0,
 };
@@ -55,106 +54,98 @@ export default function ComplianceView() {
     WorkloadConfigurationScanSummary[] | null
   >(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
+  const continueReading = useRef(true);
 
   useEffect(() => {
-    const arraysEqual = (a: string[], b: string[]) =>
-      a.length === b.length && a.every((element, index) => element === b[index]);
-
-    if (
-      configurationScanContext.currentCluster !== getCluster() || // check if user switched to another cluster
-      !arraysEqual(getAllowedNamespaces(), configurationScanContext.allowedNamespaces) // check if user changed namespace selection
-    ) {
-      const fetchData = async () => {
-        configurationScanContext.summaries = await listQuery(workloadConfigurationScanSummaryClass);
-        configurationScanContext.currentCluster = getCluster();
+    async function fetchData() {
+      if (
+        isNewClusterContext(
+          configurationScanContext.currentCluster,
+          configurationScanContext.allowedNamespaces
+        )
+      ) {
+        configurationScanContext.continuation = 0;
+        configurationScanContext.currentCluster = getCluster() ?? '';
         configurationScanContext.allowedNamespaces = getAllowedNamespaces();
-
-        configurationScanContext.indexSummary =
-          configurationScanContext.summaryFetchItems > configurationScanContext.summaries.length
-            ? configurationScanContext.summaries.length
-            : configurationScanContext.summaryFetchItems;
-
-        fetchConfigurationScanSummaries(
-          configurationScanContext.summaries.slice(0, configurationScanContext.indexSummary)
-        ).then(response => {
-          configurationScanContext.workloadScans = response;
-
-          setWorkloadScanData(configurationScanContext.workloadScans);
-          setLoading(false);
-        });
-      };
-
-      fetchData().catch(console.error);
-    } else {
+      }
+      if (configurationScanContext.continuation !== undefined) {
+        await fetchWorkloadScanData(continueReading, setProgressMessage, setLoading);
+      }
       setWorkloadScanData(configurationScanContext.workloadScans);
     }
+
+    fetchData();
+    return () => {
+      continueReading.current = false;
+    };
   }, []);
 
   return (
     <>
       <h1>Compliance</h1>
-      <Stack direction="row" spacing={2}>
-        <Typography variant="body1" component="div" sx={{ flexGrow: 1 }}>
-          Reading {configurationScanContext.indexSummary} of{' '}
-          {configurationScanContext.summaries.length} scans
-        </Typography>
-        <MoreButton
-          setLoading={setLoading}
-          setWorkloadScans={setWorkloadScanData}
-          title="Read more"
+      {!loading && (
+        <Stack direction="row" spacing={2}>
+          <Typography variant="body1" component="div">
+            {configurationScanContext.workloadScans.length} scans{' '}
+          </Typography>
+          {configurationScanContext.continuation !== undefined && (
+            <Button
+              onClick={() => {
+                setTimeout(() => {
+                  continueReading.current = true;
+                  fetchWorkloadScanData(continueReading, setProgressMessage, setLoading);
+                });
+              }}
+              variant="contained"
+              sx={{ padding: 1 }}
+            >
+              More scans
+            </Button>
+          )}
+        </Stack>
+      )}
+
+      {loading && (
+        <Box sx={{ padding: 2 }}>
+          <ProgressIndicator continueReading={continueReading} progressMessage={progressMessage} />
+        </Box>
+      )}
+
+      {!loading && workloadScanData && (
+        <HeadlampTabs
+          defaultIndex={configurationScanContext.selectedTab}
+          onTabChanged={tabIndex => (configurationScanContext.selectedTab = tabIndex)}
+          tabs={[
+            {
+              label: 'Controls',
+              component: <ConfigurationScanningListView workloadScanData={workloadScanData} />,
+            },
+            {
+              label: 'Resources',
+              component: (
+                <KubescapeWorkloadConfigurationScanList workloadScanData={workloadScanData} />
+              ),
+            },
+            {
+              label: 'Namespaces',
+              component: <NamespaceView workloadScanData={workloadScanData} />,
+            },
+          ]}
+          ariaLabel="Navigation Tabs"
         />
-        <MoreButton
-          setLoading={setLoading}
-          setWorkloadScans={setWorkloadScanData}
-          title="All"
-          readToEnd
-        />
-      </Stack>
-      <HeadlampTabs
-        defaultIndex={configurationScanContext.selectedTab}
-        onTabChanged={tabIndex => (configurationScanContext.selectedTab = tabIndex)}
-        tabs={[
-          {
-            label: 'Controls',
-            component: (
-              <ConfigurationScanningListView
-                loading={loading}
-                workloadScanData={workloadScanData}
-              />
-            ),
-          },
-          {
-            label: 'Resources',
-            component: (
-              <KubescapeWorkloadConfigurationScanList workloadScanData={workloadScanData} />
-            ),
-          },
-          {
-            label: 'Namespaces',
-            component: <NamespaceView workloadScanData={workloadScanData} />,
-          },
-        ]}
-        ariaLabel="Navigation Tabs"
-      />
+      )}
     </>
   );
 }
 
 function ConfigurationScanningListView(
   props: Readonly<{
-    loading: boolean;
-    workloadScanData: WorkloadConfigurationScanSummary[] | null;
+    workloadScanData: WorkloadConfigurationScanSummary[];
   }>
 ) {
-  const { loading, workloadScanData } = props;
+  const { workloadScanData } = props;
   const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] = useState(true);
-
-  if (loading || !workloadScanData)
-    return (
-      <Box sx={{ padding: 2 }}>
-        <RotatingLines />
-      </Box>
-    );
 
   const controlsWithFindings = controlLibrary.filter(control =>
     workloadScanData?.some(w =>
@@ -330,67 +321,28 @@ function countFailedScans(workloadScanData: WorkloadConfigurationScanSummary[]):
     .filter(scan => scan.status.status === 'failed').length;
 }
 
-export async function fetchConfigurationScanSummaries(
-  summaries: WorkloadConfigurationScanSummary[]
-): Promise<any> {
-  return await Promise.all(
-    summaries.map(async (summary: WorkloadConfigurationScanSummary) => {
-      return await fetchObject(
-        summary.metadata.name,
-        summary.metadata.namespace,
-        workloadConfigurationScanSummaryClass
-      );
-    })
-  );
-}
+async function fetchWorkloadScanData(
+  continueReading: React.MutableRefObject<boolean>,
+  setProgress: (progress: string) => void,
+  setLoading: (loading: boolean) => void
+): Promise<void> {
+  while (continueReading.current && configurationScanContext.continuation !== undefined) {
+    setLoading(true);
+    await paginatedListQuery(
+      workloadConfigurationScanSummaryClass,
+      configurationScanContext.continuation,
+      configurationScanContext.pageSize,
+      getAllowedNamespaces()
+    ).then(response => {
+      const { items, continuation } = response;
 
-function MoreButton(
-  props: Readonly<{
-    setLoading: any;
-    setWorkloadScans: any;
-    title: string;
-    readToEnd?: boolean;
-  }>
-) {
-  const { setLoading, setWorkloadScans, title, readToEnd } = props;
+      configurationScanContext.continuation = continuation;
+      configurationScanContext.workloadScans.push(...items);
+    });
 
-  return (
-    <Button
-      disabled={configurationScanContext.indexSummary === configurationScanContext.summaries.length}
-      onClick={() => {
-        const currentIndex = configurationScanContext.indexSummary;
-        if (readToEnd) {
-          configurationScanContext.indexSummary = configurationScanContext.summaries.length;
-        } else {
-          configurationScanContext.indexSummary =
-            currentIndex + configurationScanContext.summaryFetchItems >
-            configurationScanContext.summaries.length
-              ? configurationScanContext.summaries.length
-              : currentIndex + configurationScanContext.summaryFetchItems;
-        }
-
-        setLoading(true);
-        setTimeout(() =>
-          fetchConfigurationScanSummaries(
-            configurationScanContext.summaries.slice(
-              currentIndex,
-              configurationScanContext.indexSummary
-            )
-          ).then(response => {
-            if (!configurationScanContext.workloadScans)
-              configurationScanContext.workloadScans = response;
-            else
-              configurationScanContext.workloadScans =
-                configurationScanContext.workloadScans?.concat(response);
-
-            setWorkloadScans(configurationScanContext.workloadScans);
-            setLoading(false);
-          })
-        );
-      }}
-      variant="contained"
-    >
-      {title}
-    </Button>
-  );
+    if (configurationScanContext.continuation !== undefined) {
+      setProgress(`Reading ${configurationScanContext.workloadScans.length} scans...`);
+    }
+  }
+  setLoading(false);
 }

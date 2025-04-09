@@ -1,4 +1,5 @@
 import { K8s } from '@kinvolk/headlamp-plugin/lib';
+import { ApiError } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   Link as HeadlampLink,
   SectionBox,
@@ -10,6 +11,7 @@ import Pod from '@kinvolk/headlamp-plugin/lib/k8s/pod';
 import { localeDate } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
+import { ErrorMessage } from '../common/ErrorMessage';
 import { RoutingName } from '../index';
 import { applicationProfileClass } from '../model';
 import { AlertMessagePopup } from './AlertMessagePopup';
@@ -75,13 +77,18 @@ export function ApplicationProfiles() {
 
 function NodeAgentLogging() {
   const [alerts, setAlerts] = useState<NodeAgentLogLine[]>([]);
-  const [nodeAgents] = K8s.ResourceClasses.Pod.useList({
+  const [nodeAgents, error] = K8s.ResourceClasses.Pod.useList({
     labelSelector: 'app.kubernetes.io/component=node-agent,app.kubernetes.io/instance=kubescape',
   });
   const nodeAlerts = useRef<Map<string, NodeAgentLogLine[]>>(new Map());
 
+  if (error) return <ErrorMessage error={error} />;
+
   if (!nodeAgents) {
-    return <></>;
+    const error = new ApiError('Could not find Kubescape NodeAgent pods', {
+      status: 404,
+    });
+    return <ErrorMessage error={error} />;
   }
 
   function setNodeAgentAlerts(nodeName: string, lines: NodeAgentLogLine[]) {
@@ -92,7 +99,7 @@ function NodeAgentLogging() {
 
   return (
     <SectionBox title="Runtime Detection">
-      {nodeAgents.map(nodeAgent => (
+      {nodeAgents?.map(nodeAgent => (
         <NodeLog nodeAgent={nodeAgent} setNodeAgentAlerts={setNodeAgentAlerts} />
       ))}
       <HeadlampTable

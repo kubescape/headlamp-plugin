@@ -10,9 +10,12 @@ import { Box, Stack, Tooltip } from '@mui/material';
 import { makeNamespaceLink } from '../common/Namespace';
 import { RoutingName } from '../index';
 import { WorkloadScan } from './fetch-vulnerabilities';
-import { vulnerabilityContext } from './Vulnerabilities';
 
-export default function WorkloadScanListView(props: { workloadScans: WorkloadScan[] | null }) {
+export default function WorkloadScanListView(
+  props: Readonly<{
+    workloadScans: WorkloadScan[] | null;
+  }>
+) {
   const { workloadScans } = props;
 
   if (!workloadScans) {
@@ -104,7 +107,7 @@ export default function WorkloadScanListView(props: { workloadScans: WorkloadSca
                         name:
                           workloadScan.relevant?.manifestName ??
                           workloadScan.imageScan?.manifestName,
-                        namespace: vulnerabilityContext.kubescapeNamespace, //  namespace in vulnerabilitiesRef is wrong in refering to workload namespace
+                        namespace: workloadScan.imageScan?.namespace, //  namespace in vulnerabilitiesRef is wrong in refering to workload namespace
                       }}
                       search={workloadScan.relevant ? '?filtered' : ''}
                     >

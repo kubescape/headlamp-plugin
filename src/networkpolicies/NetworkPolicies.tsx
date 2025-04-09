@@ -10,7 +10,12 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { useEffect, useState } from 'react';
 import { RoutingName } from '../index';
-import { deepListQuery, generatedNetworkPolicyClass, knownServersClass, listQuery } from '../model';
+import {
+  generatedNetworkPolicyClass,
+  knownServersClass,
+  listQuery,
+  paginatedListQuery,
+} from '../model';
 import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
 import { KnownServer } from '../softwarecomposition/KnownServer';
 
@@ -117,9 +122,12 @@ function KnownServerList() {
   const [knownServers, setKnownServers]: [KnownServer[], any] = useState<KnownServer[]>([]);
 
   useEffect(() => {
-    deepListQuery(knownServersClass).then((result: any) => {
-      setKnownServers(result);
-    });
+    async function fetchData() {
+      await paginatedListQuery(knownServersClass, 0, undefined).then((result: any) => {
+        setKnownServers(result.items);
+      });
+    }
+    fetchData().catch(console.error);
   }, []);
 
   if (!knownServers) {
