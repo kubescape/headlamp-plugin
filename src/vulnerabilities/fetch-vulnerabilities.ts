@@ -1,14 +1,16 @@
 /* 
   Query vulnerabilty data and rework data into VulnerabilityModel for easier processing in the views. 
 */
-
+import { ApiError } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
+import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import {
-  fetchObject,
+  paginatedListQuery,
   vulnerabilityManifestClass,
   vulnerabilityManifestSummaryClass,
 } from '../model';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
+import { vulnerabilityContext } from './Vulnerabilities';
 
 // WorkloadScan is derived from VulnerabilityManifestSummary
 export interface WorkloadScan {
@@ -30,60 +32,133 @@ export interface ImageScan {
   matches: VulnerabilityManifest.Match[];
 }
 
-async function fetchImageScan(name: string, namespace: string): Promise<ImageScan | undefined> {
-  try {
-    const v = await fetchObject(name, namespace, vulnerabilityManifestClass);
-
-    const imageScan: ImageScan = {
-      manifestName: v.metadata.name,
-      namespace: v.metadata.namespace,
-      imageName: v.metadata.annotations['kubescape.io/image-tag'],
-      creationTimestamp: v.metadata.creationTimestamp,
-      matches: v.spec.payload.matches ?? [],
-    };
-    return imageScan;
-  } catch (e) {
-    console.log('Missing manifest ' + name);
-    return Promise.resolve(undefined);
-  }
-}
-
 // Query vulnerabilitymanifestsummaries and vulnerabilitymanifests
 // Convert the retrieved data to WorkloadScan and ImageScan
-export async function fetchVulnerabilityManifests(
-  summaries: VulnerabilityManifestSummary[],
-  kubescapeNamespace: string
-): Promise<any> {
-  return await Promise.all(
-    summaries.map(async (summary: VulnerabilityManifestSummary) => {
-      const detailedSummary = await fetchObject(
-        summary.metadata.name,
-        summary.metadata.namespace,
-        vulnerabilityManifestSummaryClass
-      );
-      const w: WorkloadScan = {
-        manifestName: detailedSummary.metadata.name,
-        name: detailedSummary.metadata.labels['kubescape.io/workload-name'],
-        namespace: detailedSummary.metadata.labels['kubescape.io/workload-namespace'],
-        container: detailedSummary.metadata.labels['kubescape.io/workload-container-name'],
-        kind: detailedSummary.metadata.labels['kubescape.io/workload-kind'],
-        imageScan: undefined,
-        relevant: undefined,
-      };
-      if (detailedSummary.spec.vulnerabilitiesRef?.all?.name) {
-        w.imageScan = await fetchImageScan(
-          detailedSummary.spec.vulnerabilitiesRef.all.name,
-          kubescapeNamespace
-        );
-      }
-      if (detailedSummary.spec.vulnerabilitiesRef?.relevant?.name) {
-        w.relevant = await fetchImageScan(
-          detailedSummary.spec.vulnerabilitiesRef.relevant.name,
-          kubescapeNamespace
-        );
-      }
+async function fetchVulnerabilityManifestSummaries(
+  continueReading: React.MutableRefObject<boolean>,
+  setProgress: (progress: string) => void,
+  setLoading: (loading: boolean) => void,
+  setError: (error: ApiError | null) => void
+): Promise<void> {
+  while (
+    continueReading.current &&
+    vulnerabilityContext.vulnerabilityManifestSummaryContinuation !== undefined
+  ) {
+    setLoading(true);
 
-      return w;
-    })
+    await paginatedListQuery(
+      vulnerabilityManifestSummaryClass,
+      vulnerabilityContext.vulnerabilityManifestSummaryContinuation,
+      vulnerabilityContext.pageSize,
+      getAllowedNamespaces()
+    )
+      .then(response => {
+        const { items, continuation } = response;
+
+        vulnerabilityContext.vulnerabilityManifestSummaryContinuation = continuation;
+
+        for (const item of items) {
+          const detailedSummary: VulnerabilityManifestSummary = item;
+          const w: WorkloadScan = {
+            manifestName: detailedSummary.metadata.name,
+            name: detailedSummary.metadata.labels['kubescape.io/workload-name'],
+            namespace: detailedSummary.metadata.labels['kubescape.io/workload-namespace'],
+            container: detailedSummary.metadata.labels['kubescape.io/workload-container-name'],
+            kind: detailedSummary.metadata.labels['kubescape.io/workload-kind'],
+            imageScan: undefined,
+            relevant: undefined,
+          };
+          vulnerabilityContext.workloadScans.push(w);
+
+          if (detailedSummary.spec.vulnerabilitiesRef?.all?.name) {
+            w.imageScan = vulnerabilityContext.imageScans.get(
+              detailedSummary.spec.vulnerabilitiesRef.all.name
+            );
+          }
+          if (detailedSummary.spec.vulnerabilitiesRef?.relevant?.name) {
+            w.relevant = vulnerabilityContext.imageScans.get(
+              detailedSummary.spec.vulnerabilitiesRef.relevant.name
+            );
+          }
+        }
+      })
+      .catch(error => {
+        continueReading.current = false;
+        setError(error);
+      });
+    if (vulnerabilityContext.vulnerabilityManifestSummaryContinuation !== undefined) {
+      setProgress(
+        `Reading ${vulnerabilityContext.workloadScans.length} VulnerabilityManifestSummaries...`
+      );
+    }
+  }
+  setLoading(false);
+}
+
+/**
+ * Fetch VulnerabilityManifests and convert them to ImageScan objects.
+ *
+ * TODO Improve - All vulnerability manifests are fetched, however this is not OK when the user has limited namespace access. Improve when the VulnerabilityManifest are stored in the workload namespace by the operator.
+ *
+ * This function will continue fetching until the user stops it or the end is reached.
+ * It will also update the progress message.
+ */
+async function fetchVulnerabilityManifests(
+  continueReading: React.MutableRefObject<boolean>,
+  setProgress: (progress: string) => void,
+  setLoading: (loading: boolean) => void,
+  setError: (error: ApiError | null) => void
+): Promise<void> {
+  while (
+    continueReading.current &&
+    vulnerabilityContext.vulnerabilityManifestContinuation !== undefined
+  ) {
+    setLoading(true);
+
+    await paginatedListQuery(
+      vulnerabilityManifestClass,
+      vulnerabilityContext.vulnerabilityManifestContinuation,
+      vulnerabilityContext.pageSize
+    )
+      .then(response => {
+        const { items, continuation } = response;
+
+        vulnerabilityContext.vulnerabilityManifestContinuation = continuation;
+
+        for (const v of items) {
+          const imageScan: ImageScan = {
+            manifestName: v.metadata.name,
+            namespace: v.metadata.namespace,
+            imageName: v.metadata.annotations['kubescape.io/image-tag'],
+            creationTimestamp: v.metadata.creationTimestamp,
+            matches: v.spec.payload.matches ?? [],
+          };
+
+          vulnerabilityContext.imageScans.set(v.metadata.name, imageScan);
+        }
+      })
+      .catch(error => {
+        continueReading.current = false;
+        setError(error);
+      });
+    if (vulnerabilityContext.vulnerabilityManifestContinuation !== undefined) {
+      setProgress(`Reading ${vulnerabilityContext.imageScans.size} VulnerabilityManifests...`);
+    }
+  }
+  setLoading(false);
+}
+
+export async function fetchVulnerabilities(
+  continueReading: React.MutableRefObject<boolean>,
+  setProgressMessage: (progress: string) => void,
+  setLoading: (loading: boolean) => void,
+  setError: (error: ApiError | null) => void
+): Promise<void> {
+  await fetchVulnerabilityManifests(continueReading, setProgressMessage, setLoading, setError);
+  await fetchVulnerabilityManifestSummaries(
+    continueReading,
+    setProgressMessage,
+    setLoading,
+    setError
   );
 }

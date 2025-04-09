@@ -4,7 +4,7 @@
 import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { makeCustomResourceClass } from '@kinvolk/headlamp-plugin/lib/k8s/crd';
-import { KubeObject, KubeObjectClass } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
+import { KubeObjectClass } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
 
 const spdxGroup = 'spdx.softwarecomposition.kubescape.io';
 const spdxVersion = 'v1beta1';
@@ -126,11 +126,39 @@ export async function listQuery(objectClass: KubeObjectClass): Promise<any> {
         request(`/apis/${group}/${version}/namespaces/${namespace}/${pluralName}`)
       )
     );
+
     return listOfLists.flatMap(list => list.items);
   } else {
     const overviewList = await request(`/apis/${group}/${version}/${pluralName}`);
-
     return overviewList.items;
+  }
+}
+export async function paginatedListQuery(
+  objectClass: KubeObjectClass,
+  continuation: number | undefined,
+  pageSize: number | undefined,
+  allowedNamespaces: string[] = []
+): Promise<any> {
+  const group = objectClass.apiEndpoint.apiInfo[0].group;
+  const version = objectClass.apiEndpoint.apiInfo[0].version;
+  const pluralName = objectClass.pluralName;
+
+  let queryFragment = `${pluralName}?resourceVersion=fullSpec&continue=${continuation}`;
+  if (pageSize !== undefined) {
+    queryFragment += `&limit=${pageSize}`;
+  }
+  if (allowedNamespaces.length > 0) {
+    const listOfLists: any[] = await Promise.all(
+      allowedNamespaces.map(namespace =>
+        request(`/apis/${group}/${version}/namespaces/${namespace}/${queryFragment}`)
+      )
+    );
+
+    return { items: listOfLists.flatMap(list => list.items), continuation: undefined };
+  } else {
+    //await new Promise(resolve => setTimeout(resolve, 2000));
+    const overviewList = await request(`/apis/${group}/${version}/${queryFragment}`);
+    return { items: overviewList.items, continuation: overviewList.metadata.continue };
   }
 }
 
@@ -143,18 +171,4 @@ export function fetchObject(
   const version = objectClass.apiEndpoint.apiInfo[0].version;
 
   return proxyRequest(name, namespace, group, version, objectClass.pluralName);
-}
-
-// List methods for spdx.softwarecomposition.kubescape.io do not retrieve info in the spec.
-// As a workaround, deepListQuery() will fetch each item individually.
-export async function deepListQuery(objectClass: KubeObjectClass): Promise<any[]> {
-  const items = await listQuery(objectClass);
-
-  const detailList = await Promise.all(
-    items.map((object: KubeObject) =>
-      fetchObject(object.metadata.name, object.jsonData.metadata.namespace, objectClass)
-    )
-  );
-
-  return detailList;
 }

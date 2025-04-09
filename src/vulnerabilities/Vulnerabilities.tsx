@@ -1,7 +1,7 @@
 /* 
   Overview page for vulnerability issues, workloads and images. 
 */
-import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
+import { ApiError } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   Link as HeadlampLink,
   SectionBox,
@@ -12,13 +12,14 @@ import {
 import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { Box, Button, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { RotatingLines } from 'react-loader-spinner';
+import { isNewClusterContext } from '../common/clusterContext';
+import { ErrorMessage } from '../common/ErrorMessage';
+import { ProgressIndicator } from '../common/ProgressIndicator';
 import makeSeverityLabel from '../common/SeverityLabel';
 import { RoutingName } from '../index';
-import { listQuery, vulnerabilityManifestSummaryClass } from '../model';
-import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
-import { fetchVulnerabilityManifests, WorkloadScan } from './fetch-vulnerabilities';
+import { fetchVulnerabilities, ImageScan, WorkloadScan } from './fetch-vulnerabilities';
 import ImageListView from './ImageList';
 import WorkloadScanListView from './ResourceList';
 
@@ -37,115 +38,116 @@ interface CVEScan {
 // workloadScans are cached in global scope because it is an expensive query for the API server
 type VulnerabilityContext = {
   workloadScans: WorkloadScan[];
-  currentCluster: string | null;
-  summaries: VulnerabilityManifestSummary[];
-  indexSummary: number;
-  summaryFetchItems: number;
+  imageScans: Map<string, ImageScan>;
+  currentCluster: string;
+  vulnerabilityManifestContinuation: number | undefined;
+  vulnerabilityManifestSummaryContinuation: number | undefined;
+  pageSize: number;
   allowedNamespaces: string[];
   selectedTab: number;
-  kubescapeNamespace: string;
 };
 
 export const vulnerabilityContext: VulnerabilityContext = {
   workloadScans: [],
+  imageScans: new Map<string, ImageScan>(),
   currentCluster: '',
-  summaries: [],
-  indexSummary: 0,
-  summaryFetchItems: 20,
+  vulnerabilityManifestContinuation: 0,
+  vulnerabilityManifestSummaryContinuation: 0,
+  pageSize: 50,
   allowedNamespaces: [],
   selectedTab: 0,
-  kubescapeNamespace: '',
 };
 
 export default function KubescapeVulnerabilities() {
-  const [workloadScans, setWorkloadScans] = useState<WorkloadScan[] | null>(null);
+  const [workloadScanData, setWorkloadScanData] = useState<WorkloadScan[] | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
+  const continueReading = useRef(true);
+  const [error, setError] = useState<ApiError | null>(null);
 
   useEffect(() => {
-    const arraysEqual = (a: string[], b: string[]) =>
-      a.length === b.length && a.every((element, index) => element === b[index]);
-
-    if (
-      vulnerabilityContext.currentCluster !== getCluster() || // check if user switched to another cluster
-      !arraysEqual(getAllowedNamespaces(), vulnerabilityContext.allowedNamespaces) // check if user changed namespace selection
-    ) {
-      const fetchData = async () => {
-        const kubescapePods: any[0] = await request(
-          `/api/v1/pods?labelSelector=${encodeURI(
-            'app.kubernetes.io/component=kubescape,app.kubernetes.io/instance=kubescape'
-          )}`
-        );
-        if (kubescapePods?.items.length === 0) {
-          console.error('Could not find Kubescape operator in cluster');
-          return;
-        }
-        vulnerabilityContext.summaries = await listQuery(vulnerabilityManifestSummaryClass);
-        vulnerabilityContext.currentCluster = getCluster();
+    const fetchData = async () => {
+      if (
+        isNewClusterContext(
+          vulnerabilityContext.currentCluster,
+          vulnerabilityContext.allowedNamespaces
+        )
+      ) {
+        vulnerabilityContext.vulnerabilityManifestContinuation = 0;
+        vulnerabilityContext.vulnerabilityManifestSummaryContinuation = 0;
+        vulnerabilityContext.currentCluster = getCluster() ?? '';
         vulnerabilityContext.allowedNamespaces = getAllowedNamespaces();
-        vulnerabilityContext.kubescapeNamespace = kubescapePods.items[0].metadata.namespace;
+      }
 
-        vulnerabilityContext.indexSummary =
-          vulnerabilityContext.summaryFetchItems > vulnerabilityContext.summaries.length
-            ? vulnerabilityContext.summaries.length
-            : vulnerabilityContext.summaryFetchItems;
+      await fetchVulnerabilities(continueReading, setProgressMessage, setLoading, setError);
 
-        fetchVulnerabilityManifests(
-          vulnerabilityContext.summaries.slice(0, vulnerabilityContext.indexSummary),
-          vulnerabilityContext.kubescapeNamespace
-        ).then(response => {
-          vulnerabilityContext.workloadScans = response;
+      setWorkloadScanData(vulnerabilityContext.workloadScans);
+    };
 
-          setWorkloadScans(vulnerabilityContext.workloadScans);
-          setLoading(false);
-        });
-      };
-
-      fetchData().catch(console.error);
-    } else {
-      setWorkloadScans(vulnerabilityContext.workloadScans);
-    }
+    fetchData().catch(console.error);
+    return () => {
+      continueReading.current = false;
+    };
   }, []);
 
   return (
     <>
       <h1>Vulnerabilities</h1>
-      <Stack direction="row" spacing={2}>
-        <Typography variant="body1" component="div" sx={{ flexGrow: 1 }}>
-          Reading {vulnerabilityContext.indexSummary} of {vulnerabilityContext.summaries.length}{' '}
-          scans
-        </Typography>
-        <MoreButton setLoading={setLoading} setWorkloadScans={setWorkloadScans} title="Read more" />
-        <MoreButton
-          setLoading={setLoading}
-          setWorkloadScans={setWorkloadScans}
-          title="All"
-          readToEnd
+      {error && <ErrorMessage error={error} />}
+      {!error && !loading && (
+        <Stack direction="row" spacing={2}>
+          <Typography variant="body1" component="div">
+            {vulnerabilityContext.workloadScans.length} scans{' '}
+          </Typography>
+          {vulnerabilityContext.vulnerabilityManifestSummaryContinuation !== undefined && (
+            <Button
+              onClick={() => {
+                setTimeout(() => {
+                  continueReading.current = true;
+                  fetchVulnerabilities(continueReading, setProgressMessage, setLoading, setError);
+                });
+              }}
+              variant="contained"
+              sx={{ padding: 1 }}
+            >
+              More scans
+            </Button>
+          )}
+        </Stack>
+      )}
+
+      {!error && loading && (
+        <Box sx={{ padding: 2 }}>
+          <ProgressIndicator continueReading={continueReading} progressMessage={progressMessage} />
+        </Box>
+      )}
+
+      {!error && !loading && workloadScanData && (
+        <HeadlampTabs
+          defaultIndex={vulnerabilityContext.selectedTab}
+          onTabChanged={tabIndex => (vulnerabilityContext.selectedTab = tabIndex)}
+          tabs={[
+            {
+              label: 'CVEs',
+              component: <CVEListView loading={loading} workloadScans={workloadScanData} />,
+            },
+            {
+              label: 'Resources',
+              component: <WorkloadScanListView workloadScans={workloadScanData} />,
+            },
+            {
+              label: 'Images',
+              component: <ImageListView workloadScans={workloadScanData} />,
+            },
+          ]}
+          ariaLabel="Navigation Tabs"
         />
-      </Stack>
-      <HeadlampTabs
-        defaultIndex={vulnerabilityContext.selectedTab}
-        onTabChanged={tabIndex => (vulnerabilityContext.selectedTab = tabIndex)}
-        tabs={[
-          {
-            label: 'CVEs',
-            component: <CVEListView loading={loading} workloadScans={workloadScans} />,
-          },
-          {
-            label: 'Resources',
-            component: <WorkloadScanListView workloadScans={workloadScans} />,
-          },
-          {
-            label: 'Images',
-            component: <ImageListView workloadScans={workloadScans} />,
-          },
-        ]}
-        ariaLabel="Navigation Tabs"
-      />
+      )}
     </>
   );
 }
 
-function CVEListView(props: { loading: boolean; workloadScans: WorkloadScan[] | null }) {
+function CVEListView(props: Readonly<{ loading: boolean; workloadScans: WorkloadScan[] | null }>) {
   const { loading, workloadScans } = props;
   const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useState(false);
   const [isFixedCVESwitchChecked, setIsFixedCVESwitchChecked] = useState(false);
@@ -329,50 +331,4 @@ function getCVEList(workloadScans: WorkloadScan[]): CVEScan[] {
   }
 
   return vulnerabilityList;
-}
-
-function MoreButton(props: {
-  setLoading: any;
-  setWorkloadScans: any;
-  title: string;
-  readToEnd?: boolean;
-}) {
-  const { setLoading, setWorkloadScans, title, readToEnd } = props;
-
-  return (
-    <Button
-      disabled={vulnerabilityContext.indexSummary === vulnerabilityContext.summaries.length}
-      onClick={() => {
-        const currentIndex = vulnerabilityContext.indexSummary;
-        if (readToEnd) {
-          vulnerabilityContext.indexSummary = vulnerabilityContext.summaries.length;
-        } else {
-          vulnerabilityContext.indexSummary =
-            currentIndex + vulnerabilityContext.summaryFetchItems >
-            vulnerabilityContext.summaries.length
-              ? vulnerabilityContext.summaries.length
-              : currentIndex + vulnerabilityContext.summaryFetchItems;
-        }
-
-        setLoading(true);
-        setTimeout(() =>
-          fetchVulnerabilityManifests(
-            vulnerabilityContext.summaries.slice(currentIndex, vulnerabilityContext.indexSummary),
-            vulnerabilityContext.kubescapeNamespace
-          ).then(response => {
-            if (!vulnerabilityContext.workloadScans) vulnerabilityContext.workloadScans = response;
-            else
-              vulnerabilityContext.workloadScans =
-                vulnerabilityContext.workloadScans?.concat(response);
-
-            setWorkloadScans(vulnerabilityContext.workloadScans);
-            setLoading(false);
-          })
-        );
-      }}
-      variant="contained"
-    >
-      {title}
-    </Button>
-  );
 }
