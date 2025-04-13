@@ -39,14 +39,13 @@ The queries to the Kubescape database use Headlamps feature for `Allowed namespa
 
 - Install Headlamp (https://headlamp.dev/docs/latest/installation/desktop/)
 - Open Plugin Catalog
-- Turn off "Only Official" (Kubescape plugin has status Verified, not yet Official)
 - Select the KubeScape Headlamp plugin and click the install button
 - After install you may need to restart Headlamp
 
 #### In-cluster Headlamp
 
 - Install Headlamp (https://headlamp.dev/docs/latest/installation/in-cluster/)
-- Add an initContainer to the headlamp deployment to download the kubescape-plugin files. See [example helm values](https://github.com/kubescape/headlamp-plugin/blob/main/examples/headlamp-helm-values.yaml).
+- Deploy the container image `ghcr.io/kubescape/headlamp-plugin` as a sidecar container to the headlamp deployment. See [example helm values](https://github.com/kubescape/headlamp-plugin/blob/main/examples/headlamp-helm-values.yaml).
 
 ## Quick test
 

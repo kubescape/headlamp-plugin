@@ -11,7 +11,7 @@ import { Box, Stack, Tooltip } from '@mui/material';
 import { RoutingName } from '../index';
 import { ImageScan, WorkloadScan } from './fetch-vulnerabilities';
 
-export default function ImageListView(props: { workloadScans: WorkloadScan[] | null }) {
+export default function ImageListView(props: Readonly<{ workloadScans: WorkloadScan[] | null }>) {
   const { workloadScans } = props;
   if (!workloadScans) {
     return <></>;
@@ -138,7 +138,7 @@ function countImageScans(imageScan: ImageScan) {
   const counters: number[] = [];
   const severities = ['Critical', 'High', 'Medium', 'Low'];
 
-  severities.map(severity => {
+  severities.forEach(severity => {
     const count = imageScan.matches.filter(
       match => match.vulnerability.severity === severity
     ).length;
@@ -173,7 +173,7 @@ function cveList(imageScan: ImageScan, severity: string) {
 function getImageScans(workloadScans: WorkloadScan[]): ImageScan[] {
   const imageScans = new Map<string, ImageScan>();
 
-  workloadScans.map(w => {
+  workloadScans.forEach(w => {
     if (w.imageScan) imageScans.set(w.imageScan.manifestName, w.imageScan);
   });
 

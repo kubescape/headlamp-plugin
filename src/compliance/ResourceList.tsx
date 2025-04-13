@@ -6,7 +6,7 @@ import { Box, FormControlLabel, Stack, Switch, Tooltip } from '@mui/material';
 import { useState } from 'react';
 import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
-import controlLibrary from './controlLibrary';
+import { controlLibrary } from './controlLibrary';
 
 export default function KubescapeWorkloadConfigurationScanList(
   props: Readonly<{
