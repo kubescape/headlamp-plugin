@@ -14,7 +14,7 @@ import { getLastURLSegment } from '../common/url';
 import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';
-import controlLibrary from './controlLibrary';
+import { controlLibrary } from './controlLibrary';
 
 const { createRouteURL } = Router;
 
