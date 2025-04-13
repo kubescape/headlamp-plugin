@@ -26,7 +26,8 @@ import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { RoutingName } from '../index';
 import { paginatedListQuery, workloadConfigurationScanSummaryClass } from '../model';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
-import { Control, controlLibrary } from './controlLibrary';
+import { Control } from './Control';
+import { controlLibrary } from './controlLibrary';
 import NamespaceView from './NamespaceView';
 import KubescapeWorkloadConfigurationScanList from './ResourceList';
 

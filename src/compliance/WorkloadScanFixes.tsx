@@ -12,7 +12,7 @@ import { getURLSegments } from '../common/url';
 import { RoutingName } from '../index';
 import { fetchObject, proxyRequest, workloadConfigurationScanClass } from '../model';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
-import controlLibrary from './controlLibrary';
+import { controlLibrary } from './controlLibrary';
 
 const { createRouteURL } = Router;
 

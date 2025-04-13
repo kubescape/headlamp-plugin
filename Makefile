@@ -9,6 +9,12 @@ vap_test_files:=\
 	deployment-with-common-label-2.yaml  \
 	pod.yaml
 
+controls-download: 
+	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/controls -o src/compliance/controlLibrary.ts;
+	
+	sed -i '1s/^/export const controlLibrary: Control[] = \n/' src/compliance/controlLibrary.ts
+	sed -i '1s/^/import { Control } from ".\/Control" \n/' src/compliance/controlLibrary.ts
+
 wasm-download: 
 	# Download WASM exec.js 
 	curl https://raw.githubusercontent.com/golang/go/refs/heads/master/lib/wasm/wasm_exec.js -o src/wasm/wasm_exec.js;
@@ -26,7 +32,7 @@ kubescape-download:
 		echo $$word >> dist/vap-test-files-index.yaml; \
 	done; 
 
-download: wasm-download kubescape-download 
+download: wasm-download kubescape-download controls-download
 
 build: 
 	GOOS=js GOARCH=wasm go -C go build -ldflags="-s -w" -o ../dist/main.wasm cmd/main.go 
