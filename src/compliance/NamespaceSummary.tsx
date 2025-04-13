@@ -3,7 +3,7 @@
 */
 import {
   Link as HeadlampLink,
-  MainInfoSection,
+  NameValueTable,
   SectionBox,
   Table,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
@@ -20,21 +20,22 @@ export default function KubescapeConfigurationScanNamespaceSummary() {
 
   configurationScanSummariesClass.useApiGet(setConfigurationScanSummary, namespace);
 
+  if (!configurationScanSummary) {
+    return <></>;
+  }
   return (
-    <>
-      {configurationScanSummary && (
-        <MainInfoSection
-          title="Namespace Configuration Scans"
-          resource={configurationScanSummary}
-        />
-      )}
+    <SectionBox title="Configuration scans">
+      <NameValueTable
+        rows={[
+          {
+            name: 'Namespace',
+            value: configurationScanSummary.metadata.name,
+          },
+        ]}
+      />
 
-      {configurationScanSummary && (
-        <ConfigurationScans
-          configurationScans={configurationScanSummary.jsonData.spec.summaryRef}
-        />
-      )}
-    </>
+      <ConfigurationScans configurationScans={configurationScanSummary.jsonData.spec.summaryRef} />
+    </SectionBox>
   );
 }
 
@@ -44,27 +45,25 @@ function ConfigurationScans(
   const { configurationScans } = props;
 
   return (
-    <SectionBox title="Configuration scans">
-      <Table
-        data={configurationScans}
-        columns={[
-          {
-            header: 'Namespace',
-            accessorKey: 'name',
-            Cell: ({ cell }: any) => (
-              <HeadlampLink
-                routeName={RoutingName.KubescapeWorkloadConfigurationScanDetails}
-                params={{
-                  name: cell.row.original.name,
-                  namespace: cell.row.original.namespace,
-                }}
-              >
-                {cell.getValue()}
-              </HeadlampLink>
-            ),
-          },
-        ]}
-      />
-    </SectionBox>
+    <Table
+      data={configurationScans}
+      columns={[
+        {
+          header: 'Namespace',
+          accessorKey: 'name',
+          Cell: ({ cell }: any) => (
+            <HeadlampLink
+              routeName={RoutingName.KubescapeWorkloadConfigurationScanDetails}
+              params={{
+                name: cell.row.original.name,
+                namespace: cell.row.original.namespace,
+              }}
+            >
+              {cell.getValue()}
+            </HeadlampLink>
+          ),
+        },
+      ]}
+    />
   );
 }
