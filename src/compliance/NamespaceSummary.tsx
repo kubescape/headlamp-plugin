@@ -8,6 +8,7 @@ import {
   Table,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
+import { Box, Stack } from '@mui/material';
 import { useState } from 'react';
 import { getLastURLSegment } from '../common/url';
 import { RoutingName } from '../index';
@@ -24,12 +25,16 @@ export default function KubescapeConfigurationScanNamespaceSummary() {
     return <></>;
   }
   return (
-    <SectionBox title="Configuration scans">
+    <SectionBox title="Namespace Configuration scans">
       <NameValueTable
         rows={[
           {
             name: 'Namespace',
             value: configurationScanSummary.metadata.name,
+          },
+          {
+            name: 'Failed Controls',
+            value: resultStack(configurationScanSummary.jsonData),
           },
         ]}
       />
@@ -65,5 +70,41 @@ function ConfigurationScans(
         },
       ]}
     />
+  );
+}
+
+export function resultStack(scanSummary: ConfigurationScanSummary) {
+  const severities = scanSummary.spec.severities;
+
+  const criticalCount = severities.critical;
+  const mediumCount = severities.medium;
+  const highCount = severities.high;
+  const lowCount = severities.low;
+
+  function controlsBox(color: string, severity: string, countScan: number) {
+    return (
+      <Box
+        sx={{
+          borderLeft: 2,
+          borderTop: 1,
+          borderRight: 1,
+          borderBottom: 1,
+          borderColor: `gray gray gray ${color}`,
+          textAlign: 'center',
+          width: 100,
+        }}
+      >
+        {countScan} {severity}
+      </Box>
+    );
+  }
+
+  return (
+    <Stack direction="row" spacing={1}>
+      {controlsBox('purple', 'Critical', criticalCount)}
+      {controlsBox('red', 'High', highCount)}
+      {controlsBox('orange', 'Medium', mediumCount)}
+      {controlsBox('yellow', 'Low', lowCount)}
+    </Stack>
   );
 }
