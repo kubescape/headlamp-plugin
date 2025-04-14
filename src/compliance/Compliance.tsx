@@ -26,8 +26,9 @@ import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { RoutingName } from '../index';
 import { paginatedListQuery, workloadConfigurationScanSummaryClass } from '../model';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
-import { Control } from './Control';
-import { controlLibrary } from './controlLibrary';
+import { Control, FrameWork } from './FrameWork';
+import { FrameworkButtons } from './FrameworkButtons';
+import { frameworks } from './frameworks';
 import NamespaceView from './NamespaceView';
 import KubescapeWorkloadConfigurationScanList from './ResourceList';
 
@@ -39,6 +40,7 @@ type ConfigurationScanContext = {
   pageSize: number;
   allowedNamespaces: string[];
   selectedTab: number;
+  framework: FrameWork;
 };
 
 export const configurationScanContext: ConfigurationScanContext = {
@@ -48,6 +50,7 @@ export const configurationScanContext: ConfigurationScanContext = {
   pageSize: 50,
   allowedNamespaces: [],
   selectedTab: 0,
+  framework: frameworks[0],
 };
 
 export default function ComplianceView() {
@@ -56,6 +59,9 @@ export default function ComplianceView() {
   >(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
+  const [framework, setFramework] = useState(frameworks[0]);
+  const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] = useState(true);
+
   const continueReading = useRef(true);
 
   useEffect(() => {
@@ -73,7 +79,9 @@ export default function ComplianceView() {
       if (configurationScanContext.continuation !== undefined) {
         await fetchWorkloadScanData(continueReading, setProgressMessage, setLoading);
       }
-      setWorkloadScanData(configurationScanContext.workloadScans);
+      setWorkloadScanData(
+        filterWorkloadScanData(configurationScanContext.workloadScans, framework)
+      );
     }
 
     fetchData();
@@ -82,14 +90,17 @@ export default function ComplianceView() {
     };
   }, []);
 
+  useEffect(() => {
+    setWorkloadScanData(filterWorkloadScanData(configurationScanContext.workloadScans, framework));
+    configurationScanContext.framework = framework;
+  }, [framework]);
+
   return (
     <>
       <h1>Compliance</h1>
+
       {!loading && (
         <Stack direction="row" spacing={2}>
-          <Typography variant="body1" component="div">
-            {configurationScanContext.workloadScans.length} scans{' '}
-          </Typography>
           {configurationScanContext.continuation !== undefined && (
             <Button
               onClick={() => {
@@ -114,27 +125,52 @@ export default function ComplianceView() {
       )}
 
       {!loading && workloadScanData && (
-        <HeadlampTabs
-          defaultIndex={configurationScanContext.selectedTab}
-          onTabChanged={tabIndex => (configurationScanContext.selectedTab = tabIndex)}
-          tabs={[
-            {
-              label: 'Controls',
-              component: <ConfigurationScanningListView workloadScanData={workloadScanData} />,
-            },
-            {
-              label: 'Resources',
-              component: (
-                <KubescapeWorkloadConfigurationScanList workloadScanData={workloadScanData} />
-              ),
-            },
-            {
-              label: 'Namespaces',
-              component: <NamespaceView workloadScanData={workloadScanData} />,
-            },
-          ]}
-          ariaLabel="Navigation Tabs"
-        />
+        <>
+          <FormControlLabel
+            checked={isFailedControlSwitchChecked}
+            control={<Switch color="primary" />}
+            label={'Failed controls'}
+            onChange={(event: any, checked: boolean) => {
+              setIsFailedControlSwitchChecked(checked);
+            }}
+          />
+          <FrameworkButtons setFramework={setFramework} />
+          <Typography variant="body1" component="div" sx={{ padding: 2 }}>
+            {workloadScanData.length} scans, {countFailedScans(workloadScanData)} configuration
+            issues
+          </Typography>
+          <HeadlampTabs
+            defaultIndex={configurationScanContext.selectedTab}
+            onTabChanged={tabIndex => (configurationScanContext.selectedTab = tabIndex)}
+            tabs={[
+              {
+                label: 'Controls',
+                component: (
+                  <ConfigurationScanningListView
+                    workloadScanData={workloadScanData}
+                    framework={framework}
+                    isFailedControlSwitchChecked={isFailedControlSwitchChecked}
+                  />
+                ),
+              },
+              {
+                label: 'Resources',
+                component: (
+                  <KubescapeWorkloadConfigurationScanList
+                    workloadScanData={workloadScanData}
+                    framework={framework}
+                    isFailedControlSwitchChecked={isFailedControlSwitchChecked}
+                  />
+                ),
+              },
+              {
+                label: 'Namespaces',
+                component: <NamespaceView workloadScanData={workloadScanData} />,
+              },
+            ]}
+            ariaLabel="Navigation Tabs"
+          />
+        </>
       )}
     </>
   );
@@ -143,113 +179,94 @@ export default function ComplianceView() {
 function ConfigurationScanningListView(
   props: Readonly<{
     workloadScanData: WorkloadConfigurationScanSummary[];
+    framework: FrameWork;
+    isFailedControlSwitchChecked: boolean;
   }>
 ) {
-  const { workloadScanData } = props;
-  const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] = useState(true);
+  const { workloadScanData, framework, isFailedControlSwitchChecked } = props;
 
-  const controlsWithFindings = controlLibrary.filter(control =>
-    workloadScanData?.some(w =>
-      Object.values(w.spec.controls).some(
-        scan => control.controlID === scan.controlID && scan.status.status === 'failed'
-      )
-    )
-  );
+  const controlsWithFindings = getControlsWithFindings(workloadScanData, framework);
 
-  const controls = isFailedControlSwitchChecked ? controlsWithFindings : controlLibrary;
+  const controls = isFailedControlSwitchChecked ? controlsWithFindings : framework.controls;
 
   return (
-    <>
-      <h5>
-        {countFailedScans(workloadScanData)} configuration issues, {controlsWithFindings.length}{' '}
-        failed controls
-      </h5>
-      <FormControlLabel
-        checked={isFailedControlSwitchChecked}
-        control={<Switch color="primary" />}
-        label={'Failed controls'}
-        onChange={(event: any, checked: boolean) => {
-          setIsFailedControlSwitchChecked(checked);
-        }}
-      />
-      <SectionBox>
-        <Table
-          data={controls}
-          columns={[
-            {
-              header: 'Severity',
-              accessorFn: (control: Control) =>
-                makeCVSSLabel(
-                  control.baseScore,
-                  workloadScanData ? countScans(workloadScanData, control, 'failed') : 0
-                ),
-              gridTemplate: 'min-content',
-            },
+    <SectionBox>
+      <Table
+        data={controls}
+        columns={[
+          {
+            header: 'Severity',
+            accessorFn: (control: Control) =>
+              makeCVSSLabel(
+                control.baseScore,
+                workloadScanData ? countScans(workloadScanData, control, 'failed') : 0
+              ),
+            gridTemplate: 'min-content',
+          },
+          {
+            id: 'ID',
+            header: 'ID',
+            accessorKey: 'controlID',
+            Cell: ({ cell }: any) => (
+              <Link
+                target="_blank"
+                href={'https://hub.armosec.io/docs/' + cell.getValue().toLowerCase()}
+              >
+                <div>{cell.getValue()}</div>
+              </Link>
+            ),
+            gridTemplate: 'auto',
+          },
+          {
+            header: 'Control Name',
+            accessorKey: 'name',
+            Cell: ({ cell, row }: any) => (
+              <Tooltip
+                title={row.original.description}
+                slotProps={{ tooltip: { sx: { fontSize: '0.9em' } } }}
+              >
+                <Box>{cell.getValue()}</Box>
+              </Tooltip>
+            ),
+            gridTemplate: 'auto',
+          },
+          {
+            header: 'Category',
+            accessorFn: (control: Control) =>
+              control.category?.subCategory?.name ?? control.category?.name,
+            gridTemplate: 'auto',
+          },
+          {
+            header: 'Remediation',
+            accessorFn: (control: Control) => control.remediation.replaceAll('`', "'"),
+          },
+          {
+            header: 'Resources',
+            accessorFn: (control: Control) =>
+              workloadScanData ? makeResultsLabel(workloadScanData, control) : '',
+            gridTemplate: 'auto',
+          },
+          // {
+          //   header: 'Score',
+          //   accessorFn: (control: Control) => {
+          //     const evaluated = workloadScanData
+          //       .flatMap(w => Object.values(w.spec.controls))
+          //       .filter(scan => scan.controlID === control.controlID).length;
+          //     const passed = countScans(workloadScanData, control, 'passed');
+          //     return ((passed * 100) / evaluated).toFixed(0) + '%';
+          //   },
+          // },
+        ]}
+        initialState={{
+          sorting: [
             {
               id: 'ID',
-              header: 'ID',
-              accessorKey: 'controlID',
-              Cell: ({ cell }: any) => (
-                <Link
-                  target="_blank"
-                  href={'https://hub.armosec.io/docs/' + cell.getValue().toLowerCase()}
-                >
-                  <div>{cell.getValue()}</div>
-                </Link>
-              ),
-              gridTemplate: 'auto',
+              desc: false,
             },
-            {
-              header: 'Control Name',
-              accessorKey: 'name',
-              Cell: ({ cell, row }: any) => (
-                <Tooltip
-                  title={row.original.description}
-                  slotProps={{ tooltip: { sx: { fontSize: '0.9em' } } }}
-                >
-                  <Box>{cell.getValue()}</Box>
-                </Tooltip>
-              ),
-              gridTemplate: 'auto',
-            },
-            {
-              header: 'Category',
-              accessorFn: (control: Control) =>
-                control.category?.subCategory?.name ?? control.category?.name,
-              gridTemplate: 'auto',
-            },
-            {
-              header: 'Remediation',
-              accessorFn: (control: Control) => control.remediation.replaceAll('`', "'"),
-            },
-            {
-              header: 'Resources',
-              accessorFn: (control: Control) =>
-                workloadScanData ? makeResultsLabel(workloadScanData, control) : '',
-              gridTemplate: 'auto',
-            },
-            // {
-            //   header: 'Score',
-            //   accessorFn: (control: Control) => {
-            //     const evaluated = workloadScanData
-            //       .flatMap(w => Object.values(w.spec.controls))
-            //       .filter(scan => scan.controlID === control.controlID).length;
-            //     const passed = countScans(workloadScanData, control, 'passed');
-            //     return ((passed * 100) / evaluated).toFixed(0) + '%';
-            //   },
-            // },
-          ]}
-          initialState={{
-            sorting: [
-              {
-                id: 'ID',
-                desc: false,
-              },
-            ],
-          }}
-        />
-      </SectionBox>
-    </>
+          ],
+        }}
+      />
+    </SectionBox>
   );
 }
 
@@ -305,7 +322,7 @@ function makeResultsLabel(workloadScanData: WorkloadConfigurationScanSummary[], 
   }
 }
 
-function countScans(
+export function countScans(
   workloadScanData: WorkloadConfigurationScanSummary[],
   control: Control,
   status: string
@@ -346,4 +363,39 @@ async function fetchWorkloadScanData(
     }
   }
   setLoading(false);
+}
+
+function getControlsWithFindings(
+  workloadScanData: WorkloadConfigurationScanSummary[],
+  frameWork: FrameWork
+) {
+  return frameWork.controls.filter(control =>
+    workloadScanData?.some(w =>
+      Object.values(w.spec.controls).some(
+        scan => control.controlID === scan.controlID && scan.status.status === 'failed'
+      )
+    )
+  );
+}
+
+export function filterWorkloadScanData(
+  workloadScans: WorkloadConfigurationScanSummary[],
+  frameWork: FrameWork
+): WorkloadConfigurationScanSummary[] {
+  const filteredWorkloadScans: WorkloadConfigurationScanSummary[] = [];
+
+  for (const workloadScan of workloadScans) {
+    const w: WorkloadConfigurationScanSummary = structuredClone(workloadScan);
+
+    if (frameWork) {
+      w.spec.controls = Object.fromEntries(
+        Object.entries(workloadScan.spec.controls).filter(([, value]) =>
+          frameWork.controls.find(control => control.controlID === value.controlID)
+        )
+      );
+    }
+
+    filteredWorkloadScans.push(w);
+  }
+  return filteredWorkloadScans;
 }

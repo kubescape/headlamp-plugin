@@ -9,11 +9,10 @@ vap_test_files:=\
 	deployment-with-common-label-2.yaml  \
 	pod.yaml
 
-controls-download: 
-	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/controls -o src/compliance/controlLibrary.ts;
-	
-	sed -i '1s/^/export const controlLibrary: Control[] = \n/' src/compliance/controlLibrary.ts
-	sed -i '1s/^/import { Control } from ".\/Control" \n/' src/compliance/controlLibrary.ts
+controls-download:  
+	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/frameworks -o src/compliance/frameworks.ts; 
+	sed -i '1s/^/export const frameworks: FrameWork[] = \n/' src/compliance/frameworks.ts; 
+	sed -i '1s/^/import { FrameWork } from ".\/FrameWork" \n/' src/compliance/frameworks.ts; 
 
 wasm-download: 
 	# Download WASM exec.js 

@@ -2,125 +2,116 @@
   List configuration scans for all workloads.  
 */
 import { Link, Table } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { Box, FormControlLabel, Stack, Switch, Tooltip } from '@mui/material';
-import { useState } from 'react';
+import { Box, Stack, Tooltip } from '@mui/material';
 import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
-import { controlLibrary } from './controlLibrary';
+import { FrameWork } from './FrameWork';
 
 export default function KubescapeWorkloadConfigurationScanList(
   props: Readonly<{
     workloadScanData: WorkloadConfigurationScanSummary[] | null;
+    framework: FrameWork;
+    isFailedControlSwitchChecked: boolean;
   }>
 ) {
-  const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] = useState(true);
-  const { workloadScanData } = props;
+  const { workloadScanData, framework, isFailedControlSwitchChecked } = props;
   if (!workloadScanData) {
     return <></>;
   }
 
   const workloadsWithFindings = getWorkloadsWithFindings(workloadScanData);
   return (
-    <>
-      <h5>
-        {workloadScanData.length} resources scanned, {workloadsWithFindings.length} failed
-      </h5>
-      <FormControlLabel
-        checked={isFailedControlSwitchChecked}
-        control={<Switch color="primary" />}
-        label={'Failed controls'}
-        onChange={(event: any, checked: boolean) => {
-          setIsFailedControlSwitchChecked(checked);
-        }}
-      />
-      <Box>
-        <Table
-          data={isFailedControlSwitchChecked ? workloadsWithFindings : workloadScanData}
-          columns={[
-            {
-              header: 'Name',
-              accessorFn: (workloadScan: WorkloadConfigurationScanSummary) =>
-                workloadScan.metadata.labels['kubescape.io/workload-name'],
-              Cell: ({ cell, row }: any) => (
-                <Link
-                  routeName={RoutingName.KubescapeWorkloadConfigurationScanDetails}
-                  params={{
-                    name: row.original.metadata.name,
-                    namespace: row.original.metadata.namespace,
-                  }}
-                >
-                  {cell.getValue()}
-                </Link>
-              ),
-              gridTemplate: 'auto',
+    <Box>
+      <Table
+        data={isFailedControlSwitchChecked ? workloadsWithFindings : workloadScanData}
+        columns={[
+          {
+            header: 'Name',
+            accessorFn: (workloadScan: WorkloadConfigurationScanSummary) =>
+              workloadScan.metadata.labels['kubescape.io/workload-name'],
+            Cell: ({ cell, row }: any) => (
+              <Link
+                routeName={RoutingName.KubescapeWorkloadConfigurationScanDetails}
+                params={{
+                  name: row.original.metadata.name,
+                  namespace: row.original.metadata.namespace,
+                }}
+              >
+                {cell.getValue()}
+              </Link>
+            ),
+            gridTemplate: 'auto',
+          },
+          {
+            header: 'Kind',
+            accessorFn: (workloadScan: WorkloadConfigurationScanSummary) =>
+              workloadScan.metadata.labels['kubescape.io/workload-kind'],
+            gridTemplate: 'auto',
+          },
+          {
+            header: 'Namespace',
+            accessorFn: (workloadScan: WorkloadConfigurationScanSummary) =>
+              workloadScan.metadata.labels['kubescape.io/workload-namespace'],
+            Cell: ({ cell }: any) => {
+              if (cell.getValue())
+                return (
+                  <Link
+                    routeName="namespace"
+                    params={{
+                      name: cell.getValue(),
+                    }}
+                  >
+                    {cell.getValue()}
+                  </Link>
+                );
             },
-            {
-              header: 'Kind',
-              accessorFn: (workloadScan: WorkloadConfigurationScanSummary) =>
-                workloadScan.metadata.labels['kubescape.io/workload-kind'],
-              gridTemplate: 'auto',
+            gridTemplate: 'auto',
+          },
+          {
+            header: 'Passed',
+            accessorFn: (workloadScan: WorkloadConfigurationScanSummary) => {
+              const passedCount = Object.values(workloadScan.spec.controls).filter(
+                scan => scan.status.status === WorkloadConfigurationScanSummary.Status.Passed
+              ).length;
+              return passedCount / Object.keys(workloadScan.spec.controls).length;
             },
-            {
-              header: 'Namespace',
-              accessorFn: (workloadScan: WorkloadConfigurationScanSummary) =>
-                workloadScan.metadata.labels['kubescape.io/workload-namespace'],
-              Cell: ({ cell }: any) => {
-                if (cell.getValue())
-                  return (
-                    <Link
-                      routeName="namespace"
-                      params={{
-                        name: cell.getValue(),
-                      }}
-                    >
-                      {cell.getValue()}
-                    </Link>
-                  );
-              },
-              gridTemplate: 'auto',
-            },
-            {
-              header: 'Passed',
-              accessorFn: (workloadScan: WorkloadConfigurationScanSummary) => {
-                const passedCount = Object.values(workloadScan.spec.controls).filter(
-                  scan => scan.status.status === WorkloadConfigurationScanSummary.Status.Passed
-                ).length;
-                return passedCount / Object.keys(workloadScan.spec.controls).length;
-              },
-              Cell: ({ cell }: any) => <progress value={cell.getValue()} />,
-              gridTemplate: 'auto',
-            },
+            Cell: ({ cell }: any) => <progress value={cell.getValue()} />,
+            gridTemplate: 'auto',
+          },
+          {
+            id: 'Failed Controls',
+            header: 'Failed Controls',
+            Cell: ({ row }: any) => resultStack(row.original, framework),
+            accessorFn: (workloadScan: WorkloadConfigurationScanSummary) =>
+              countResourceScans(workloadScan).join('.'),
+            gridTemplate: 'auto',
+          },
+        ]}
+        initialState={{
+          sorting: [
             {
               id: 'Failed Controls',
-              header: 'Failed Controls',
-              Cell: ({ row }: any) => resultStack(row.original),
-              accessorFn: (workloadScan: WorkloadConfigurationScanSummary) =>
-                countResourceScans(workloadScan).join('.'),
-              gridTemplate: 'auto',
+              desc: true,
             },
-          ]}
-          initialState={{
-            sorting: [
-              {
-                id: 'Failed Controls',
-                desc: true,
-              },
-            ],
-          }}
-        />
-      </Box>
-    </>
+          ],
+        }}
+      />
+    </Box>
   );
 }
 
-function controlsList(workloadScan: WorkloadConfigurationScanSummary, severity: string) {
+function controlsList(
+  workloadScan: WorkloadConfigurationScanSummary,
+  framework: FrameWork,
+  severity: string
+) {
   const controls = [];
   for (const scan of Object.values(workloadScan.spec.controls)) {
     if (
       scan.status.status === WorkloadConfigurationScanSummary.Status.Failed &&
       scan.severity.severity === severity
     ) {
-      const control = controlLibrary.find(control => control.controlID === scan.controlID);
+      const control = framework.controls.find(control => control.controlID === scan.controlID);
       if (control) {
         controls.push(control);
       }
@@ -144,7 +135,7 @@ function controlsList(workloadScan: WorkloadConfigurationScanSummary, severity: 
   }
 }
 
-function resultStack(workloadScan: WorkloadConfigurationScanSummary) {
+function resultStack(workloadScan: WorkloadConfigurationScanSummary, framework: FrameWork) {
   function box(color: string, severity: string) {
     return (
       <Box
@@ -158,7 +149,7 @@ function resultStack(workloadScan: WorkloadConfigurationScanSummary) {
           width: 20,
         }}
       >
-        <Tooltip title={controlsList(workloadScan, severity)}>
+        <Tooltip title={controlsList(workloadScan, framework, severity)}>
           <Box>
             {
               Object.values(workloadScan.spec.controls).filter(

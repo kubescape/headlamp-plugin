@@ -16,7 +16,7 @@ import { getURLSegments } from '../common/url';
 import { RoutingName } from '../index';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
-import { controlLibrary } from './controlLibrary';
+import { configurationScanContext } from './Compliance';
 
 const { createRouteURL } = Router;
 
@@ -113,7 +113,7 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
           {
             header: 'Category',
             accessorFn: (control: WorkloadConfigurationScan.Control) => {
-              const controlInfo = controlLibrary.find(
+              const controlInfo = configurationScanContext.framework.controls.find(
                 controlInfo => controlInfo.controlID === control.controlID
               );
               return controlInfo?.category?.subCategory?.name ?? controlInfo?.category?.name;
@@ -128,14 +128,16 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
           {
             header: 'Explain',
             accessorFn: (control: WorkloadConfigurationScan.Control) =>
-              controlLibrary.find(controlInfo => controlInfo.controlID === control.controlID)
-                ?.description,
+              configurationScanContext.framework.controls.find(
+                controlInfo => controlInfo.controlID === control.controlID
+              )?.description,
           },
           {
             header: 'Remediation',
             accessorFn: (control: WorkloadConfigurationScan.Control) =>
-              controlLibrary.find(controlInfo => controlInfo.controlID === control.controlID)
-                ?.remediation,
+              configurationScanContext.framework.controls.find(
+                controlInfo => controlInfo.controlID === control.controlID
+              )?.remediation,
           },
           {
             header: '',

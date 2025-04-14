@@ -1,3 +1,3 @@
 module.exports = {
-  ignorePatterns: ['src/wasm/*', 'src/compliance/controlLibrary.ts'],
+  ignorePatterns: ['src/wasm/*', 'src/compliance/frameworks.ts'],
 };
