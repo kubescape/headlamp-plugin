@@ -14,13 +14,15 @@ import { getLastURLSegment } from '../common/url';
 import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';
-import { controlLibrary } from './controlLibrary';
 
 const { createRouteURL } = Router;
 
 export default function KubescapeControlResults() {
   const controlID = getLastURLSegment();
-  const control = controlLibrary.find(element => element.controlID === controlID);
+  console.log(configurationScanContext.framework);
+  const control = configurationScanContext.framework.controls.find(
+    element => element.controlID === controlID
+  );
 
   if (!control) {
     return <p>The control {controlID} was not found.</p>;

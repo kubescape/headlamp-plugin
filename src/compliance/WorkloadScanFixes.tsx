@@ -12,7 +12,7 @@ import { getURLSegments } from '../common/url';
 import { RoutingName } from '../index';
 import { fetchObject, proxyRequest, workloadConfigurationScanClass } from '../model';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
-import { controlLibrary } from './controlLibrary';
+import { configurationScanContext } from './Compliance';
 
 const { createRouteURL } = Router;
 
@@ -21,7 +21,9 @@ export default function KubescapeWorkloadConfigurationScanFixes() {
   const [workloadConfigurationScan, setWorkloadConfigurationScan] =
     useState<WorkloadConfigurationScan | null>(null);
 
-  const control = controlLibrary.find(element => element.controlID === controlID);
+  const control = configurationScanContext.framework.controls.find(
+    element => element.controlID === controlID
+  );
 
   useEffect(() => {
     fetchObject(name, namespace, workloadConfigurationScanClass).then(

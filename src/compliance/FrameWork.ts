@@ -1,3 +1,15 @@
+export interface FrameWork {
+  name: string;
+  description: string;
+  attributes: any;
+  scanningScope: any;
+  typeTags: string[];
+  version: any;
+  controls: Control[];
+  ControlsIDs: string[];
+  subSections?: any;
+}
+
 export interface Control {
   name: string;
   attributes: {
@@ -11,7 +23,7 @@ export interface Control {
   description: string;
   remediation: string;
   manual_test?: string;
-  rulesNames: string[];
+
   long_description?: string;
   test?: string;
   controlID: string;
