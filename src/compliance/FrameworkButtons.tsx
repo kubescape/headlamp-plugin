@@ -35,6 +35,7 @@ export function FrameworkButtons(
         : 0;
       labels.push(
         <FormControlLabel
+          key={frameworkName}
           value={frameworkName}
           control={<Radio />}
           label={
