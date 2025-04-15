@@ -6,7 +6,7 @@ initContainers:
       - /bin/sh
       - -c
       - mkdir -p /build/plugins && cp -r /plugins/* /build/plugins/
-    image: ghcr.io/kubescape/headlamp-plugin:latest ## you can specify a version such as 0.5.0-beta
+    image: quay.io/kubescape/headlamp-plugin:latest ## you can specify a version such as 0.5.0-beta
     name: kubescape-plugin
     volumeMounts:
       - mountPath: /build/plugins
