@@ -45,7 +45,7 @@ The queries to the Kubescape database use Headlamps feature for `Allowed namespa
 #### In-cluster Headlamp
 
 - Install Headlamp (https://headlamp.dev/docs/latest/installation/in-cluster/)
-- Deploy the container image `ghcr.io/kubescape/headlamp-plugin` as a sidecar container to the headlamp deployment. See [example helm values](https://github.com/kubescape/headlamp-plugin/blob/main/examples/headlamp-helm-values.yaml).
+- Deploy the container image `quay.io/kubescape/headlamp-plugin` as a sidecar container to the headlamp deployment. See [example helm values](https://github.com/kubescape/headlamp-plugin/blob/main/examples/headlamp-helm-values.yaml).
 
 ## Quick test
 
