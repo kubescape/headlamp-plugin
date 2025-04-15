@@ -107,7 +107,7 @@ jobs:
           files: ${{ env.RELEASE_TAR }}
           token: ${{ github.token }}
 
-      - name: Login to GitHub Container Registry
+      - name: Login to Quay Container Registry
         uses: docker/login-action@v3
         with:
           registry: quay.io/kubescape
