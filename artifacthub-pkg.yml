@@ -18,7 +18,7 @@ screenshots:
 annotations:
   headlamp/plugin/archive-url: https://github.com/kubescape/headlamp-plugin/releases/download/v0.7.0/headlamp-plugin-v0.7.0.tar.gz
   headlamp/plugin/archive-checksum: SHA256:c963715ed443d48105c6991661b74241354af2c1c3001c85600f9b77f97743eb
-  headlamp/plugin/version-compat: '>=0.25'
+  headlamp/plugin/version-compat: '>=0.29'
   headlamp/plugin/distro-compat: in-cluster,web,docker-desktop,desktop
 readme: |
 
