@@ -38,36 +38,37 @@ export default function ImageListView(props: Readonly<{ workloadScans: WorkloadS
                       namespace: row.original.namespace,
                     }}
                   >
-                    {cell.getValue().split('@sha')[0]}
+                    {row.original.imageName}
                   </HeadlampLink>
                 );
               },
-              gridTemplate: 'max-content',
+              gridTemplate: 'auto',
             },
             {
               header: 'Workload',
               accessorFn: (imageScan: ImageScan) => {
                 const workloads = workloadScans
                   .filter(scan => scan.imageScan?.manifestName === imageScan.manifestName)
-                  .map(scan => scan.container);
+                  .map(scan => `${scan.name}/${scan.container}`);
 
                 const uniqueWorkloads = [...new Set(workloads)];
                 return <div style={{ whiteSpace: 'pre-line' }}>{uniqueWorkloads.join('\n')}</div>;
               },
-              gridTemplate: 'max-content',
+              gridTemplate: 'auto',
             },
             {
               header: 'Last scan',
               accessorFn: (imageScan: ImageScan) => (
                 <DateLabel date={imageScan.creationTimestamp} />
               ),
-              gridTemplate: 'max-content',
+              gridTemplate: 'auto',
             },
             {
               id: 'Vulnerabilities',
               header: 'Vulnerabilities',
               accessorFn: (imageScan: ImageScan) => countImageScans(imageScan).join('.'),
               Cell: ({ row }: any) => resultStack(row.original),
+              gridTemplate: 'auto',
             },
             {
               header: 'SBOM',

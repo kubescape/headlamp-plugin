@@ -14,7 +14,7 @@ import {
   Stack,
 } from '@mui/material';
 import React from 'react';
-import { KubescapeSettings, useLocalStorage } from '../common/localStorage';
+import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import {
   configurationScanContext,

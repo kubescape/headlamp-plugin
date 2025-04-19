@@ -11,8 +11,8 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Link } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { KubescapeSettings, useLocalStorage } from '../common/localStorage';
 import { getURLSegments } from '../common/url';
+import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { RoutingName } from '../index';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
