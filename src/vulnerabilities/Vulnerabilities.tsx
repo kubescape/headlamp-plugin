@@ -16,9 +16,9 @@ import { useEffect, useRef, useState } from 'react';
 import { RotatingLines } from 'react-loader-spinner';
 import { isNewClusterContext } from '../common/clusterContext';
 import { ErrorMessage } from '../common/ErrorMessage';
-import { KubescapeSettings, useLocalStorage } from '../common/localStorage';
 import { ProgressIndicator } from '../common/ProgressIndicator';
 import makeSeverityLabel from '../common/SeverityLabel';
+import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { RoutingName } from '../index';
 import { fetchVulnerabilities, ImageScan, WorkloadScan } from './fetch-vulnerabilities';
 import ImageListView from './ImageList';
@@ -42,7 +42,6 @@ type VulnerabilityContext = {
   imageScans: Map<string, ImageScan>;
   vulnerabilityManifestContinuation: number | undefined;
   vulnerabilityManifestSummaryContinuation: number | undefined;
-  selectedTab: number;
   context: {
     currentCluster: string;
     allowedNamespaces: string[];
@@ -54,7 +53,6 @@ export const vulnerabilityContext: VulnerabilityContext = {
   imageScans: new Map<string, ImageScan>(),
   vulnerabilityManifestContinuation: 0,
   vulnerabilityManifestSummaryContinuation: 0,
-  selectedTab: 0,
   context: {
     currentCluster: '',
     allowedNamespaces: [],
@@ -62,6 +60,10 @@ export const vulnerabilityContext: VulnerabilityContext = {
 };
 
 export default function KubescapeVulnerabilities() {
+  const [selectedTab, setSelectedTab] = useLocalStorage<number>(
+    KubescapeSettings.VulnerabilityTab,
+    0
+  );
   const [workloadScanData, setWorkloadScanData] = useState<WorkloadScan[] | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
@@ -124,8 +126,8 @@ export default function KubescapeVulnerabilities() {
 
       {!error && !loading && workloadScanData && (
         <HeadlampTabs
-          defaultIndex={vulnerabilityContext.selectedTab}
-          onTabChanged={tabIndex => (vulnerabilityContext.selectedTab = tabIndex)}
+          defaultIndex={selectedTab}
+          onTabChanged={tabIndex => setSelectedTab(tabIndex)}
           tabs={[
             {
               label: 'CVEs',
@@ -150,7 +152,7 @@ export default function KubescapeVulnerabilities() {
 function CVEListView(props: Readonly<{ loading: boolean; workloadScans: WorkloadScan[] | null }>) {
   const { loading, workloadScans } = props;
   const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useLocalStorage<boolean>(
-    'kubescape.RelevantCVEs',
+    KubescapeSettings.RelevantCVEs,
     false
   );
   const [isFixedCVESwitchChecked, setIsFixedCVESwitchChecked] = useLocalStorage<boolean>(

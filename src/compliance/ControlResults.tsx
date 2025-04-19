@@ -8,9 +8,9 @@ import {
   Table,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Link } from '@mui/material';
-import { KubescapeSettings, useLocalStorage } from '../common/localStorage';
 import { makeNamespaceLink } from '../common/Namespace';
 import { getLastURLSegment } from '../common/url';
+import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';

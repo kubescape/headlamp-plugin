@@ -42,9 +42,11 @@ export default function VulnerabilitiesNamespaceSummary() {
   );
 }
 
-function VulnerabilityScans(props: {
-  vulnerabilityScans: VulnerabilitySummary.VulnerabilityReference[];
-}) {
+function VulnerabilityScans(
+  props: Readonly<{
+    vulnerabilityScans: VulnerabilitySummary.VulnerabilityReference[];
+  }>
+) {
   const { vulnerabilityScans } = props;
 
   return (

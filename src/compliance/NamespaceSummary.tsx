@@ -14,6 +14,8 @@ import { getLastURLSegment } from '../common/url';
 import { RoutingName } from '../index';
 import { configurationScanSummariesClass } from '../model';
 import { ConfigurationScanSummary } from '../softwarecomposition/ConfigurationScanSummary';
+import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
+import { configurationScanContext } from './Compliance';
 
 export default function KubescapeConfigurationScanNamespaceSummary() {
   const namespace = getLastURLSegment();
@@ -25,7 +27,7 @@ export default function KubescapeConfigurationScanNamespaceSummary() {
     return <></>;
   }
   return (
-    <SectionBox title="Namespace Configuration scans">
+    <SectionBox title="Namespace Configuration scans" backLink>
       <NameValueTable
         rows={[
           {
@@ -39,15 +41,17 @@ export default function KubescapeConfigurationScanNamespaceSummary() {
         ]}
       />
 
-      <ConfigurationScans configurationScans={configurationScanSummary.jsonData.spec.summaryRef} />
+      <ConfigurationScans namespace={namespace} />
     </SectionBox>
   );
 }
 
-function ConfigurationScans(
-  props: Readonly<{ configurationScans: ConfigurationScanSummary.SummaryRef[] }>
-) {
-  const { configurationScans } = props;
+function ConfigurationScans(props: Readonly<{ namespace: string }>) {
+  const { namespace } = props;
+
+  const configurationScans = configurationScanContext.workloadScans.filter(
+    w => w.metadata.namespace === namespace
+  );
 
   return (
     <Table
@@ -55,18 +59,46 @@ function ConfigurationScans(
       columns={[
         {
           header: 'Namespace',
-          accessorKey: 'name',
+          accessorKey: 'metadata.name',
           Cell: ({ cell }: any) => (
             <HeadlampLink
               routeName={RoutingName.KubescapeWorkloadConfigurationScanDetails}
               params={{
-                name: cell.row.original.name,
-                namespace: cell.row.original.namespace,
+                name: cell.row.original.metadata.name,
+                namespace: cell.row.original.metadata.namespace,
               }}
             >
               {cell.getValue()}
             </HeadlampLink>
           ),
+          gridTemplate: 'auto',
+        },
+        {
+          header: 'Kind',
+          accessorFn: (workloadScan: WorkloadConfigurationScanSummary) =>
+            workloadScan.metadata.labels['kubescape.io/workload-kind'],
+          gridTemplate: 'auto',
+        },
+        {
+          header: 'Passed',
+          accessorFn: (workloadScan: WorkloadConfigurationScanSummary) => {
+            const passedCount = Object.values(workloadScan.spec.controls).filter(
+              scan => scan.status.status === WorkloadConfigurationScanSummary.Status.Passed
+            ).length;
+            return passedCount / Object.keys(workloadScan.spec.controls).length;
+          },
+          Cell: ({ cell }: any) => <progress value={cell.getValue()} />,
+          gridTemplate: 'auto',
+        },
+        {
+          id: 'Failed Controls',
+          header: 'Failed Controls',
+          Cell: ({ row }: any) => resultStack(row.original),
+          accessorFn: (w: WorkloadConfigurationScanSummary) =>
+            Object.values(w.spec.controls).filter(
+              scan => scan.status.status === WorkloadConfigurationScanSummary.Status.Failed
+            ).length,
+          gridTemplate: 'auto',
         },
       ]}
     />

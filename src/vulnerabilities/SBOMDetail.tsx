@@ -27,7 +27,7 @@ export default function SBOMDetail() {
   const message = filtered ? 'Showing in use artifacts only' : 'Showing all artifacts';
   return (
     <>
-      <SectionBox title={'SBOM' + (filtered ? ' Filtered' : '')}>
+      <SectionBox title={'SBOM' + (filtered ? ' Filtered' : '')} backLink>
         <p>{message}</p>
         <NameValueTable
           rows={[

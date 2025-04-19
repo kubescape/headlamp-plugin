@@ -21,9 +21,9 @@ import {
 } from '@mui/material';
 import React, { useEffect, useRef, useState } from 'react';
 import { isNewClusterContext } from '../common/clusterContext';
-import { KubescapeSettings, useLocalStorage } from '../common/localStorage';
 import { ProgressIndicator } from '../common/ProgressIndicator';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
+import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { RoutingName } from '../index';
 import { paginatedListQuery, workloadConfigurationScanSummaryClass } from '../model';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
@@ -39,7 +39,6 @@ const pageSize: number = 50;
 type ConfigurationScanContext = {
   workloadScans: WorkloadConfigurationScanSummary[];
   continuation: number | undefined;
-  selectedTab: number;
   context: {
     currentCluster: string;
     allowedNamespaces: string[];
@@ -49,7 +48,6 @@ type ConfigurationScanContext = {
 export const configurationScanContext: ConfigurationScanContext = {
   workloadScans: [],
   continuation: 0,
-  selectedTab: 0,
   context: {
     currentCluster: '',
     allowedNamespaces: [],
@@ -57,6 +55,7 @@ export const configurationScanContext: ConfigurationScanContext = {
 };
 
 export default function ComplianceView() {
+  const [selectedTab, setSelectedTab] = useLocalStorage<number>(KubescapeSettings.ComplianceTab, 0);
   const [workloadScanData, setWorkloadScanData] = useState<
     WorkloadConfigurationScanSummary[] | null
   >(null);
@@ -144,8 +143,8 @@ export default function ComplianceView() {
             issues
           </Typography>
           <HeadlampTabs
-            defaultIndex={configurationScanContext.selectedTab}
-            onTabChanged={tabIndex => (configurationScanContext.selectedTab = tabIndex)}
+            defaultIndex={selectedTab}
+            onTabChanged={tabIndex => setSelectedTab(tabIndex)}
             tabs={[
               {
                 label: 'Controls',
