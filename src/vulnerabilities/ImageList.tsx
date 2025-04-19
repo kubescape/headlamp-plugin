@@ -95,6 +95,7 @@ export default function ImageListView(props: Readonly<{ workloadScans: WorkloadS
               },
             ],
           }}
+          reflectInURL="images"
         />
       </SectionBox>
     </>

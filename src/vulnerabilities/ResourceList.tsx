@@ -127,6 +127,7 @@ export default function WorkloadScanListView(
               },
             ],
           }}
+          reflectInURL="resources"
         />
       </SectionBox>
     </>

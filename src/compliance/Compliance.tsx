@@ -21,6 +21,7 @@ import {
 } from '@mui/material';
 import React, { useEffect, useRef, useState } from 'react';
 import { isNewClusterContext } from '../common/clusterContext';
+import { KubescapeSettings, useLocalStorage } from '../common/localStorage';
 import { ProgressIndicator } from '../common/ProgressIndicator';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { RoutingName } from '../index';
@@ -32,25 +33,27 @@ import { frameworks } from './frameworks';
 import NamespaceView from './NamespaceView';
 import KubescapeWorkloadConfigurationScanList from './ResourceList';
 
+const pageSize: number = 50;
+
 // workloadScans are cached in global scope because it is an expensive query for the API server
 type ConfigurationScanContext = {
   workloadScans: WorkloadConfigurationScanSummary[];
-  currentCluster: string;
   continuation: number | undefined;
-  pageSize: number;
-  allowedNamespaces: string[];
   selectedTab: number;
-  framework: FrameWork;
+  context: {
+    currentCluster: string;
+    allowedNamespaces: string[];
+  };
 };
 
 export const configurationScanContext: ConfigurationScanContext = {
   workloadScans: [],
-  currentCluster: '',
   continuation: 0,
-  pageSize: 50,
-  allowedNamespaces: [],
   selectedTab: 0,
-  framework: frameworks[0],
+  context: {
+    currentCluster: '',
+    allowedNamespaces: [],
+  },
 };
 
 export default function ComplianceView() {
@@ -59,22 +62,26 @@ export default function ComplianceView() {
   >(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
-  const [framework, setFramework] = useState(frameworks[0]);
-  const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] = useState(true);
+  const [frameworkName, setFrameworkName] = useLocalStorage<string>(
+    KubescapeSettings.Framework,
+    'AllControls'
+  );
+  const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] = useLocalStorage<boolean>(
+    KubescapeSettings.FailedControls,
+    true
+  );
 
   const continueReading = useRef(true);
 
+  const framework = frameworks.find(fw => fw.name === frameworkName) ?? frameworks[0];
+
   useEffect(() => {
     async function fetchData() {
-      if (
-        isNewClusterContext(
-          configurationScanContext.currentCluster,
-          configurationScanContext.allowedNamespaces
-        )
-      ) {
+      if (isNewClusterContext(configurationScanContext.context)) {
         configurationScanContext.continuation = 0;
-        configurationScanContext.currentCluster = getCluster() ?? '';
-        configurationScanContext.allowedNamespaces = getAllowedNamespaces();
+        configurationScanContext.workloadScans = [];
+        configurationScanContext.context.currentCluster = getCluster() ?? '';
+        configurationScanContext.context.allowedNamespaces = getAllowedNamespaces();
       }
       if (configurationScanContext.continuation !== undefined) {
         await fetchWorkloadScanData(continueReading, setProgressMessage, setLoading);
@@ -88,12 +95,7 @@ export default function ComplianceView() {
     return () => {
       continueReading.current = false;
     };
-  }, []);
-
-  useEffect(() => {
-    setWorkloadScanData(filterWorkloadScanData(configurationScanContext.workloadScans, framework));
-    configurationScanContext.framework = framework;
-  }, [framework]);
+  }, [frameworkName]);
 
   return (
     <>
@@ -126,15 +128,17 @@ export default function ComplianceView() {
 
       {!loading && workloadScanData && (
         <>
-          <FormControlLabel
-            checked={isFailedControlSwitchChecked}
-            control={<Switch color="primary" />}
-            label={'Failed controls'}
-            onChange={(event: any, checked: boolean) => {
-              setIsFailedControlSwitchChecked(checked);
-            }}
-          />
-          <FrameworkButtons setFramework={setFramework} />
+          <Stack direction="row" spacing={1}>
+            <FormControlLabel
+              checked={isFailedControlSwitchChecked}
+              control={<Switch color="primary" />}
+              label={'Failed controls'}
+              onChange={(event: any, checked: boolean) => {
+                setIsFailedControlSwitchChecked(checked);
+              }}
+            />
+            <FrameworkButtons frameworkName={frameworkName} setFrameworkName={setFrameworkName} />
+          </Stack>
           <Typography variant="body1" component="div" sx={{ padding: 2 }}>
             {workloadScanData.length} scans, {countFailedScans(workloadScanData)} configuration
             issues
@@ -197,10 +201,7 @@ function ConfigurationScanningListView(
           {
             header: 'Severity',
             accessorFn: (control: Control) =>
-              makeCVSSLabel(
-                control.baseScore,
-                workloadScanData ? countScans(workloadScanData, control, 'failed') : 0
-              ),
+              makeCVSSLabel(control.baseScore, hasFailedScans(workloadScanData, control)),
             gridTemplate: 'min-content',
           },
           {
@@ -241,21 +242,19 @@ function ConfigurationScanningListView(
             accessorFn: (control: Control) => control.remediation.replaceAll('`', "'"),
           },
           {
+            header: 'Compliance',
+            accessorFn: (control: Control) =>
+              Math.trunc(controlComplianceScore(workloadScanData, control)),
+            Cell: ({ cell }: any) => cell.getValue() + '%',
+            gridTemplate: 'auto',
+          },
+          {
             header: 'Resources',
             accessorFn: (control: Control) =>
               workloadScanData ? makeResultsLabel(workloadScanData, control) : '',
+
             gridTemplate: 'auto',
           },
-          // {
-          //   header: 'Score',
-          //   accessorFn: (control: Control) => {
-          //     const evaluated = workloadScanData
-          //       .flatMap(w => Object.values(w.spec.controls))
-          //       .filter(scan => scan.controlID === control.controlID).length;
-          //     const passed = countScans(workloadScanData, control, 'passed');
-          //     return ((passed * 100) / evaluated).toFixed(0) + '%';
-          //   },
-          // },
         ]}
         initialState={{
           sorting: [
@@ -265,12 +264,13 @@ function ConfigurationScanningListView(
             },
           ],
         }}
+        reflectInURL="controls"
       />
     </SectionBox>
   );
 }
 
-function makeCVSSLabel(baseScore: number, failCount: number) {
+function makeCVSSLabel(baseScore: number, hasFailedScans: boolean) {
   let status: StatusLabelProps['status'] = '';
   let severity: string;
 
@@ -287,13 +287,13 @@ function makeCVSSLabel(baseScore: number, failCount: number) {
     severity = 'Critical';
   }
 
-  if (failCount > 0) {
+  if (hasFailedScans) {
     status = 'error';
   } else {
     status = 'success';
   }
 
-  if (baseScore >= 7.0 && failCount > 0) {
+  if (baseScore >= 7.0 && hasFailedScans) {
     return <StatusLabel status={status}>{severity}</StatusLabel>;
   } else {
     return severity;
@@ -322,6 +322,14 @@ function makeResultsLabel(workloadScanData: WorkloadConfigurationScanSummary[], 
   }
 }
 
+function hasFailedScans(workloadScanData: WorkloadConfigurationScanSummary[], control: Control) {
+  return workloadScanData?.some(w =>
+    Object.values(w.spec.controls).some(
+      scan => scan.controlID === control.controlID && scan.status.status === 'failed'
+    )
+  );
+}
+
 export function countScans(
   workloadScanData: WorkloadConfigurationScanSummary[],
   control: Control,
@@ -339,6 +347,15 @@ function countFailedScans(workloadScanData: WorkloadConfigurationScanSummary[]):
     .filter(scan => scan.status.status === 'failed').length;
 }
 
+export function countScansForControl(
+  workloadScanData: WorkloadConfigurationScanSummary[],
+  control: Control
+): number {
+  return workloadScanData.filter(w =>
+    Object.values(w.spec.controls).some(scan => scan.controlID === control.controlID)
+  ).length;
+}
+
 async function fetchWorkloadScanData(
   continueReading: React.MutableRefObject<boolean>,
   setProgress: (progress: string) => void,
@@ -349,7 +366,7 @@ async function fetchWorkloadScanData(
     await paginatedListQuery(
       workloadConfigurationScanSummaryClass,
       configurationScanContext.continuation,
-      configurationScanContext.pageSize,
+      pageSize,
       getAllowedNamespaces()
     ).then(response => {
       const { items, continuation } = response;
@@ -398,4 +415,18 @@ export function filterWorkloadScanData(
     filteredWorkloadScans.push(w);
   }
   return filteredWorkloadScans;
+}
+
+// The control compliance score measures the compliance of individual controls within a framework.
+// It is calculated by evaluating the ratio of resources that passed to the total number of resources evaluated against that control.
+export function controlComplianceScore(
+  workloadScanData: WorkloadConfigurationScanSummary[],
+  control: Control
+) {
+  const passedCount = countScans(workloadScanData, control, 'passed');
+  const total = countScansForControl(workloadScanData, control);
+  if (total === 0) {
+    return 100;
+  }
+  return (passedCount / total) * 100;
 }

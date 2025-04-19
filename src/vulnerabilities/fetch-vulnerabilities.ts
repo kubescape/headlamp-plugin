@@ -12,6 +12,8 @@ import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManif
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
 import { vulnerabilityContext } from './Vulnerabilities';
 
+const pageSize: number = 50;
+
 // WorkloadScan is derived from VulnerabilityManifestSummary
 export interface WorkloadScan {
   manifestName: string;
@@ -49,7 +51,7 @@ async function fetchVulnerabilityManifestSummaries(
     await paginatedListQuery(
       vulnerabilityManifestSummaryClass,
       vulnerabilityContext.vulnerabilityManifestSummaryContinuation,
-      vulnerabilityContext.pageSize,
+      pageSize,
       getAllowedNamespaces()
     )
       .then(response => {
@@ -118,7 +120,7 @@ async function fetchVulnerabilityManifests(
     await paginatedListQuery(
       vulnerabilityManifestClass,
       vulnerabilityContext.vulnerabilityManifestContinuation,
-      vulnerabilityContext.pageSize
+      pageSize
     )
       .then(response => {
         const { items, continuation } = response;

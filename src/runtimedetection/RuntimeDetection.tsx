@@ -1,15 +1,11 @@
-import { Router } from '@kinvolk/headlamp-plugin/lib';
 import { NameValueTable, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
 import Editor from '@monaco-editor/react';
 import * as yaml from 'js-yaml';
 import { useState } from 'react';
 import { getURLSegments } from '../common/url';
-import { RoutingName } from '../index';
 import { applicationProfileClass } from '../model';
 import { ApplicationProfile } from '../softwarecomposition/ApplicationProfile';
-
-const { createRouteURL } = Router;
 
 export function RuntimeDetection() {
   const [name, namespace] = getURLSegments(-1, -2);
@@ -25,10 +21,7 @@ export function RuntimeDetection() {
 
   return (
     <>
-      <SectionBox
-        title="Application Profile"
-        backLink={createRouteURL(RoutingName.ApplicationProfiles)}
-      >
+      <SectionBox title="Application Profile" backLink>
         <NameValueTable
           rows={[
             {

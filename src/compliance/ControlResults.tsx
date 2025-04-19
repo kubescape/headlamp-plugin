@@ -1,7 +1,6 @@
 /* 
   Information about a control and failed workloads. 
 */
-import { Router } from '@kinvolk/headlamp-plugin/lib';
 import {
   Link as HeadlampLink,
   NameValueTable,
@@ -9,20 +8,21 @@ import {
   Table,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Link } from '@mui/material';
+import { KubescapeSettings, useLocalStorage } from '../common/localStorage';
 import { makeNamespaceLink } from '../common/Namespace';
 import { getLastURLSegment } from '../common/url';
 import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';
-
-const { createRouteURL } = Router;
+import { frameworks } from './frameworks';
 
 export default function KubescapeControlResults() {
   const controlID = getLastURLSegment();
-  console.log(configurationScanContext.framework);
-  const control = configurationScanContext.framework.controls.find(
-    element => element.controlID === controlID
-  );
+  const [frameworkName] = useLocalStorage<string>(KubescapeSettings.Framework, 'AllControls');
+
+  const framework = frameworks.find(fw => fw.name === frameworkName) ?? frameworks[0];
+
+  const control = framework.controls.find(element => element.controlID === controlID);
 
   if (!control) {
     return <p>The control {controlID} was not found.</p>;
@@ -35,10 +35,7 @@ export default function KubescapeControlResults() {
 
   return (
     <>
-      <SectionBox
-        title={`${controlID}: ${control.name}`}
-        backLink={createRouteURL(RoutingName.ComplianceView)}
-      >
+      <SectionBox title={`${controlID}: ${control.name}`} backLink>
         <NameValueTable
           rows={[
             {

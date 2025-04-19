@@ -1,7 +1,6 @@
 /* 
   Show configuration scan results for a workload. 
 */
-import { Router } from '@kinvolk/headlamp-plugin/lib';
 import {
   Link as HeadlampLink,
   NameValueTable,
@@ -12,13 +11,12 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Link } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { KubescapeSettings, useLocalStorage } from '../common/localStorage';
 import { getURLSegments } from '../common/url';
 import { RoutingName } from '../index';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
-import { configurationScanContext } from './Compliance';
-
-const { createRouteURL } = Router;
+import { frameworks } from './frameworks';
 
 export default function KubescapeWorkloadConfigurationScanDetails() {
   const [name, namespace] = getURLSegments(-1, -2);
@@ -39,10 +37,7 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
 
   return (
     <>
-      <SectionBox
-        title="Workload Configuration Scan"
-        backLink={createRouteURL(RoutingName.ComplianceView)}
-      >
+      <SectionBox title="Workload Configuration Scan" backLink>
         <NameValueTable
           rows={[
             {
@@ -78,6 +73,9 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
   const { workloadConfigurationScan } = props;
   const controls = workloadConfigurationScan.spec.controls;
   const entries = Object.keys(controls).map(key => controls[key]);
+  const [frameworkName] = useLocalStorage<string>(KubescapeSettings.Framework, 'AllControls');
+
+  const framework = frameworks.find(fw => fw.name === frameworkName) ?? frameworks[0];
 
   return (
     <SectionBox title="Controls">
@@ -113,7 +111,7 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
           {
             header: 'Category',
             accessorFn: (control: WorkloadConfigurationScan.Control) => {
-              const controlInfo = configurationScanContext.framework.controls.find(
+              const controlInfo = framework.controls.find(
                 controlInfo => controlInfo.controlID === control.controlID
               );
               return controlInfo?.category?.subCategory?.name ?? controlInfo?.category?.name;
@@ -128,16 +126,14 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
           {
             header: 'Explain',
             accessorFn: (control: WorkloadConfigurationScan.Control) =>
-              configurationScanContext.framework.controls.find(
-                controlInfo => controlInfo.controlID === control.controlID
-              )?.description,
+              framework.controls.find(controlInfo => controlInfo.controlID === control.controlID)
+                ?.description,
           },
           {
             header: 'Remediation',
             accessorFn: (control: WorkloadConfigurationScan.Control) =>
-              configurationScanContext.framework.controls.find(
-                controlInfo => controlInfo.controlID === control.controlID
-              )?.remediation,
+              framework.controls.find(controlInfo => controlInfo.controlID === control.controlID)
+                ?.remediation,
           },
           {
             header: '',

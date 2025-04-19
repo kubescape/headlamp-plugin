@@ -1,29 +1,25 @@
 /* 
   Show fix suggestion for a workload. 
 */
-import { K8s, Router } from '@kinvolk/headlamp-plugin/lib';
+import { K8s } from '@kinvolk/headlamp-plugin/lib';
 import { NameValueTable, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { DiffEditor } from '@monaco-editor/react';
 import { Link } from '@mui/material';
 import * as yaml from 'js-yaml';
 import { cloneDeep } from 'lodash';
 import { useEffect, useState } from 'react';
+import { KubescapeSettings, useLocalStorage } from '../common/localStorage';
 import { getURLSegments } from '../common/url';
-import { RoutingName } from '../index';
 import { fetchObject, proxyRequest, workloadConfigurationScanClass } from '../model';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
-import { configurationScanContext } from './Compliance';
-
-const { createRouteURL } = Router;
+import { frameworks } from './frameworks';
 
 export default function KubescapeWorkloadConfigurationScanFixes() {
   const [controlID, name, namespace] = getURLSegments(-1, -2, -3);
   const [workloadConfigurationScan, setWorkloadConfigurationScan] =
     useState<WorkloadConfigurationScan | null>(null);
-
-  const control = configurationScanContext.framework.controls.find(
-    element => element.controlID === controlID
-  );
+  const [frameworkName] = useLocalStorage<string>(KubescapeSettings.Framework, 'AllControls');
+  const framework = frameworks.find(fw => fw.name === frameworkName) ?? frameworks[0];
 
   useEffect(() => {
     fetchObject(name, namespace, workloadConfigurationScanClass).then(
@@ -33,19 +29,15 @@ export default function KubescapeWorkloadConfigurationScanFixes() {
     );
   }, []);
 
+  const control = framework.controls.find(element => element.controlID === controlID);
+
   if (!workloadConfigurationScan) {
     return <></>;
   }
 
   return (
     <>
-      <SectionBox
-        title={control?.name}
-        backLink={createRouteURL(RoutingName.KubescapeWorkloadConfigurationScanDetails, {
-          name: workloadConfigurationScan.metadata.name,
-          namespace: workloadConfigurationScan.metadata.namespace,
-        })}
-      >
+      <SectionBox title={control?.name} backLink>
         <NameValueTable
           rows={[
             {
@@ -199,20 +191,16 @@ function Fix(
   const lines = fixedYAML.match(/\n/g)?.length ?? 10;
 
   return (
-    <>
-      {/* <Editor theme="vs-dark" language="yaml" value={yaml.dump(control)} height={500} /> */}
-
-      <DiffEditor
-        theme={localStorage.headlampThemePreference === 'dark' ? 'vs-dark' : ''}
-        language="yaml"
-        original={original}
-        modified={fixedYAML}
-        height={lines * 30}
-        options={{
-          renderSideBySide: true,
-        }}
-      />
-    </>
+    <DiffEditor
+      theme={localStorage.headlampThemePreference === 'dark' ? 'vs-dark' : ''}
+      language="yaml"
+      original={original}
+      modified={fixedYAML}
+      height={lines * 30}
+      options={{
+        renderSideBySide: true,
+      }}
+    />
   );
 }
 

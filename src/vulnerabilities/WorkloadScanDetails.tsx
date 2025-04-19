@@ -1,7 +1,6 @@
 /* 
   Show vulnerability scan results for a workload. 
 */
-import { Router } from '@kinvolk/headlamp-plugin/lib';
 import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   NameValueTable,
@@ -13,12 +12,9 @@ import { FormControlLabel, Link, Switch } from '@mui/material';
 import { useEffect, useState } from 'react';
 import makeSeverityLabel from '../common/SeverityLabel';
 import { getURLSegments } from '../common/url';
-import { RoutingName } from '../index';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
 import { getCVESummary } from './CVESummary';
-
-const { createRouteURL } = Router;
 
 export default function KubescapeVulnerabilityDetails() {
   const [name, namespace] = getURLSegments(-1, -2);
@@ -38,10 +34,7 @@ export default function KubescapeVulnerabilityDetails() {
   return (
     summary && (
       <>
-        <SectionBox
-          title="Vulnerabilities"
-          backLink={createRouteURL(RoutingName.KubescapeVulnerabilities)}
-        >
+        <SectionBox title="Vulnerabilities" backLink>
           <NameValueTable
             rows={[
               {
