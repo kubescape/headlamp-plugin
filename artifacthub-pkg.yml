@@ -1,7 +1,7 @@
-version: v0.7.0
+version: v0.8.0
 name: headlamp_kubescape
 displayName: Kubescape Headlamp Plugin
-createdAt: '2025-04-15T13:50:24Z'
+createdAt: '2025-04-19T14:41:34Z'
 description: Kubescape compliance and vulnerabilities in Headlamp.
 homeURL: https://github.com/kubescape/headlamp-plugin
 logoURL: https://avatars.githubusercontent.com/u/100554170
@@ -16,8 +16,8 @@ screenshots:
   - title: Vulnerabilities
     url: https://raw.githubusercontent.com/kubescape/headlamp-plugin/693d664b433f3f3c03e7a8337cd665eb4be32b8e/demo/vulnerabilities.png
 annotations:
-  headlamp/plugin/archive-url: https://github.com/kubescape/headlamp-plugin/releases/download/v0.7.0/headlamp-plugin-v0.7.0.tar.gz
-  headlamp/plugin/archive-checksum: SHA256:c963715ed443d48105c6991661b74241354af2c1c3001c85600f9b77f97743eb
+  headlamp/plugin/archive-url: https://github.com/kubescape/headlamp-plugin/releases/download/v0.8.0/headlamp-plugin-v0.8.0.tar.gz
+  headlamp/plugin/archive-checksum: SHA256:904722ca5b6e3966be03cc12201e082a03eddf379227a02523727b0c1ecab832
   headlamp/plugin/version-compat: '>=0.29'
   headlamp/plugin/distro-compat: in-cluster,web,docker-desktop,desktop
 readme: |
