@@ -4,7 +4,6 @@
 import '@xyflow/react/dist/style.css';
 import './style.css';
 import dagre from '@dagrejs/dagre';
-import { Router } from '@kinvolk/headlamp-plugin/lib';
 import { SectionBox, Tabs as HeadlampTabs } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import Editor from '@monaco-editor/react';
@@ -13,12 +12,9 @@ import { Edge, MarkerType, Node, ReactFlow, ReactFlowInstance } from '@xyflow/re
 import * as yaml from 'js-yaml';
 import { useEffect, useState } from 'react';
 import { getURLSegments } from '../common/url';
-import { RoutingName } from '../index';
 import { generatedNetworkPolicyClass } from '../model';
 import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
 import { nodeTypes } from './nodes';
-
-const { createRouteURL } = Router;
 
 export default function KubescapeNetworkPolicyDiagram() {
   const [networkPolicyObject, setNetworkPolicyObject] = useState<KubeObject | null>(null);
@@ -30,10 +26,7 @@ export default function KubescapeNetworkPolicyDiagram() {
     return <></>;
   }
   return (
-    <SectionBox
-      title="Generated Network Policy"
-      backLink={createRouteURL(RoutingName.KubescapeNetworkPolicies)}
-    >
+    <SectionBox title="Generated Network Policy" backLink>
       <HeadlampTabs
         tabs={[
           {

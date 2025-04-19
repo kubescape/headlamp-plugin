@@ -1,7 +1,6 @@
 /* 
   Provide information on a CVE and the workloads vulnerable for this CVE. 
 */
-import { Router } from '@kinvolk/headlamp-plugin/lib';
 import {
   Link as HeadlampLink,
   NameValueTable,
@@ -13,8 +12,6 @@ import { getURLSegments } from '../common/url';
 import { RoutingName } from '../index';
 import { WorkloadScan } from './fetch-vulnerabilities';
 import { vulnerabilityContext } from './Vulnerabilities';
-
-const { createRouteURL } = Router;
 
 export default function KubescapeCVEResults() {
   const [cve] = getURLSegments(-1);
@@ -36,7 +33,7 @@ export default function KubescapeCVEResults() {
     return <></>;
   }
   return (
-    <SectionBox title={cve} backLink={createRouteURL(RoutingName.KubescapeVulnerabilities)}>
+    <SectionBox title={cve} backLink>
       <NameValueTable
         rows={[
           {

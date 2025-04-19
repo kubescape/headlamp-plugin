@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RotatingLines } from 'react-loader-spinner';
 import { isNewClusterContext } from '../common/clusterContext';
 import { ErrorMessage } from '../common/ErrorMessage';
+import { KubescapeSettings, useLocalStorage } from '../common/localStorage';
 import { ProgressIndicator } from '../common/ProgressIndicator';
 import makeSeverityLabel from '../common/SeverityLabel';
 import { RoutingName } from '../index';
@@ -39,23 +40,25 @@ interface CVEScan {
 type VulnerabilityContext = {
   workloadScans: WorkloadScan[];
   imageScans: Map<string, ImageScan>;
-  currentCluster: string;
   vulnerabilityManifestContinuation: number | undefined;
   vulnerabilityManifestSummaryContinuation: number | undefined;
-  pageSize: number;
-  allowedNamespaces: string[];
   selectedTab: number;
+  context: {
+    currentCluster: string;
+    allowedNamespaces: string[];
+  };
 };
 
 export const vulnerabilityContext: VulnerabilityContext = {
   workloadScans: [],
   imageScans: new Map<string, ImageScan>(),
-  currentCluster: '',
   vulnerabilityManifestContinuation: 0,
   vulnerabilityManifestSummaryContinuation: 0,
-  pageSize: 50,
-  allowedNamespaces: [],
   selectedTab: 0,
+  context: {
+    currentCluster: '',
+    allowedNamespaces: [],
+  },
 };
 
 export default function KubescapeVulnerabilities() {
@@ -67,16 +70,13 @@ export default function KubescapeVulnerabilities() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (
-        isNewClusterContext(
-          vulnerabilityContext.currentCluster,
-          vulnerabilityContext.allowedNamespaces
-        )
-      ) {
+      if (isNewClusterContext(vulnerabilityContext.context)) {
+        vulnerabilityContext.imageScans.clear();
+        vulnerabilityContext.workloadScans = [];
         vulnerabilityContext.vulnerabilityManifestContinuation = 0;
         vulnerabilityContext.vulnerabilityManifestSummaryContinuation = 0;
-        vulnerabilityContext.currentCluster = getCluster() ?? '';
-        vulnerabilityContext.allowedNamespaces = getAllowedNamespaces();
+        vulnerabilityContext.context.currentCluster = getCluster() ?? '';
+        vulnerabilityContext.context.allowedNamespaces = getAllowedNamespaces();
       }
 
       await fetchVulnerabilities(continueReading, setProgressMessage, setLoading, setError);
@@ -149,8 +149,14 @@ export default function KubescapeVulnerabilities() {
 
 function CVEListView(props: Readonly<{ loading: boolean; workloadScans: WorkloadScan[] | null }>) {
   const { loading, workloadScans } = props;
-  const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useState(false);
-  const [isFixedCVESwitchChecked, setIsFixedCVESwitchChecked] = useState(false);
+  const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useLocalStorage<boolean>(
+    'kubescape.RelevantCVEs',
+    false
+  );
+  const [isFixedCVESwitchChecked, setIsFixedCVESwitchChecked] = useLocalStorage<boolean>(
+    KubescapeSettings.FixedCVEs,
+    false
+  );
 
   if (loading || !workloadScans)
     return (
@@ -273,6 +279,7 @@ function CVEListView(props: Readonly<{ loading: boolean; workloadScans: Workload
               },
             ],
           }}
+          reflectInURL="cve"
         />
       </SectionBox>
     </>

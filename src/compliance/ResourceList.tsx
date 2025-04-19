@@ -95,6 +95,7 @@ export default function KubescapeWorkloadConfigurationScanList(
             },
           ],
         }}
+        reflectInURL="resources"
       />
     </Box>
   );

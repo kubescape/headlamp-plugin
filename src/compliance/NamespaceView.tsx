@@ -60,6 +60,15 @@ export default function NamespaceView(
             Cell: ({ cell }: any) => <progress value={cell.getValue()} />,
           },
           {
+            header: 'Compliance',
+            accessorFn: (namespaceResult: NamespaceResult) =>
+              namespaceResult.total === 0
+                ? 100
+                : Math.trunc((namespaceResult.passed / namespaceResult.total) * 100),
+            Cell: ({ cell }: any) => cell.getValue() + '%',
+            gridTemplate: 'auto',
+          },
+          {
             header: 'Critical',
             accessorKey: 'criticalCount',
             gridTemplate: 'min-content',
@@ -98,6 +107,7 @@ export default function NamespaceView(
             },
           ],
         }}
+        reflectInURL="namespaces"
       />
     </SectionBox>
   );

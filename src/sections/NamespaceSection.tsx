@@ -11,7 +11,6 @@ import { configurationScanSummariesClass, vulnerabilitySummaryClass } from '../m
 import { getCVESummary } from '../vulnerabilities/CVESummary';
 
 export default function addKubescapeNamespaceSection(resource: any, sections: any) {
-  console.log(resource);
   // Ignore if there is no resource.
   if (!resource) {
     return sections;

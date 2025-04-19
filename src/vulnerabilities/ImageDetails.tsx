@@ -1,7 +1,6 @@
 /* 
   Show vulnerability scan results for a container image. 
 */
-import { Router } from '@kinvolk/headlamp-plugin/lib';
 import {
   NameValueTable,
   SectionBox,
@@ -13,11 +12,8 @@ import { Link } from '@mui/material';
 import { useState } from 'react';
 import makeSeverityLabel from '../common/SeverityLabel';
 import { getURLSegments } from '../common/url';
-import { RoutingName } from '../index';
 import { vulnerabilityManifestClass } from '../model';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
-
-const { createRouteURL } = Router;
 
 export default function ImageVulnerabilityDetails() {
   const [name, namespace] = getURLSegments(-1, -2);
@@ -28,10 +24,7 @@ export default function ImageVulnerabilityDetails() {
   if (manifestVulnerability) {
     return (
       <>
-        <SectionBox
-          title="Image Vulnerabilities"
-          backLink={createRouteURL(RoutingName.KubescapeVulnerabilities)}
-        >
+        <SectionBox title="Image Vulnerabilities" backLink>
           <NameValueTable
             rows={[
               {
