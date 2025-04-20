@@ -58,7 +58,7 @@ function ConfigurationScans(props: Readonly<{ namespace: string }>) {
       data={configurationScans}
       columns={[
         {
-          header: 'Namespace',
+          header: 'Name',
           accessorKey: 'metadata.name',
           Cell: ({ cell }: any) => (
             <HeadlampLink
