@@ -32,6 +32,13 @@ import { FrameworkButtons } from './FrameworkButtons';
 import { frameworks } from './frameworks';
 import NamespaceView from './NamespaceView';
 import KubescapeWorkloadConfigurationScanList from './ResourceList';
+import {
+  controlComplianceScore,
+  countFailedScans,
+  countScans,
+  filterWorkloadScanData,
+  getControlsWithFindings,
+} from './workload-scanning';
 
 const pageSize: number = 50;
 
@@ -61,6 +68,10 @@ export default function ComplianceView() {
   >(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
+  const [exceptions, setExceptions] = useState<{
+    controlsExcepted: number;
+    resourcesExcepted: number;
+  }>({ controlsExcepted: 0, resourcesExcepted: 0 });
   const [frameworkName, setFrameworkName] = useLocalStorage<string>(
     KubescapeSettings.Framework,
     'AllControls'
@@ -85,9 +96,12 @@ export default function ComplianceView() {
       if (configurationScanContext.continuation !== undefined) {
         await fetchWorkloadScanData(continueReading, setProgressMessage, setLoading);
       }
-      setWorkloadScanData(
-        filterWorkloadScanData(configurationScanContext.workloadScans, framework)
+      const [filteredWorkloadScans, controlsExcepted, resourcesExcepted] = filterWorkloadScanData(
+        configurationScanContext.workloadScans,
+        framework
       );
+      setExceptions({ resourcesExcepted, controlsExcepted });
+      setWorkloadScanData(filteredWorkloadScans);
     }
 
     fetchData();
@@ -139,8 +153,10 @@ export default function ComplianceView() {
             <FrameworkButtons frameworkName={frameworkName} setFrameworkName={setFrameworkName} />
           </Stack>
           <Typography variant="body1" component="div" sx={{ padding: 2 }}>
-            {workloadScanData.length} scans, {countFailedScans(workloadScanData)} configuration
-            issues
+            {`${workloadScanData.length} total checks, ${countFailedScans(
+              workloadScanData
+            )} configuration issues, excluding ${exceptions.resourcesExcepted} resources and 
+            ${exceptions.controlsExcepted} controls`}
           </Typography>
           <HeadlampTabs
             defaultIndex={selectedTab}
@@ -329,32 +345,6 @@ function hasFailedScans(workloadScanData: WorkloadConfigurationScanSummary[], co
   );
 }
 
-export function countScans(
-  workloadScanData: WorkloadConfigurationScanSummary[],
-  control: Control,
-  status: string
-): number {
-  return workloadScanData
-    .flatMap(w => Object.values(w.spec.controls))
-    .filter(scan => scan.controlID === control.controlID)
-    .filter(scan => scan.status.status === status).length;
-}
-
-function countFailedScans(workloadScanData: WorkloadConfigurationScanSummary[]): number {
-  return workloadScanData
-    .flatMap(w => Object.values(w.spec.controls))
-    .filter(scan => scan.status.status === 'failed').length;
-}
-
-export function countScansForControl(
-  workloadScanData: WorkloadConfigurationScanSummary[],
-  control: Control
-): number {
-  return workloadScanData.filter(w =>
-    Object.values(w.spec.controls).some(scan => scan.controlID === control.controlID)
-  ).length;
-}
-
 async function fetchWorkloadScanData(
   continueReading: React.MutableRefObject<boolean>,
   setProgress: (progress: string) => void,
@@ -379,53 +369,4 @@ async function fetchWorkloadScanData(
     }
   }
   setLoading(false);
-}
-
-function getControlsWithFindings(
-  workloadScanData: WorkloadConfigurationScanSummary[],
-  frameWork: FrameWork
-) {
-  return frameWork.controls.filter(control =>
-    workloadScanData?.some(w =>
-      Object.values(w.spec.controls).some(
-        scan => control.controlID === scan.controlID && scan.status.status === 'failed'
-      )
-    )
-  );
-}
-
-export function filterWorkloadScanData(
-  workloadScans: WorkloadConfigurationScanSummary[],
-  frameWork: FrameWork
-): WorkloadConfigurationScanSummary[] {
-  const filteredWorkloadScans: WorkloadConfigurationScanSummary[] = [];
-
-  for (const workloadScan of workloadScans) {
-    const w: WorkloadConfigurationScanSummary = structuredClone(workloadScan);
-
-    if (frameWork) {
-      w.spec.controls = Object.fromEntries(
-        Object.entries(workloadScan.spec.controls).filter(([, value]) =>
-          frameWork.controls.find(control => control.controlID === value.controlID)
-        )
-      );
-    }
-
-    filteredWorkloadScans.push(w);
-  }
-  return filteredWorkloadScans;
-}
-
-// The control compliance score measures the compliance of individual controls within a framework.
-// It is calculated by evaluating the ratio of resources that passed to the total number of resources evaluated against that control.
-export function controlComplianceScore(
-  workloadScanData: WorkloadConfigurationScanSummary[],
-  control: Control
-) {
-  const passedCount = countScans(workloadScanData, control, 'passed');
-  const total = countScansForControl(workloadScanData, control);
-  if (total === 0) {
-    return 100;
-  }
-  return (passedCount / total) * 100;
 }

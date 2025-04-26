@@ -2,6 +2,7 @@ import { Dispatch, SetStateAction, useEffect, useState } from 'react';
 
 export enum KubescapeSettings {
   ComplianceTab,
+  Exceptions,
   FailedControls,
   FixedCVEs,
   Framework,
@@ -17,11 +18,7 @@ export function useLocalStorage<T>(
   const storageKey = `kubescape.${KubescapeSettings[key]}`;
 
   const [value, setValue] = useState<T>(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      return JSON.parse(saved);
-    }
-    return defaultValue;
+    return getItemFromLocalStorage(key) ?? defaultValue;
   });
 
   useEffect(() => {
@@ -29,4 +26,18 @@ export function useLocalStorage<T>(
   }, [key, value]);
 
   return [value, setValue];
+}
+
+export function getItemFromLocalStorage<T>(key: KubescapeSettings): T | null {
+  const storageKey = `kubescape.${KubescapeSettings[key]}`;
+  const saved = localStorage.getItem(storageKey);
+  if (saved) {
+    return JSON.parse(saved);
+  }
+  return null;
+}
+
+export function clearItemFromLocalStorage(key: KubescapeSettings) {
+  const storageKey = `kubescape.${KubescapeSettings[key]}`;
+  localStorage.removeItem(storageKey);
 }

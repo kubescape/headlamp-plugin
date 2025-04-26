@@ -16,13 +16,10 @@ import {
 import React from 'react';
 import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
-import {
-  configurationScanContext,
-  controlComplianceScore,
-  filterWorkloadScanData,
-} from './Compliance';
+import { configurationScanContext } from './Compliance';
 import { FrameWork } from './FrameWork';
 import { frameworks } from './frameworks';
+import { controlComplianceScore, filterWorkloadScanData } from './workload-scanning';
 
 export function FrameworkButtons(
   props: Readonly<{
@@ -49,12 +46,12 @@ export function FrameworkButtons(
     .forEach(name => {
       const framework = frameworks.find(fw => fw.name === name);
       if (framework) {
-        const workloadScanData = filterWorkloadScanData(
+        const [filteredWorkloadScans] = filterWorkloadScanData(
           configurationScanContext.workloadScans,
           framework
         );
-        const percentage = workloadScanData
-          ? Math.trunc(frameworkComplianceScore(workloadScanData, framework))
+        const percentage = filteredWorkloadScans
+          ? Math.trunc(frameworkComplianceScore(filteredWorkloadScans, framework))
           : 0;
         labels.push(
           <FormControlLabel

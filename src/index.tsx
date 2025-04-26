@@ -25,6 +25,7 @@ namespace RoutingPath {
     '/kubescape/vulnerabilities/namespaces/:namespace/:name';
   export const KubescapeCVEResults = '/kubescape/vulnerabilities/cves/:cve';
   export const ImageVulnerabilityDetails = '/kubescape/vulnerabilities/images/:namespace/:name';
+  export const KubescapePostureExceptionPolicies = 'KubescapeExceptions';
   export const KubescapeVulnerabilities = '/kubescape/vulnerabilities';
   export const KubescapeNetworkPolicies = '/kubescape/networkpolicies';
   export const KubescapeNetworkPolicyDiagram = '/kubescape/networkpolicies/:namespace/:name';
@@ -41,6 +42,7 @@ export namespace RoutingName {
   export const KubescapeControlResults = 'Control Configuration Scan';
   export const KubescapeWorkloadConfigurationScanFixes = 'Workload Configuration Fixes';
   export const VulnerabilitiesNamespaceSummary = 'Namespace Vulnerabilities';
+  export const KubescapePostureExceptionPolicies = 'KubescapeExceptions';
   export const KubescapeVulnerabilityDetails = 'Vulnerability';
   export const KubescapeCVEResults = 'CVE Vulnerabilities';
   export const ImageVulnerabilityDetails = 'Image Vulnerabilities';
@@ -97,6 +99,13 @@ registerSidebarEntry({
   url: RoutingPath.ApplicationProfiles,
 });
 
+registerSidebarEntry({
+  parent: kubescape,
+  name: 'exceptions',
+  label: 'Policy Exceptions',
+  url: RoutingPath.KubescapePostureExceptionPolicies,
+});
+
 import ComplianceView from './compliance/Compliance';
 
 registerRoute({
@@ -135,6 +144,16 @@ registerRoute({
   component: () => <KubescapeControlResults />,
   exact: true,
   name: RoutingName.KubescapeControlResults,
+});
+
+import KubescapePostureExceptionPolicies from './exceptions/PostureExceptionPolicies';
+
+registerRoute({
+  path: RoutingPath.KubescapePostureExceptionPolicies,
+  sidebar: compliance,
+  component: () => <KubescapePostureExceptionPolicies />,
+  exact: true,
+  name: 'RoutingName.KubescapePostureExceptionPolicies',
 });
 
 import KubescapeWorkloadConfigurationScanFixes from './compliance/WorkloadScanFixes';
