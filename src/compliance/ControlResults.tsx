@@ -6,6 +6,7 @@ import {
   NameValueTable,
   SectionBox,
   Table,
+  TableColumn,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Link } from '@mui/material';
 import { makeNamespaceLink } from '../common/Namespace';
@@ -15,10 +16,14 @@ import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';
 import { frameworks } from './frameworks';
+import { useSelectedClusters } from '@kinvolk/headlamp-plugin/lib/k8s';
+import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 
 export default function KubescapeControlResults() {
   const controlID = getLastURLSegment();
   const [frameworkName] = useLocalStorage<string>(KubescapeSettings.Framework, 'AllControls');
+  const useHLSelectedClusters = useSelectedClusters ?? (() => null); // Needed for backwards compatibility
+  const clusters = useHLSelectedClusters() ?? [getCluster()];
 
   const framework = frameworks.find(fw => fw.name === frameworkName) ?? frameworks[0];
 
@@ -90,6 +95,7 @@ export default function KubescapeControlResults() {
                   params={{
                     name: cell.row.original.metadata.name,
                     namespace: cell.row.original.metadata.namespace,
+                    cluster: cell.row.original.metadata.cluster,
                   }}
                 >
                   {cell.getValue()}
@@ -109,6 +115,12 @@ export default function KubescapeControlResults() {
                 workloadScan.metadata.labels['kubescape.io/workload-namespace'],
               Cell: ({ cell }: any) => (cell.getValue() ? makeNamespaceLink(cell.getValue()) : ''),
             },
+            clusters.length > 1
+              ? {
+                  header: 'Cluster',
+                  accessorKey: 'metadata.cluster',
+                }
+              : ({} as TableColumn<WorkloadConfigurationScanSummary>),
             {
               header: 'Scan name',
               accessorFn: (workloadScan: WorkloadConfigurationScanSummary) =>

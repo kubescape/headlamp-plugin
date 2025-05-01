@@ -19,14 +19,17 @@ import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfig
 import { frameworks } from './frameworks';
 
 export default function KubescapeWorkloadConfigurationScanDetails() {
-  const [name, namespace] = getURLSegments(-1, -2);
+  const [name, namespace, cluster] = getURLSegments(-1, -2, -3);
   const [configurationScan, setConfigurationScan] = useState<WorkloadConfigurationScan | null>(
     null
   );
 
   useEffect(() => {
-    fetchObject(name, namespace, workloadConfigurationScanClass).then(
+    fetchObject(name, namespace, cluster, workloadConfigurationScanClass).then(
       (result: WorkloadConfigurationScan) => {
+        if (result) {
+          result.metadata.cluster = cluster;
+        }
         setConfigurationScan(result);
       }
     );
@@ -47,6 +50,10 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
             {
               name: 'Namespace',
               value: configurationScan.metadata.labels['kubescape.io/workload-namespace'],
+            },
+            {
+              name: 'Cluster',
+              value: configurationScan.metadata.cluster,
             },
             {
               name: 'Kind',

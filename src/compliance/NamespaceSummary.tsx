@@ -16,6 +16,7 @@ import { configurationScanSummariesClass } from '../model';
 import { ConfigurationScanSummary } from '../softwarecomposition/ConfigurationScanSummary';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';
+import { cluster } from '@kinvolk/headlamp-plugin/lib/k8s/index';
 
 export default function KubescapeConfigurationScanNamespaceSummary() {
   const namespace = getLastURLSegment();
@@ -66,6 +67,7 @@ function ConfigurationScans(props: Readonly<{ namespace: string }>) {
               params={{
                 name: cell.row.original.metadata.name,
                 namespace: cell.row.original.metadata.namespace,
+                cluster: cell.row.original.metadata.cluster,
               }}
             >
               {cell.getValue()}

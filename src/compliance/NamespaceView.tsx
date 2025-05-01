@@ -5,11 +5,16 @@ import {
   Link as HeadlampLink,
   SectionBox,
   Table,
+  TableColumn,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
+import { useSelectedClusters } from '@kinvolk/headlamp-plugin/lib/k8s';
+import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
+
 class NamespaceResult {
   namespace: string;
+  cluster: string;
   criticalCount: number = 0;
   highCount: number = 0;
   mediumCount: number = 0;
@@ -19,8 +24,9 @@ class NamespaceResult {
   passed: number = 0;
   failed: number = 0;
 
-  constructor(namespace: string) {
+  constructor(namespace: string, cluster: string) {
     this.namespace = namespace;
+    this.cluster = cluster;
   }
 }
 
@@ -30,9 +36,12 @@ export default function NamespaceView(
   }>
 ) {
   const { workloadScanData } = props;
+  const useHLSelectedClusters = useSelectedClusters ?? (() => null); // Needed for backwards compatibility
+  const clusters = useHLSelectedClusters() ?? [getCluster()];
   if (!workloadScanData) {
     return <></>;
   }
+
   return (
     <SectionBox>
       <Table
@@ -53,6 +62,12 @@ export default function NamespaceView(
               </HeadlampLink>
             ),
           },
+          clusters.length > 1
+            ? {
+                header: 'Cluster',
+                accessorKey: 'cluster',
+              }
+            : ({} as TableColumn<NamespaceResult>),
           {
             header: 'Passed',
             accessorFn: (namespaceResult: NamespaceResult) =>
@@ -121,7 +136,7 @@ function getNamespaceResults(
   for (const scan of workloadScanData) {
     let namespaceResult = namespaces.find(ns => ns.namespace === scan.metadata.namespace);
     if (!namespaceResult) {
-      namespaceResult = new NamespaceResult(scan.metadata.namespace);
+      namespaceResult = new NamespaceResult(scan.metadata.namespace, scan.metadata.cluster);
       namespaces.push(namespaceResult);
     }
 

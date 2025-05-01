@@ -16,7 +16,7 @@ namespace RoutingPath {
   export const ComplianceView = '/kubescape/compliance';
   export const KubescapeConfigurationScanNamespaceSummary = '/kubescape/compliance/:namespace';
   export const KubescapeWorkloadConfigurationScanDetails =
-    '/kubescape/compliance/namespaces/:namespace/:name';
+    '/kubescape/compliance/:cluster/:namespace/:name';
   export const KubescapeControlResults = '/kubescape/compliance/controls/:control';
   export const KubescapeWorkloadConfigurationScanFixes =
     '/kubescape/compliance/namespaces/:namespace/:name/:control';

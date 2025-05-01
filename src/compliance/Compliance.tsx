@@ -39,12 +39,15 @@ import {
   filterWorkloadScanData,
   getControlsWithFindings,
 } from './workload-scanning';
+import { useSelectedClusters } from '@kinvolk/headlamp-plugin/lib/k8s';
 
 const pageSize: number = 50;
 
 // workloadScans are cached in global scope because it is an expensive query for the API server
 type ConfigurationScanContext = {
   workloadScans: WorkloadConfigurationScanSummary[];
+  clusters: string[];
+  clusterCursor: number;
   continuation: number | undefined;
   context: {
     currentCluster: string;
@@ -54,6 +57,8 @@ type ConfigurationScanContext = {
 
 export const configurationScanContext: ConfigurationScanContext = {
   workloadScans: [],
+  clusters: [],
+  clusterCursor: 0,
   continuation: 0,
   context: {
     currentCluster: '',
@@ -81,6 +86,8 @@ export default function ComplianceView() {
     true
   );
 
+  const useHLSelectedClusters = useSelectedClusters ?? (() => null); // Needed for backwards compatibility
+  const clusters = useHLSelectedClusters() ?? [getCluster()];
   const continueReading = useRef(true);
 
   const framework = frameworks.find(fw => fw.name === frameworkName) ?? frameworks[0];
@@ -88,12 +95,17 @@ export default function ComplianceView() {
   useEffect(() => {
     async function fetchData() {
       if (isNewClusterContext(configurationScanContext.context)) {
+        configurationScanContext.clusters = clusters;
+        configurationScanContext.clusterCursor = 0;
         configurationScanContext.continuation = 0;
         configurationScanContext.workloadScans = [];
         configurationScanContext.context.currentCluster = getCluster() ?? '';
         configurationScanContext.context.allowedNamespaces = getAllowedNamespaces();
       }
-      if (configurationScanContext.continuation !== undefined) {
+      if (
+        configurationScanContext.continuation !== undefined &&
+        configurationScanContext.clusterCursor < configurationScanContext.clusters.length
+      ) {
         await fetchWorkloadScanData(continueReading, setProgressMessage, setLoading);
       }
       const [filteredWorkloadScans, controlsExcepted, resourcesExcepted] = filterWorkloadScanData(
@@ -350,23 +362,31 @@ async function fetchWorkloadScanData(
   setProgress: (progress: string) => void,
   setLoading: (loading: boolean) => void
 ): Promise<void> {
-  while (continueReading.current && configurationScanContext.continuation !== undefined) {
-    setLoading(true);
-    await paginatedListQuery(
-      workloadConfigurationScanSummaryClass,
-      configurationScanContext.continuation,
-      pageSize,
-      getAllowedNamespaces()
-    ).then(response => {
-      const { items, continuation } = response;
+  while (configurationScanContext.clusterCursor < configurationScanContext.clusters.length) {
+    while (continueReading.current && configurationScanContext.continuation !== undefined) {
+      setLoading(true);
+      await paginatedListQuery(
+        configurationScanContext.clusters[configurationScanContext.clusterCursor],
+        workloadConfigurationScanSummaryClass,
+        configurationScanContext.continuation,
+        pageSize,
+        getAllowedNamespaces()
+      ).then(response => {
+        const { items, continuation } = response;
 
-      configurationScanContext.continuation = continuation;
-      configurationScanContext.workloadScans.push(...items);
-    });
+        configurationScanContext.continuation = continuation;
+        configurationScanContext.workloadScans.push(...items);
+      });
 
-    if (configurationScanContext.continuation !== undefined) {
-      setProgress(`Reading ${configurationScanContext.workloadScans.length} scans...`);
+      if (configurationScanContext.continuation !== undefined) {
+        setProgress(`Reading ${configurationScanContext.workloadScans.length} scans...`);
+      }
+    }
+    configurationScanContext.clusterCursor++; // move to the next cluster
+    if (configurationScanContext.clusterCursor < configurationScanContext.clusters.length) {
+      configurationScanContext.continuation = 0;
     }
   }
+
   setLoading(false);
 }

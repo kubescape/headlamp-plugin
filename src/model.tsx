@@ -104,13 +104,18 @@ export const knownServersClass = makeCustomResourceClass({
 export function proxyRequest(
   name: string,
   namespace: string,
+  cluster: string,
   group: string,
   version: string,
   pluralName: string
 ): Promise<any> {
   const api = group ? '/apis/' : '/api';
+
   return request(
-    `${api}${group}/${version}/${namespace ? 'namespaces/' : ''}${namespace}/${pluralName}/${name}`
+    `${api}${group}/${version}/${namespace ? 'namespaces/' : ''}${namespace}/${pluralName}/${name}`,
+    {
+      cluster: cluster,
+    }
   );
 }
 
@@ -134,6 +139,7 @@ export async function listQuery(objectClass: KubeObjectClass): Promise<any> {
   }
 }
 export async function paginatedListQuery(
+  cluster: string,
   objectClass: KubeObjectClass,
   continuation: number | undefined,
   pageSize: number | undefined,
@@ -157,7 +163,12 @@ export async function paginatedListQuery(
     return { items: listOfLists.flatMap(list => list.items), continuation: undefined };
   } else {
     //await new Promise(resolve => setTimeout(resolve, 2000));
-    const overviewList = await request(`/apis/${group}/${version}/${queryFragment}`);
+    const overviewList = await request(`/apis/${group}/${version}/${queryFragment}`, {
+      cluster: cluster,
+    });
+    overviewList.items.forEach((item: any) => {
+      item.metadata.cluster = cluster;
+    });
     return { items: overviewList.items, continuation: overviewList.metadata.continue };
   }
 }
@@ -165,10 +176,11 @@ export async function paginatedListQuery(
 export function fetchObject(
   name: string,
   namespace: string,
+  cluster: string,
   objectClass: KubeObjectClass
 ): Promise<any> {
   const group = objectClass.apiEndpoint.apiInfo[0].group;
   const version = objectClass.apiEndpoint.apiInfo[0].version;
 
-  return proxyRequest(name, namespace, group, version, objectClass.pluralName);
+  return proxyRequest(name, namespace, cluster, group, version, objectClass.pluralName);
 }

@@ -1,11 +1,13 @@
 /* 
   List configuration scans for all workloads.  
 */
-import { Link, Table } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { Link, Table, TableColumn } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, Stack, Tooltip } from '@mui/material';
 import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { FrameWork } from './FrameWork';
+import { useSelectedClusters } from '@kinvolk/headlamp-plugin/lib/k8s';
+import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 
 export default function KubescapeWorkloadConfigurationScanList(
   props: Readonly<{
@@ -15,6 +17,9 @@ export default function KubescapeWorkloadConfigurationScanList(
   }>
 ) {
   const { workloadScanData, framework, isFailedControlSwitchChecked } = props;
+  const useHLSelectedClusters = useSelectedClusters ?? (() => null); // Needed for backwards compatibility
+  const clusters = useHLSelectedClusters() ?? [getCluster()];
+
   if (!workloadScanData) {
     return <></>;
   }
@@ -35,6 +40,7 @@ export default function KubescapeWorkloadConfigurationScanList(
                 params={{
                   name: row.original.metadata.name,
                   namespace: row.original.metadata.namespace,
+                  cluster: row.original.metadata.cluster,
                 }}
               >
                 {cell.getValue()}
@@ -67,6 +73,12 @@ export default function KubescapeWorkloadConfigurationScanList(
             },
             gridTemplate: 'auto',
           },
+          clusters.length > 1
+            ? {
+                header: 'Cluster',
+                accessorKey: 'metadata.cluster',
+              }
+            : ({} as TableColumn<WorkloadConfigurationScanSummary>),
           {
             header: 'Passed',
             accessorFn: (workloadScan: WorkloadConfigurationScanSummary) => {
