@@ -24,6 +24,6 @@ export interface ResourceDesignator {
 export interface PosturePolicy {
   [key: string]: string | undefined;
   frameworkName?: string;
-  controlName?: string;
+  controlName?: string; // TODO remove
   controlID?: string;
 }

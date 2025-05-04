@@ -10,19 +10,15 @@ import {
 import { Link } from '@mui/material';
 import { makeNamespaceLink } from '../common/Namespace';
 import { getLastURLSegment } from '../common/url';
-import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { RoutingName } from '../index';
+import { controls } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';
-import { frameworks } from './frameworks';
 
 export default function KubescapeControlResults() {
   const controlID = getLastURLSegment();
-  const [frameworkName] = useLocalStorage<string>(KubescapeSettings.Framework, 'AllControls');
 
-  const framework = frameworks.find(fw => fw.name === frameworkName) ?? frameworks[0];
-
-  const control = framework.controls.find(element => element.controlID === controlID);
+  const control = controls.find(element => element.controlID === controlID);
 
   if (!control) {
     return <p>The control {controlID} was not found.</p>;

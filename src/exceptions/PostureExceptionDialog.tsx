@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useState } from 'react';
-import styled from 'styled-components';
+import { ErrorContainer } from '../common/ErrorContainer';
 import {
   PostureExceptionPolicy,
   PosturePolicy,
@@ -139,15 +139,6 @@ export function EditPosturePolicyExceptionDialog(
     </>
   );
 }
-
-const ErrorContainer = styled.div`
-  padding: 1rem;
-  background-color: #f44336;
-  color: white;
-  border-radius: 4px;
-  margin: 1rem 0;
-  text-align: center;
-`;
 
 function EditResourceMatchers(
   props: Readonly<{ editedException: PostureExceptionPolicy; setEditedException: Function }>

@@ -10,6 +10,8 @@ const spdxGroup = 'spdx.softwarecomposition.kubescape.io';
 const spdxVersion = 'v1beta1';
 const spdxGroupVersions = [{ group: spdxGroup, version: spdxVersion }];
 
+export const customObjectLabel = 'kubescape.io/custom-object';
+
 export const vulnerabilityManifestClass = makeCustomResourceClass({
   apiInfo: spdxGroupVersions,
   isNamespaced: true,

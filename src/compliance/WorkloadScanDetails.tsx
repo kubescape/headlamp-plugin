@@ -12,11 +12,10 @@ import {
 import { Link } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { getURLSegments } from '../common/url';
-import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { RoutingName } from '../index';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
+import { controls } from '../rego';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
-import { frameworks } from './frameworks';
 
 export default function KubescapeWorkloadConfigurationScanDetails() {
   const [name, namespace] = getURLSegments(-1, -2);
@@ -71,16 +70,11 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
 
 function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigurationScan }>) {
   const { workloadConfigurationScan } = props;
-  const controls = workloadConfigurationScan.spec.controls;
-  const entries = Object.keys(controls).map(key => controls[key]);
-  const [frameworkName] = useLocalStorage<string>(KubescapeSettings.Framework, 'AllControls');
-
-  const framework = frameworks.find(fw => fw.name === frameworkName) ?? frameworks[0];
 
   return (
     <SectionBox title="Controls">
       <HeadlampTable
-        data={entries}
+        data={Object.values(workloadConfigurationScan.spec.controls)}
         columns={[
           {
             id: 'Status',
@@ -111,7 +105,7 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
           {
             header: 'Category',
             accessorFn: (control: WorkloadConfigurationScan.Control) => {
-              const controlInfo = framework.controls.find(
+              const controlInfo = controls.find(
                 controlInfo => controlInfo.controlID === control.controlID
               );
               return controlInfo?.category?.subCategory?.name ?? controlInfo?.category?.name;
@@ -126,13 +120,13 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
           {
             header: 'Explain',
             accessorFn: (control: WorkloadConfigurationScan.Control) =>
-              framework.controls.find(controlInfo => controlInfo.controlID === control.controlID)
+              controls.find(controlInfo => controlInfo.controlID === control.controlID)
                 ?.description,
           },
           {
             header: 'Remediation',
             accessorFn: (control: WorkloadConfigurationScan.Control) =>
-              framework.controls.find(controlInfo => controlInfo.controlID === control.controlID)
+              controls.find(controlInfo => controlInfo.controlID === control.controlID)
                 ?.remediation,
           },
           {

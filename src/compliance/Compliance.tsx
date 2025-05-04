@@ -1,6 +1,7 @@
 /* 
   Overview  page for configuration controls and resources. 
 */
+import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   Link as HeadlampLink,
   SectionBox,
@@ -25,11 +26,14 @@ import { ProgressIndicator } from '../common/ProgressIndicator';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { RoutingName } from '../index';
-import { paginatedListQuery, workloadConfigurationScanSummaryClass } from '../model';
+import {
+  customObjectLabel,
+  paginatedListQuery,
+  workloadConfigurationScanSummaryClass,
+} from '../model';
+import { Control, controls, FrameWork, frameworks } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
-import { Control, FrameWork } from './FrameWork';
 import { FrameworkButtons } from './FrameworkButtons';
-import { frameworks } from './frameworks';
 import NamespaceView from './NamespaceView';
 import KubescapeWorkloadConfigurationScanList from './ResourceList';
 import {
@@ -61,7 +65,18 @@ export const configurationScanContext: ConfigurationScanContext = {
   },
 };
 
-export default function ComplianceView() {
+/**
+ * Overview page for configuration controls and resources.
+ *
+ * This page is the main entry point for viewing the compliance posture of the cluster.
+ * It displays a list of all controls and resources that have been scanned by Kubescape,
+ * along with information about the compliance posture of each control and resource.
+ * The page also provides a filter for viewing the compliance posture of specific
+ * resources and controls.
+ *
+ * @returns The ComplianceView component.
+ */
+export default function ComplianceView(): JSX.Element {
   const [selectedTab, setSelectedTab] = useLocalStorage<number>(KubescapeSettings.ComplianceTab, 0);
   const [workloadScanData, setWorkloadScanData] = useState<
     WorkloadConfigurationScanSummary[] | null
@@ -76,14 +91,41 @@ export default function ComplianceView() {
     KubescapeSettings.Framework,
     'AllControls'
   );
+  const [customFrameworks, setCustomFrameworks] = useState<any[]>([]);
+
   const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] = useLocalStorage<boolean>(
     KubescapeSettings.FailedControls,
     true
   );
-
   const continueReading = useRef(true);
 
-  const framework = frameworks.find(fw => fw.name === frameworkName) ?? frameworks[0];
+  const framework =
+    frameworks.find(fw => fw.name === frameworkName) ??
+    customFrameworks?.find(fw => fw.name === frameworkName) ??
+    frameworks[0];
+
+  useEffect(() => {
+    const queryParams = new URLSearchParams();
+    queryParams.append('labelSelector', `${customObjectLabel}=framework`);
+    request(`api/v1/configmaps?${queryParams.toString()}`)
+      .then(response => {
+        const customFrameworks =
+          response.items?.map((configMap: any) => {
+            const controlsIDs: string[] = JSON.parse(configMap.data.controlsIDs) ?? [];
+            return {
+              name: configMap.data.name,
+              description: configMap.data.description,
+              controls: controls.filter(c =>
+                controlsIDs?.some(controlID => controlID === c.controlID)
+              ),
+            } as FrameWork;
+          }) ?? [];
+        setCustomFrameworks(customFrameworks);
+      })
+      .catch(error => {
+        console.error(error);
+      });
+  }, []);
 
   useEffect(() => {
     async function fetchData() {
@@ -150,7 +192,11 @@ export default function ComplianceView() {
                 setIsFailedControlSwitchChecked(checked);
               }}
             />
-            <FrameworkButtons frameworkName={frameworkName} setFrameworkName={setFrameworkName} />
+            <FrameworkButtons
+              frameworkName={frameworkName}
+              customFrameworks={customFrameworks}
+              setFrameworkName={setFrameworkName}
+            />
           </Stack>
           <Typography variant="body1" component="div" sx={{ padding: 2 }}>
             {`${workloadScanData.length} total checks, ${countFailedScans(
@@ -216,7 +262,7 @@ function ConfigurationScanningListView(
           {
             header: 'Severity',
             accessorFn: (control: Control) =>
-              makeCVSSLabel(control.baseScore, hasFailedScans(workloadScanData, control)),
+              makeSeverityLabel(control.baseScore, hasFailedScans(workloadScanData, control)),
             gridTemplate: 'min-content',
           },
           {
@@ -285,22 +331,9 @@ function ConfigurationScanningListView(
   );
 }
 
-function makeCVSSLabel(baseScore: number, hasFailedScans: boolean) {
+function makeSeverityLabel(baseScore: number, hasFailedScans: boolean) {
+  const severity = complianceSeverity(baseScore);
   let status: StatusLabelProps['status'] = '';
-  let severity: string;
-
-  // https://nvd.nist.gov/vuln-metrics/cvss
-  if (baseScore < 0.1) {
-    severity = 'None';
-  } else if (baseScore < 4.0) {
-    severity = 'Low';
-  } else if (baseScore < 7.0) {
-    severity = 'Medium';
-  } else if (baseScore < 9.0) {
-    severity = 'High';
-  } else {
-    severity = 'Critical';
-  }
 
   if (hasFailedScans) {
     status = 'error';
@@ -313,6 +346,23 @@ function makeCVSSLabel(baseScore: number, hasFailedScans: boolean) {
   } else {
     return severity;
   }
+}
+
+export function complianceSeverity(baseScore: number) {
+  let severity: string;
+
+  if (baseScore < 0.1) {
+    severity = 'None';
+  } else if (baseScore < 4.0) {
+    severity = 'Low';
+  } else if (baseScore < 7.0) {
+    severity = 'Medium';
+  } else if (baseScore < 9.0) {
+    severity = 'High';
+  } else {
+    severity = 'Critical';
+  }
+  return severity;
 }
 
 function makeResultsLabel(workloadScanData: WorkloadConfigurationScanSummary[], control: Control) {

@@ -10,9 +10,15 @@ vap_test_files:=\
 	pod.yaml
 
 controls-download:  
-	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/frameworks -o src/compliance/frameworks.ts; 
-	sed -i '1s/^/export const frameworks: FrameWork[] = \n/' src/compliance/frameworks.ts; 
-	sed -i '1s/^/import { FrameWork } from ".\/FrameWork" \n/' src/compliance/frameworks.ts; 
+	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/frameworks -o src/rego/frameworks.ts; 
+	sed -i '1s/^/export const frameworks: FrameWork[] = \n/' src/rego/frameworks.ts; 
+	sed -i '1s/^/import { FrameWork } from ".\/FrameWork" \n/' src/rego/frameworks.ts; 
+	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/controls -o src/rego/controls.ts; 
+	sed -i '1s/^/export const controls: Control[] = \n/' src/rego/controls.ts; 
+	sed -i '1s/^/import { Control } from ".\/Control" \n/' src/rego/controls.ts; 
+	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/rules -o src/rego/rules.ts; 
+	sed -i '1s/^/export const rules: Rule[] = \n/' src/rego/rules.ts; 
+	sed -i '1s/^/import { Rule } from ".\/Rule" \n/' src/rego/rules.ts; 
 
 wasm-download: 
 	# Download WASM exec.js 

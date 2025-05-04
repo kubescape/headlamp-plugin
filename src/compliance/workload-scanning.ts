@@ -1,8 +1,8 @@
 import YAML from 'yaml';
 import { getItemFromLocalStorage, KubescapeSettings } from '../common/webStorage';
 import { PostureExceptionPolicy, PosturePolicy } from '../exceptions/PostureExceptionPolicy';
+import { Control, FrameWork } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
-import { Control, FrameWork } from './FrameWork';
 
 /**
  * Filters the given workload scans based on the given frameWork and postureExceptionPolicies.

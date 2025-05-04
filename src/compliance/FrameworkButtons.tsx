@@ -15,24 +15,22 @@ import {
 } from '@mui/material';
 import React from 'react';
 import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
+import { defaultFrameworkNames, FrameWork, frameworks } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';
-import { FrameWork } from './FrameWork';
-import { frameworks } from './frameworks';
 import { controlComplianceScore, filterWorkloadScanData } from './workload-scanning';
 
 export function FrameworkButtons(
   props: Readonly<{
     frameworkName: string;
+    customFrameworks: FrameWork[];
     setFrameworkName: React.Dispatch<React.SetStateAction<string>>;
   }>
 ) {
-  const { frameworkName, setFrameworkName } = props;
+  const { frameworkName, customFrameworks, setFrameworkName } = props;
   function frameworkChange(event: React.ChangeEvent<HTMLInputElement>, value: string) {
     setFrameworkName(value);
   }
-
-  const defaultFrameworkNames = ['AllControls', 'cis-v1.10.0', 'MITRE', 'NSA'];
 
   const [selectedFrameworkNames, setSelectedFrameworkNames] = useLocalStorage<string[]>(
     KubescapeSettings.FrameworkNames,
@@ -44,7 +42,8 @@ export function FrameworkButtons(
   selectedFrameworkNames
     .toSorted((a, b) => a.localeCompare(b))
     .forEach(name => {
-      const framework = frameworks.find(fw => fw.name === name);
+      const framework =
+        frameworks.find(fw => fw.name === name) ?? customFrameworks?.find(fw => fw.name === name);
       if (framework) {
         const [filteredWorkloadScans] = filterWorkloadScanData(
           configurationScanContext.workloadScans,
@@ -71,15 +70,23 @@ export function FrameworkButtons(
 
   const frameworkNames: string[] = frameworks
     .map(framework => framework.name)
+    .concat(customFrameworks.map(framework => framework.name))
     .sort((a, b) => a.localeCompare(b));
 
   const handleChange = (event: SelectChangeEvent<typeof selectedFrameworkNames>) => {
     const {
       target: { value },
     } = event;
+
+    const values = typeof value === 'string' ? value.split(',') : value;
+
+    // Save the updated configuration to the store
     setSelectedFrameworkNames(
-      // On autofill we get a stringified value.
-      typeof value === 'string' ? value.split(',') : value
+      values.filter(
+        frameworkName =>
+          frameworks.some(fw => fw.name === frameworkName) ||
+          customFrameworks.some(fw => fw.name === frameworkName)
+      )
     );
   };
 

@@ -4,8 +4,8 @@
 import { Link, Table } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, Stack, Tooltip } from '@mui/material';
 import { RoutingName } from '../index';
+import { FrameWork } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
-import { FrameWork } from './FrameWork';
 
 export default function KubescapeWorkloadConfigurationScanList(
   props: Readonly<{

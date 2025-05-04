@@ -11,8 +11,8 @@ import { useEffect, useState } from 'react';
 import { getURLSegments } from '../common/url';
 import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { fetchObject, proxyRequest, workloadConfigurationScanClass } from '../model';
+import { frameworks } from '../rego';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
-import { frameworks } from './frameworks';
 
 export default function KubescapeWorkloadConfigurationScanFixes() {
   const [controlID, name, namespace] = getURLSegments(-1, -2, -3);

@@ -6,6 +6,7 @@ import {
 import { Box, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import * as YAML from 'yaml';
+import { saveToFile } from '../common/filedialog';
 import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { useConfirm } from './ConfirmDialog';
 import { EditPosturePolicyExceptionDialog } from './PostureExceptionDialog';
@@ -66,7 +67,11 @@ export default function KubescapePostureExceptionPolicies() {
       policy.policyType = 'postureExceptionPolicy';
       policy.actions = ['alertOnly'];
     });
-    saveToFile(JSON.stringify(postureExceptionPolicies, null, 2), enqueueSnackbar);
+    saveToFile(
+      JSON.stringify(postureExceptionPolicies, null, 2),
+      'kubescape-exceptions.json',
+      enqueueSnackbar
+    );
   };
 
   const handleImport = async () => {
@@ -122,7 +127,7 @@ export default function KubescapePostureExceptionPolicies() {
         </Tooltip>
         <Tooltip title="Load an existing policy from file">
           <IconButton onClick={() => handleImport()}>
-            <Icon icon="mdi:import" />
+            <Icon icon="mdi:file-import" />
           </IconButton>
         </Tooltip>
         <Tooltip title="Reset policy to default">
@@ -216,46 +221,6 @@ function displayMatchers(matchers: PosturePolicy[] | ResourceDesignator[] | unde
     </Stack>
   );
 }
-
-const saveToFile = async (content: string, enqueueSnackbar: Function) => {
-  const blob = new Blob([content], { type: 'text/plain' });
-  const defaultFileName = 'kubescape-exceptions.json';
-
-  const createSaveFilePicker = async (): Promise<FileSystemFileHandle> => {
-    const fileHandle = await window.showSaveFilePicker({
-      suggestedName: defaultFileName,
-    });
-
-    return fileHandle;
-  };
-
-  let fileName = defaultFileName;
-  if (window.showSaveFilePicker) {
-    try {
-      const fileHandle = await createSaveFilePicker();
-      fileName = fileHandle.name;
-      const writable = await fileHandle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-    } catch (error) {
-      console.error('Error selecting a file:', error);
-      return null;
-    }
-  } else {
-    // For browsers that don't support window.showSaveFilePicker
-    const a = document.createElement('a');
-    a.href = window.URL.createObjectURL(blob);
-    a.download = defaultFileName;
-
-    // Trigger the download
-    a.click();
-
-    // Clean up
-    window.URL.revokeObjectURL(a.href);
-  }
-
-  enqueueSnackbar(`${fileName} saved successfully`, { variant: 'success' });
-};
 
 const defaultPostureExceptionPolicies: PostureExceptionPolicy[] = [
   {
