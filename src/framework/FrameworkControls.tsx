@@ -5,7 +5,8 @@ import {
   StatusLabelProps,
   Table,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { Box, Link, Tooltip } from '@mui/material';
+import { Box, Collapse, Link, Tooltip } from '@mui/material';
+import { useState } from 'react';
 import { getURLSegments } from '../common/url';
 import { complianceSeverity } from '../compliance/Compliance';
 import { Control, frameworks } from '../rego';
@@ -67,12 +68,38 @@ export function FrameworkControls() {
             gridTemplate: 'auto',
           },
           {
+            header: 'Control Types',
+            accessorFn: (control: Control) => control.attributes?.controlTypeTags?.join(', '),
+          },
+          {
+            header: 'Scanning scope',
+            accessorFn: (control: Control) => control.scanningScope?.matches?.join(', '),
+          },
+          {
             header: 'Remediation',
             accessorFn: (control: Control) => control.remediation.replaceAll('`', "'"),
           },
           {
             header: 'Severity',
             accessorFn: (control: Control) => severityLabel(control.baseScore),
+            gridTemplate: 'min-content',
+          },
+          {
+            header: 'Example',
+            accessorFn: (control: Control) => control.example,
+            Cell: ({ cell }: any) => {
+              const value = cell.getValue();
+              if (value?.length > 0 && value[0] === '@')
+                return (
+                  <Link
+                    target="_blank"
+                    href={`https://github.com/kubescape/regolibrary/blob/master/${value.slice(1)}`}
+                  >
+                    {value}
+                  </Link>
+                );
+              return value && <CodePanel value={value} />;
+            },
             gridTemplate: 'min-content',
           },
         ]}
@@ -87,6 +114,21 @@ export function FrameworkControls() {
         reflectInURL="controls"
       />
     </SectionBox>
+  );
+}
+
+function CodePanel(props: Readonly<{ value: string }>) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <button onClick={() => setOpen(!open)}>Code</button>
+      <Collapse in={open}>
+        <pre>
+          <code>{props.value}</code>
+        </pre>
+      </Collapse>
+    </div>
   );
 }
 
