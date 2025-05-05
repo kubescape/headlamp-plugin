@@ -145,7 +145,7 @@ function EditResourceMatchers(
 ) {
   const { editedException, setEditedException } = props;
 
-  const fields = ['kind', 'name', 'namespace'];
+  const fields = ['namespace', 'name', 'kind'];
 
   const handleAddRow = () => {
     const newResources = editedException.resources ? [...editedException.resources] : [];
@@ -195,9 +195,9 @@ function EditResourceMatchers(
         <Table>
           <TableHead>
             <TableRow key="header">
-              <HeaderCell title="Kind" />
-              <HeaderCell title="Name" />
               <HeaderCell title="Namespace" />
+              <HeaderCell title="Name" />
+              <HeaderCell title="Kind" />
             </TableRow>
           </TableHead>
           <TableBody>
@@ -230,7 +230,7 @@ function EditPolicyMatchers(
   props: Readonly<{ editedException: PostureExceptionPolicy; setEditedException: Function }>
 ) {
   const { editedException, setEditedException } = props;
-  const fields = ['controlID', 'controlName', 'frameworkName'];
+  const fields = ['controlID', 'frameworkName'];
 
   const handleAddRow = () => {
     const newPosturePolicies = editedException.posturePolicies
@@ -279,7 +279,6 @@ function EditPolicyMatchers(
           <TableHead>
             <TableRow key="header">
               <HeaderCell title="Control ID" />
-              <HeaderCell title="Control Name" />
               <HeaderCell title="Framework" />
             </TableRow>
           </TableHead>

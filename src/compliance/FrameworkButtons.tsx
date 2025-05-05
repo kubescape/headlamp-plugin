@@ -16,9 +16,8 @@ import {
 import React from 'react';
 import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { defaultFrameworkNames, FrameWork, frameworks } from '../rego';
-import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';
-import { controlComplianceScore, filterWorkloadScanData } from './workload-scanning';
+import { frameworkComplianceScore } from './workload-scanning';
 
 export function FrameworkButtons(
   props: Readonly<{
@@ -45,12 +44,8 @@ export function FrameworkButtons(
       const framework =
         frameworks.find(fw => fw.name === name) ?? customFrameworks?.find(fw => fw.name === name);
       if (framework) {
-        const [filteredWorkloadScans] = filterWorkloadScanData(
-          configurationScanContext.workloadScans,
-          framework
-        );
-        const percentage = filteredWorkloadScans
-          ? Math.trunc(frameworkComplianceScore(filteredWorkloadScans, framework))
+        const percentage = configurationScanContext.workloadScans
+          ? Math.trunc(frameworkComplianceScore(configurationScanContext.workloadScans, framework))
           : 0;
         labels.push(
           <FormControlLabel
@@ -124,18 +119,4 @@ export function FrameworkButtons(
       </FormControl>
     </>
   );
-}
-
-// The framework compliance score provides an overall assessment of your cluster's compliance with a specific framework.
-// It is calculated by averaging the Control Compliance Scores of all controls within the framework.
-// https://kubescape.io/docs/frameworks-and-controls/frameworks/
-function frameworkComplianceScore(
-  workloadScanData: WorkloadConfigurationScanSummary[],
-  framework: FrameWork
-) {
-  const controlComplianceScores = framework.controls.map(control =>
-    controlComplianceScore(workloadScanData, control)
-  );
-
-  return controlComplianceScores.reduce((a, b) => a + b, 0) / controlComplianceScores.length;
 }

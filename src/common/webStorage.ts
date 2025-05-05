@@ -37,6 +37,11 @@ export function getItemFromLocalStorage<T>(key: KubescapeSettings): T | null {
   return null;
 }
 
+export function setItemInLocalStorage<T>(key: KubescapeSettings, value: T) {
+  const storageKey = `kubescape.${KubescapeSettings[key]}`;
+  localStorage.setItem(storageKey, JSON.stringify(value));
+}
+
 export function clearItemFromLocalStorage(key: KubescapeSettings) {
   const storageKey = `kubescape.${KubescapeSettings[key]}`;
   localStorage.removeItem(storageKey);

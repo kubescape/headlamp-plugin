@@ -231,7 +231,7 @@ const defaultPostureExceptionPolicies: PostureExceptionPolicy[] = [
       {
         designatorType: 'Attributes',
         attributes: {
-          namespace: 'kubescape|kube-system|kube-public|kube-node-lease|kubeconfig',
+          namespace: '^kubescape$|^kube-system$|^kube-public$|^kube-node-lease$',
         },
       },
     ],

@@ -2,7 +2,8 @@
   List configuration scans for all workloads.  
 */
 import { Link, Table } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { Box, Stack, Tooltip } from '@mui/material';
+import { Box, FormControlLabel, Stack, Switch, Tooltip } from '@mui/material';
+import { mutateResourceException } from '../exceptions/mutate-exception';
 import { RoutingName } from '../index';
 import { FrameWork } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
@@ -10,14 +11,29 @@ import { WorkloadConfigurationScanSummary } from '../softwarecomposition/Workloa
 export default function KubescapeWorkloadConfigurationScanList(
   props: Readonly<{
     workloadScanData: WorkloadConfigurationScanSummary[] | null;
+    setWorkloadScanData: (workloadScanData: WorkloadConfigurationScanSummary[]) => void;
     framework: FrameWork;
     isFailedControlSwitchChecked: boolean;
   }>
 ) {
-  const { workloadScanData, framework, isFailedControlSwitchChecked } = props;
+  const { workloadScanData, setWorkloadScanData, framework, isFailedControlSwitchChecked } = props;
   if (!workloadScanData) {
     return <></>;
   }
+
+  const handleExcludeResource = (
+    workloadScan: WorkloadConfigurationScanSummary,
+    checked: boolean
+  ) => {
+    mutateResourceException(
+      workloadScan.metadata.labels['kubescape.io/workload-name'],
+      workloadScan.metadata.namespace,
+      workloadScan.metadata.labels['kubescape.io/workload-kind'],
+      checked
+    );
+    workloadScan.exceptedByPolicy = checked;
+    setWorkloadScanData([...workloadScanData]);
+  };
 
   const workloadsWithFindings = getWorkloadsWithFindings(workloadScanData);
   return (
@@ -39,6 +55,21 @@ export default function KubescapeWorkloadConfigurationScanList(
               >
                 {cell.getValue()}
               </Link>
+            ),
+            gridTemplate: 'auto',
+          },
+          {
+            header: 'Excluded',
+            accessorKey: 'exceptedByPolicy',
+            Cell: ({ cell }: any) => (
+              <FormControlLabel
+                label=""
+                checked={cell.getValue() === true}
+                control={<Switch color="primary" />}
+                onChange={(event: any, checked: boolean) => {
+                  handleExcludeResource(cell.row.original, checked);
+                }}
+              />
             ),
             gridTemplate: 'auto',
           },
@@ -153,11 +184,14 @@ function resultStack(workloadScan: WorkloadConfigurationScanSummary, framework: 
         <Tooltip title={controlsList(workloadScan, framework, severity)}>
           <Box>
             {
-              Object.values(workloadScan.spec.controls).filter(
-                scan =>
-                  scan.status.status === WorkloadConfigurationScanSummary.Status.Failed &&
-                  scan.severity.severity === severity
-              ).length
+              Object.values(workloadScan.spec.controls)
+                .filter(w => !w.exceptedByPolicy)
+                .filter(
+                  scan =>
+                    !scan.exceptedByPolicy &&
+                    scan.status.status === WorkloadConfigurationScanSummary.Status.Failed &&
+                    scan.severity.severity === severity
+                ).length
             }
           </Box>
         </Tooltip>

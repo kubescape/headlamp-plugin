@@ -25,6 +25,12 @@ import { isNewClusterContext } from '../common/clusterContext';
 import { ProgressIndicator } from '../common/ProgressIndicator';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
+import {
+  applyExceptionsToWorkloadScanData,
+  countExcludedControls,
+  countExcludedResources,
+  countExcludedWorkloadsForControl,
+} from '../exceptions/apply-exceptions';
 import { RoutingName } from '../index';
 import {
   customObjectLabel,
@@ -40,8 +46,8 @@ import {
   controlComplianceScore,
   countFailedScans,
   countScans,
-  filterWorkloadScanData,
   getControlsWithFindings,
+  hasFailedScans,
 } from './workload-scanning';
 
 const pageSize: number = 50;
@@ -83,10 +89,6 @@ export default function ComplianceView(): JSX.Element {
   >(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
-  const [exceptions, setExceptions] = useState<{
-    controlsExcepted: number;
-    resourcesExcepted: number;
-  }>({ controlsExcepted: 0, resourcesExcepted: 0 });
   const [frameworkName, setFrameworkName] = useLocalStorage<string>(
     KubescapeSettings.Framework,
     'AllControls'
@@ -138,12 +140,8 @@ export default function ComplianceView(): JSX.Element {
       if (configurationScanContext.continuation !== undefined) {
         await fetchWorkloadScanData(continueReading, setProgressMessage, setLoading);
       }
-      const [filteredWorkloadScans, controlsExcepted, resourcesExcepted] = filterWorkloadScanData(
-        configurationScanContext.workloadScans,
-        framework
-      );
-      setExceptions({ resourcesExcepted, controlsExcepted });
-      setWorkloadScanData(filteredWorkloadScans);
+      applyExceptionsToWorkloadScanData(configurationScanContext.workloadScans, frameworkName);
+      setWorkloadScanData(configurationScanContext.workloadScans);
     }
 
     fetchData();
@@ -201,8 +199,10 @@ export default function ComplianceView(): JSX.Element {
           <Typography variant="body1" component="div" sx={{ padding: 2 }}>
             {`${workloadScanData.length} total checks, ${countFailedScans(
               workloadScanData
-            )} configuration issues, excluding ${exceptions.resourcesExcepted} resources and 
-            ${exceptions.controlsExcepted} controls`}
+            )} configuration issues, excluding ${countExcludedResources(
+              workloadScanData
+            )} resources and 
+            ${countExcludedControls(workloadScanData)} controls`}
           </Typography>
           <HeadlampTabs
             defaultIndex={selectedTab}
@@ -223,6 +223,7 @@ export default function ComplianceView(): JSX.Element {
                 component: (
                   <KubescapeWorkloadConfigurationScanList
                     workloadScanData={workloadScanData}
+                    setWorkloadScanData={setWorkloadScanData}
                     framework={framework}
                     isFailedControlSwitchChecked={isFailedControlSwitchChecked}
                   />
@@ -230,7 +231,12 @@ export default function ComplianceView(): JSX.Element {
               },
               {
                 label: 'Namespaces',
-                component: <NamespaceView workloadScanData={workloadScanData} />,
+                component: (
+                  <NamespaceView
+                    workloadScanData={workloadScanData}
+                    setWorkloadScanData={setWorkloadScanData}
+                  />
+                ),
               },
             ]}
             ariaLabel="Navigation Tabs"
@@ -310,6 +316,13 @@ function ConfigurationScanningListView(
             gridTemplate: 'auto',
           },
           {
+            header: 'Excluded',
+            accessorFn: (control: Control) =>
+              countExcludedWorkloadsForControl(workloadScanData, control),
+            Cell: ({ cell }: any) => cell.getValue(),
+            gridTemplate: 'auto',
+          },
+          {
             header: 'Resources',
             accessorFn: (control: Control) =>
               workloadScanData ? makeResultsLabel(workloadScanData, control) : '',
@@ -385,14 +398,6 @@ function makeResultsLabel(workloadScanData: WorkloadConfigurationScanSummary[], 
   } else {
     return failCount;
   }
-}
-
-function hasFailedScans(workloadScanData: WorkloadConfigurationScanSummary[], control: Control) {
-  return workloadScanData?.some(w =>
-    Object.values(w.spec.controls).some(
-      scan => scan.controlID === control.controlID && scan.status.status === 'failed'
-    )
-  );
 }
 
 async function fetchWorkloadScanData(

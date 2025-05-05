@@ -9,17 +9,14 @@ import * as yaml from 'js-yaml';
 import { cloneDeep } from 'lodash';
 import { useEffect, useState } from 'react';
 import { getURLSegments } from '../common/url';
-import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { fetchObject, proxyRequest, workloadConfigurationScanClass } from '../model';
-import { frameworks } from '../rego';
+import { controls } from '../rego';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
 
 export default function KubescapeWorkloadConfigurationScanFixes() {
   const [controlID, name, namespace] = getURLSegments(-1, -2, -3);
   const [workloadConfigurationScan, setWorkloadConfigurationScan] =
     useState<WorkloadConfigurationScan | null>(null);
-  const [frameworkName] = useLocalStorage<string>(KubescapeSettings.Framework, 'AllControls');
-  const framework = frameworks.find(fw => fw.name === frameworkName) ?? frameworks[0];
 
   useEffect(() => {
     fetchObject(name, namespace, workloadConfigurationScanClass).then(
@@ -29,7 +26,7 @@ export default function KubescapeWorkloadConfigurationScanFixes() {
     );
   }, []);
 
-  const control = framework.controls.find(element => element.controlID === controlID);
+  const control = controls.find(element => element.controlID === controlID);
 
   if (!workloadConfigurationScan) {
     return <></>;

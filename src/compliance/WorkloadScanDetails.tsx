@@ -12,6 +12,8 @@ import {
 import { Link } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { getURLSegments } from '../common/url';
+import { getItemFromLocalStorage, KubescapeSettings } from '../common/webStorage';
+import { applyExceptionsToWorkloadScan } from '../exceptions/apply-exceptions';
 import { RoutingName } from '../index';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
 import { controls } from '../rego';
@@ -22,10 +24,12 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
   const [configurationScan, setConfigurationScan] = useState<WorkloadConfigurationScan | null>(
     null
   );
+  const frameworkName = getItemFromLocalStorage<string>(KubescapeSettings.Framework) ?? '';
 
   useEffect(() => {
     fetchObject(name, namespace, workloadConfigurationScanClass).then(
       (result: WorkloadConfigurationScan) => {
+        applyExceptionsToWorkloadScan(result, frameworkName);
         setConfigurationScan(result);
       }
     );
@@ -80,7 +84,7 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
             id: 'Status',
             header: 'Status',
             accessorKey: 'status.status',
-            Cell: ({ row }: any) => makeStatusLabel(row.original),
+            Cell: ({ row }: any) => makeStatusLabel(workloadConfigurationScan, row.original),
             gridTemplate: 'min-content',
           },
           {
@@ -163,35 +167,49 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
   );
 }
 
-function getResults(scan: WorkloadConfigurationScan): string {
+function getResults(workloadConfigurationScan: WorkloadConfigurationScan): string {
   let failCount: number = 0;
   let passedCount: number = 0;
   let skippedCount: number = 0;
-  for (const data of Object.values(scan.spec.controls)) {
-    switch (data.status.status) {
-      case 'failed': {
-        failCount++;
-        break;
+  let excludedCount: number = 0;
+  if (workloadConfigurationScan.exceptedByPolicy) {
+    excludedCount = Object.values(workloadConfigurationScan.spec.controls).length;
+  } else {
+    for (const scan of Object.values(workloadConfigurationScan.spec.controls)) {
+      if (scan.exceptedByPolicy) {
+        excludedCount++;
+        continue;
       }
-      case 'passed': {
-        passedCount++;
-        break;
-      }
-      case 'skipped': {
-        skippedCount++;
-        break;
+      switch (scan.status.status) {
+        case 'failed': {
+          failCount++;
+          break;
+        }
+        case 'passed': {
+          passedCount++;
+          break;
+        }
+        case 'skipped': {
+          skippedCount++;
+          break;
+        }
       }
     }
   }
 
-  return `Failed ${failCount}, Passed ${passedCount}, Skipped ${skippedCount}`;
+  return `Failed ${failCount}, Passed ${passedCount}, Skipped ${skippedCount}, Excluded ${excludedCount}`;
 }
 
-function makeStatusLabel(control: WorkloadConfigurationScan.Control) {
+function makeStatusLabel(
+  workloadConfigurationScan: WorkloadConfigurationScan,
+  control: WorkloadConfigurationScan.Control
+) {
   let status: StatusLabelProps['status'] = '';
-  const statusLabel: string = control.status.status;
+  let statusLabel: string = control.status.status;
 
-  if (statusLabel === 'failed') {
+  if (workloadConfigurationScan.exceptedByPolicy || control.exceptedByPolicy) {
+    statusLabel = 'excluded';
+  } else if (statusLabel === 'failed') {
     status = 'error';
   } else {
     status = 'success';
