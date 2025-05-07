@@ -40,10 +40,11 @@ import { useState } from 'react';
 import { ErrorContainer } from '../common/ErrorContainer';
 import { ErrorMessage } from '../common/ErrorMessage';
 import { saveToFile } from '../common/filedialog';
+import { getKubescapePluginUrl } from '../common/PluginHelper';
 import { getURLSegments } from '../common/url';
 import { complianceSeverity } from '../compliance/Compliance';
 import { customObjectLabel } from '../model';
-import { Control, controls, defaultFrameworkNames, FrameWork, frameworks, rules } from '../rego';
+import { Control, controls, defaultFrameworkNames, FrameWork, frameworks, Rule } from '../rego';
 
 declare global {
   interface Window {
@@ -155,15 +156,29 @@ function FrameworkEditor(
       controlsIDs: frameworkControls.map(c => c.controlID),
     } as FrameWork;
 
-    // merge the rules as kubescape-cli needs it
-    frameworkForDownload.controls.forEach(c => {
-      c.rules = rules.filter(r => c.rulesNames?.some(ruleName => ruleName === r.name));
-    });
-    saveToFile(
-      JSON.stringify(frameworkForDownload, null, 2),
-      `${framework.name}.json`,
-      enqueueSnackbar
-    );
+    const regoRulesUrl = getKubescapePluginUrl() + '/rego-rules.json';
+    fetch(regoRulesUrl)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP status: ${response.status}`);
+        }
+        return response.text();
+      })
+      .then(json => {
+        const rules = JSON.parse(json) as Rule[];
+        frameworkForDownload.controls.forEach(c => {
+          c.rules = rules.filter(r => c.rulesNames?.some(ruleName => ruleName === r.name));
+        });
+        saveToFile(
+          JSON.stringify(frameworkForDownload, null, 2),
+          `${framework.name}.json`,
+          enqueueSnackbar
+        );
+      })
+      .catch(error => {
+        console.error('Error fetching rego rules:', error);
+        enqueueSnackbar(`Error fetching rego rules: ${error.message}`, { variant: 'error' });
+      });
   };
 
   return (
