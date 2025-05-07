@@ -10,7 +10,8 @@ vap_test_files:=\
 	pod.yaml
 
 controls-download:  
-	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/frameworks -o src/rego/frameworks.ts; 
+	# note: controls are removed from frameworks as they are also available in controls.ts 
+	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/frameworks | jq '.[].controls = []' > src/rego/frameworks.ts; 
 	sed -i '1s/^/export const frameworks: FrameWork[] = \n/' src/rego/frameworks.ts; 
 	sed -i '1s/^/import { FrameWork } from ".\/FrameWork" \n/' src/rego/frameworks.ts; 
 	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/controls -o src/rego/controls.ts; 

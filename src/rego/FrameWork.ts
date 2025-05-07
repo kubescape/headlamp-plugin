@@ -9,7 +9,6 @@ export interface FrameWork {
   typeTags?: string[];
   version?: any;
   controls: Control[];
-  controlsIDs?: string[];
   ControlsIDs?: string[];
   subSections?: any;
 }

@@ -37,7 +37,7 @@ import {
   paginatedListQuery,
   workloadConfigurationScanSummaryClass,
 } from '../model';
-import { Control, controls, FrameWork, frameworks } from '../rego';
+import { Control, controls, fitControlsToFrameworks, FrameWork, frameworks } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { FrameworkButtons } from './FrameworkButtons';
 import NamespaceView from './NamespaceView';
@@ -70,6 +70,8 @@ export const configurationScanContext: ConfigurationScanContext = {
     allowedNamespaces: [],
   },
 };
+
+fitControlsToFrameworks();
 
 /**
  * Overview page for configuration controls and resources.

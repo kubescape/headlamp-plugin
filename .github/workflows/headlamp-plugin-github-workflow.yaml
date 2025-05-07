@@ -20,6 +20,7 @@ jobs:
       matrix:
         node-version: [22.x]
         go-version: [1.24.x]
+        jq-version: ['1.7']
 
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +34,11 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
+
+      - name: Setup jq
+        uses: dcarbone/install-jq-action@v3
+        with:
+          version: ${{ matrix.jq-version }}
 
       - run: npx @kinvolk/headlamp-plugin lint .
       - run: npx @kinvolk/headlamp-plugin format --check .
