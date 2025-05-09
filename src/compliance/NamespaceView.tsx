@@ -7,6 +7,7 @@ import {
   Table,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { FormControlLabel, Switch } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import { mutateNamespaceException } from '../exceptions/mutate-exception';
 import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
@@ -34,19 +35,24 @@ export default function NamespaceView(
     setWorkloadScanData: (workloadScanData: WorkloadConfigurationScanSummary[]) => void;
   }>
 ) {
+  const { enqueueSnackbar } = useSnackbar();
   const { workloadScanData, setWorkloadScanData } = props;
   if (!workloadScanData) {
     return <></>;
   }
 
-  const handleExcludeNamespace = (namespace: NamespaceResult, checked: boolean) => {
-    mutateNamespaceException(namespace.namespace, checked);
-    workloadScanData.forEach(w => {
-      if (w.metadata.namespace === namespace.namespace) {
-        w.exceptedByPolicy = checked;
-      }
-    });
-    setWorkloadScanData([...workloadScanData]);
+  const handleExcludeNamespace = async (namespace: NamespaceResult, checked: boolean) => {
+    const errorMessage = await mutateNamespaceException(namespace.namespace, checked);
+    if (errorMessage) {
+      enqueueSnackbar(errorMessage, { variant: 'error' });
+    } else {
+      workloadScanData.forEach(w => {
+        if (w.metadata.namespace === namespace.namespace) {
+          w.exceptedByPolicy = checked;
+        }
+      });
+      setWorkloadScanData([...workloadScanData]);
+    }
   };
 
   return (

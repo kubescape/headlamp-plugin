@@ -3,6 +3,7 @@
 */
 import { Link, Table } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, FormControlLabel, Stack, Switch, Tooltip } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import { mutateResourceException } from '../exceptions/mutate-exception';
 import { RoutingName } from '../index';
 import { FrameWork } from '../rego';
@@ -16,23 +17,28 @@ export default function KubescapeWorkloadConfigurationScanList(
     isFailedControlSwitchChecked: boolean;
   }>
 ) {
+  const { enqueueSnackbar } = useSnackbar();
   const { workloadScanData, setWorkloadScanData, framework, isFailedControlSwitchChecked } = props;
   if (!workloadScanData) {
     return <></>;
   }
 
-  const handleExcludeResource = (
+  const handleExcludeResource = async (
     workloadScan: WorkloadConfigurationScanSummary,
     checked: boolean
   ) => {
-    mutateResourceException(
+    const errorMessage = await mutateResourceException(
       workloadScan.metadata.labels['kubescape.io/workload-name'],
       workloadScan.metadata.namespace,
       workloadScan.metadata.labels['kubescape.io/workload-kind'],
       checked
     );
-    workloadScan.exceptedByPolicy = checked;
-    setWorkloadScanData([...workloadScanData]);
+    if (errorMessage) {
+      enqueueSnackbar(errorMessage, { variant: 'error' });
+    } else {
+      workloadScan.exceptedByPolicy = checked;
+      setWorkloadScanData([...workloadScanData]);
+    }
   };
 
   const workloadsWithFindings = getWorkloadsWithFindings(workloadScanData);

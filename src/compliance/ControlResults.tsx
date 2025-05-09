@@ -8,10 +8,11 @@ import {
   Table,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { FormControlLabel, Link, Switch } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import { useState } from 'react';
 import { makeNamespaceLink } from '../common/Namespace';
+import { KubescapeSettings, useSessionStorage } from '../common/sessionStorage';
 import { getLastURLSegment } from '../common/url';
-import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { mutateControlException } from '../exceptions/mutate-exception';
 import { RoutingName } from '../index';
 import { Control, controls } from '../rego';
@@ -19,11 +20,10 @@ import { WorkloadConfigurationScanSummary } from '../softwarecomposition/Workloa
 import { configurationScanContext } from './Compliance';
 
 export default function KubescapeControlResults() {
+  const { enqueueSnackbar } = useSnackbar();
   const controlID = getLastURLSegment();
-  const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] = useLocalStorage<boolean>(
-    KubescapeSettings.FailedControls,
-    true
-  );
+  const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] =
+    useSessionStorage<boolean>(KubescapeSettings.FailedControls, true);
   const [resourceList, setResourceList] = useState<WorkloadConfigurationScanSummary[]>(
     getFailedResources(controlID, isFailedControlSwitchChecked)
   );
@@ -38,24 +38,28 @@ export default function KubescapeControlResults() {
     setResourceList(getFailedResources(controlID, checked));
   };
 
-  const handleExcludeControl = (
+  const handleExcludeControl = async (
     workloadScan: WorkloadConfigurationScanSummary,
     control: Control,
     checked: boolean
   ) => {
-    mutateControlException(
+    const errorMessage = await mutateControlException(
       workloadScan.metadata.labels['kubescape.io/workload-name'],
       workloadScan.metadata.namespace,
       workloadScan.metadata.labels['kubescape.io/workload-kind'],
       control,
       checked
     );
-    Object.entries(workloadScan.spec.controls).forEach(([key, value]) => {
-      if (value.controlID === control.controlID) {
-        workloadScan.spec.controls[key].exceptedByPolicy = checked;
-      }
-    });
-    setResourceList([...resourceList]);
+    if (errorMessage) {
+      enqueueSnackbar(errorMessage, { variant: 'error' });
+    } else {
+      Object.entries(workloadScan.spec.controls).forEach(([key, value]) => {
+        if (value.controlID === control.controlID) {
+          workloadScan.spec.controls[key].exceptedByPolicy = checked;
+        }
+      });
+      setResourceList([...resourceList]);
+    }
   };
 
   return (

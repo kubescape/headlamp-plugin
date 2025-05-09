@@ -1,6 +1,6 @@
 import { Icon } from '@iconify/react';
 import { K8s } from '@kinvolk/headlamp-plugin/lib';
-import { post, put } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
+import { ApiError, post, put } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   NameValueTable,
   SectionBox,
@@ -41,8 +41,10 @@ import { ErrorContainer } from '../common/ErrorContainer';
 import { ErrorMessage } from '../common/ErrorMessage';
 import { saveToFile } from '../common/filedialog';
 import { getKubescapePluginUrl } from '../common/PluginHelper';
+import { getItemFromSessionStorage, KubescapeSettings } from '../common/sessionStorage';
 import { getURLSegments } from '../common/url';
 import { complianceSeverity } from '../compliance/Compliance';
+import { checkUniqueness } from '../custom-objects/api-queries';
 import { customObjectLabel } from '../model';
 import { Control, controls, defaultFrameworkNames, FrameWork, frameworks, Rule } from '../rego';
 
@@ -54,8 +56,11 @@ declare global {
 }
 
 export function FrameworkNew() {
-  const { kubeScapeNamespace, error } = getKubescapeNamespace();
-  if (error) return <ErrorMessage error={error} />;
+  const kubeScapeNamespace = getItemFromSessionStorage<string>(
+    KubescapeSettings.KubescapeNamespace
+  );
+  if (!kubeScapeNamespace)
+    return <ErrorMessage error={new ApiError('Kubescape namespace not found')} />;
 
   return (
     <FrameworkEditor
@@ -66,11 +71,14 @@ export function FrameworkNew() {
 }
 
 export function FrameworkEdit() {
-  const [frameworkName] = getURLSegments(-1);
-  const { kubeScapeNamespace, error } = getKubescapeNamespace();
-  if (error) return <ErrorMessage error={error} />;
+  const [configMapName] = getURLSegments(-1);
+  const kubeScapeNamespace = getItemFromSessionStorage<string>(
+    KubescapeSettings.KubescapeNamespace
+  );
+  if (!kubeScapeNamespace)
+    return <ErrorMessage error={new ApiError('Kubescape namespace not found')} />;
 
-  const [configMap] = K8s.ResourceClasses.ConfigMap.useGet(frameworkName, kubeScapeNamespace);
+  const [configMap] = K8s.ResourceClasses.ConfigMap.useGet(configMapName, kubeScapeNamespace);
 
   if (configMap) {
     const controlsIDs: string[] = JSON.parse(configMap.jsonData.data.controlsIDs);
@@ -95,7 +103,8 @@ export function FrameworkEdit() {
 function FrameworkEditor(
   props: Readonly<{ framework: FrameWork; configMap?: KubeConfigMap; kubeScapeNamespace: string }>
 ) {
-  const { configMap, kubeScapeNamespace } = props;
+  const { kubeScapeNamespace } = props;
+  const [configMap, setConfigMap] = useState<KubeConfigMap | undefined>(props.configMap);
   const [framework, setFramework] = useState<FrameWork>(props.framework);
   const [frameworkControls, setFrameworkControls] = useState<Control[]>(props.framework.controls);
   const { enqueueSnackbar } = useSnackbar();
@@ -112,6 +121,9 @@ function FrameworkEditor(
     }
     if (!frameworkControls || frameworkControls.length === 0) {
       return setErrorMessage('Select one or more controls');
+    }
+    if (!(await checkUniqueness(framework.name, configMap?.metadata.uid, 'framework'))) {
+      return setErrorMessage('Please provide a unique name for the framework.');
     }
 
     if (!configMap?.metadata.uid) {
@@ -135,16 +147,20 @@ function FrameworkEditor(
           controlsIDs: JSON.stringify(frameworkControls.map(c => c.controlID)),
         },
       };
-      await post(`/api/v1/namespaces/${configMapNew.metadata.namespace}/configmaps`, configMapNew);
-    } else {
-      const configMapUpdated = configMap;
-      configMapUpdated.data.controlsIDs = JSON.stringify(frameworkControls.map(c => c.controlID));
-      configMapUpdated.data.description = framework.description ?? '';
-      configMapUpdated.data.name = framework.name ?? '';
-      await put(
-        `/api/v1/namespaces/${configMapUpdated.metadata.namespace}/configmaps/${configMapUpdated.metadata.name}`,
-        configMapUpdated
+      const configMapUpdated = await post(
+        `/api/v1/namespaces/${configMapNew.metadata.namespace}/configmaps`,
+        configMapNew
       );
+      setConfigMap(configMapUpdated);
+    } else {
+      configMap.data.controlsIDs = JSON.stringify(frameworkControls.map(c => c.controlID));
+      configMap.data.description = framework.description ?? '';
+      configMap.data.name = framework.name ?? '';
+      const configMapUpdated = await put(
+        `/api/v1/namespaces/${configMap.metadata.namespace}/configmaps/${configMap.metadata.name}`,
+        configMap
+      );
+      setConfigMap(configMapUpdated);
     }
     enqueueSnackbar(`${framework.name} saved successfully`, { variant: 'success' });
     setErrorMessage('');
@@ -480,13 +496,4 @@ function severityLabel(baseScore: number) {
   }
 
   return <StatusLabel status={status}>{severity}</StatusLabel>;
-}
-
-function getKubescapeNamespace() {
-  const [kubescapeOperator, error] = K8s.ResourceClasses.Pod.useList({
-    labelSelector: 'app.kubernetes.io/name=kubescape-operator,app.kubernetes.io/instance=kubescape',
-  });
-  const kubeScapeNamespace = kubescapeOperator?.[0]?.metadata.namespace ?? '';
-
-  return { kubeScapeNamespace, error };
 }
