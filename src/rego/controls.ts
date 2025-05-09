@@ -266,7 +266,7 @@ export const controls: Control[] = [
     description:
       "When you run modern, microservices-based applications in Kubernetes, you often want to control which components can communicate with each other. The principle of least privilege should be applied to how traffic can flow between pods in an Azure Kubernetes Service (AKS) cluster. Let's say you likely want to block traffic directly to back-end applications. The Network Policy feature in Kubernetes lets you define rules for ingress and egress traffic between pods in a cluster.",
     long_description:
-      'All pods in an AKS cluster can send and receive traffic without limitations, by default. To improve security, you can define rules that control the flow of traffic. Back-end applications are often only exposed to required front-end services, for example. Or, database components are only accessible to the application tiers that connect to them.\n\n Network Policy is a Kubernetes specification that defines access policies for communication between Pods. Using Network Policies, you define an ordered set of rules to send and receive traffic and apply them to a collection of pods that match one or more label selectors.\n\n These network policy rules are defined as YAML manifests. Network policies can be included as part of a wider manifest that also creates a deployment or service.',
+      'All pods in an AKS cluster can send and receive traffic without limitations, by default. To improve security, you can define rules that control the flow of traffic. Back-end applications are often only exposed to required front-end services, for example. Or, database components are only accessible to the application tiers that connect to them.\n\n Network Policy is a Kubernetes specification that defines access policies for communication between Pods. Using Network Policies, you define an ordered set of rules to send and receive traffic and apply them to a group of pods that match one or more label selectors.\n\n These network policy rules are defined as YAML manifests. Network policies can be included as part of a wider manifest that also creates a deployment or service.',
     remediation: '',
     manual_test: '',
     references: [
@@ -834,7 +834,7 @@ export const controls: Control[] = [
       attackTracks: [
         {
           attackTrack: 'workload-external-track',
-          categories: ['Data Collection'],
+          categories: ['Data Group'],
         },
       ],
     },
@@ -1316,7 +1316,7 @@ export const controls: Control[] = [
     name: 'Ensure that the Controller Manager --terminated-pod-gc-threshold argument is set as appropriate',
     description: 'Activate garbage collector on pod termination, as appropriate.',
     long_description:
-      'Garbage collection is important to ensure sufficient resource availability and avoiding degraded performance and availability. In the worst case, the system might crash or just be unusable for a long period of time. The current setting for garbage collection is 12,500 terminated pods which might be too high for your system to sustain. Based on your system resources and tests, choose an appropriate threshold value to activate garbage collection.',
+      'Garbage group is important to ensure sufficient resource availability and avoiding degraded performance and availability. In the worst case, the system might crash or just be unusable for a long period of time. The current setting for garbage group is 12,500 terminated pods which might be too high for your system to sustain. Based on your system resources and tests, choose an appropriate threshold value to activate garbage group.',
     remediation:
       'Edit the Controller Manager pod specification file `/etc/kubernetes/manifests/kube-controller-manager.yaml` on the Control Plane node and set the `--terminated-pod-gc-threshold` to an appropriate threshold, for example:\n\n \n```\n--terminated-pod-gc-threshold=10\n\n```',
     manual_test:
@@ -2101,7 +2101,7 @@ export const controls: Control[] = [
     rulesNames: ['rule-can-delete-k8s-events-v1'],
     long_description:
       'A Kubernetes event is a Kubernetes object that logs state changes and failures of the resources in the cluster. Example events are a container creation, an image pull, or a pod scheduling on a node. Kubernetes events can be very useful for identifying changes that occur in the cluster. Therefore, attackers may want to delete these events (e.g., by using: \u201ckubectl delete events\u2013all\u201d) in an attempt to avoid detection of their activity in the cluster.',
-    test: 'List who has delete/deletecollection RBAC permissions on events.',
+    test: 'List who has delete/deletegroup RBAC permissions on events.',
     controlID: 'C-0031',
     baseScore: 4.0,
     example: '@controls/examples/c031.yaml',
@@ -2997,7 +2997,7 @@ export const controls: Control[] = [
     rulesNames: ['rule-excessive-delete-rights-v1'],
     long_description:
       'Attackers may attempt to destroy data and resources in the cluster. This includes deleting deployments, configurations, storage, and compute resources.',
-    test: 'Check which subjects have delete/deletecollection RBAC permissions on workloads.',
+    test: 'Check which subjects have delete/deletegroup RBAC permissions on workloads.',
     controlID: 'C-0007',
     category: {
       name: 'Access control',
@@ -4320,7 +4320,7 @@ export const controls: Control[] = [
     long_description:
       'Exporting logs and metrics to a dedicated, persistent datastore ensures availability of audit data following a cluster security event, and provides a central location for analysis of log and metric data collated from multiple sources.',
     remediation:
-      "Azure audit logs are enabled and managed in the Azure portal. To enable log collection for the Kubernetes master components in your AKS cluster, open the Azure portal in a web browser and complete the following steps:\n\n 1. Select the resource group for your AKS cluster, such as myResourceGroup. Don't select the resource group that contains your individual AKS cluster resources, such as MC\\_myResourceGroup\\_myAKSCluster\\_eastus.\n2. On the left-hand side, choose Diagnostic settings.\n3. Select your AKS cluster, such as myAKSCluster, then choose to Add diagnostic setting.\n4. Enter a name, such as myAKSClusterLogs, then select the option to Send to Log Analytics.\n5. Select an existing workspace or create a new one. If you create a workspace, provide a workspace name, a resource group, and a location.\n6. In the list of available logs, select the logs you wish to enable. For this example, enable the kube-audit and kube-audit-admin logs. Common logs include the kube-apiserver, kube-controller-manager, and kube-scheduler. You can return and change the collected logs once Log Analytics workspaces are enabled.\n7. When ready, select Save to enable collection of the selected logs.",
+      "Azure audit logs are enabled and managed in the Azure portal. To enable log group for the Kubernetes master components in your AKS cluster, open the Azure portal in a web browser and complete the following steps:\n\n 1. Select the resource group for your AKS cluster, such as myResourceGroup. Don't select the resource group that contains your individual AKS cluster resources, such as MC\\_myResourceGroup\\_myAKSCluster\\_eastus.\n2. On the left-hand side, choose Diagnostic settings.\n3. Select your AKS cluster, such as myAKSCluster, then choose to Add diagnostic setting.\n4. Enter a name, such as myAKSClusterLogs, then select the option to Send to Log Analytics.\n5. Select an existing workspace or create a new one. If you create a workspace, provide a workspace name, a resource group, and a location.\n6. In the list of available logs, select the logs you wish to enable. For this example, enable the kube-audit and kube-audit-admin logs. Common logs include the kube-apiserver, kube-controller-manager, and kube-scheduler. You can return and change the collected logs once Log Analytics workspaces are enabled.\n7. When ready, select Save to enable group of the selected logs.",
     manual_test: '',
     references: [
       '<https://kubernetes.io/docs/tasks/debug-application-cluster/audit/>\n\n  <https://docs.microsoft.com/en-us/azure/aks/view-master-logs>\n\n  <https://docs.microsoft.com/security/benchmark/azure/security-controls-v2-logging-threat-detection#lt-4-enable-logging-for-azure-resources>',
@@ -4446,7 +4446,7 @@ export const controls: Control[] = [
     name: 'Images from allowed registry',
     attributes: {
       actionRequired: 'configuration',
-      microsoftMitreColumns: ['Collection'],
+      microsoftMitreColumns: ['Group'],
       controlTypeTags: ['security', 'compliance'],
     },
     description:
@@ -6174,7 +6174,7 @@ export const controls: Control[] = [
       attackTracks: [
         {
           attackTrack: 'workload-external-track',
-          categories: ['Data Collection'],
+          categories: ['Data Group'],
         },
       ],
     },

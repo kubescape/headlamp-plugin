@@ -1,11 +1,14 @@
+import { put, request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
+import { KubeConfigMap } from '@kinvolk/headlamp-plugin/lib/k8s/configMap';
 import * as YAML from 'yaml';
 import {
   getItemFromLocalStorage,
+  getItemFromSessionStorage,
   KubescapeSettings,
   setItemInLocalStorage,
 } from '../common/webStorage';
 import { Control } from '../rego';
-import { PostureExceptionPolicy, ResourceDesignator } from './PostureExceptionPolicy';
+import { ExceptionPolicyGroup, ResourceDesignator } from './ExceptionPolicy';
 
 /**
  * Adds or removes a resource exception, depending on the exclude flag.
@@ -17,17 +20,34 @@ import { PostureExceptionPolicy, ResourceDesignator } from './PostureExceptionPo
  * @param {string} kind The kind of the workload.
  * @param {boolean} exclude If true, the exception will be removed. Otherwise it will be added.
  */
-export function mutateResourceException(
+export async function mutateResourceException(
   name: string,
   namespace: string,
   kind: string,
   exclude: boolean
 ) {
-  const exceptions = getItemFromLocalStorage<string>(KubescapeSettings.Exceptions) ?? '';
+  console.log('C');
+  const selectedExceptionGroup = getItemFromLocalStorage<ExceptionPolicyGroup>(
+    KubescapeSettings.SelectedExceptionGroup
+  );
+  console.log('D');
+  const kubeScapeNamespace = getItemFromSessionStorage<string>(
+    KubescapeSettings.KubescapeNamespace
+  );
+  if (!kubeScapeNamespace) return;
 
-  const postureExceptionPolicies: PostureExceptionPolicy[] = YAML.parse(exceptions);
+  if (!selectedExceptionGroup?.configmapManifestName) {
+    console.log('No exception policies selected');
+    return;
+  }
 
-  let resourceExceptions = postureExceptionPolicies.find(
+  const configMap = (await request(
+    `/api/v1/namespaces/${kubeScapeNamespace}/configmaps/${selectedExceptionGroup.configmapManifestName}`
+  )) as KubeConfigMap;
+
+  if (!configMap) return;
+
+  let resourceExceptions = selectedExceptionGroup.exceptionPolicies.find(
     policy => policy.name === 'resource-exceptions'
   );
 
@@ -37,7 +57,7 @@ export function mutateResourceException(
       creationTime: new Date(),
       resources: [],
     };
-    postureExceptionPolicies.push(resourceExceptions);
+    selectedExceptionGroup.exceptionPolicies.push(resourceExceptions);
   }
 
   resourceExceptions.resources = mutateResources(
@@ -48,7 +68,14 @@ export function mutateResourceException(
     exclude
   );
 
-  setItemInLocalStorage(KubescapeSettings.Exceptions, YAML.stringify(postureExceptionPolicies));
+  configMap.data.exceptionPolicies = JSON.stringify(selectedExceptionGroup.exceptionPolicies);
+  console.log(configMap);
+  await put(
+    `/api/v1/namespaces/${configMap.metadata.namespace}/configmaps/${configMap.metadata.name}`,
+    configMap
+  );
+
+  setItemInLocalStorage(KubescapeSettings.SelectedExceptionGroup, selectedExceptionGroup);
 }
 
 /**
@@ -69,36 +96,31 @@ export function mutateControlException(
   control: Control,
   exclude: boolean
 ) {
-  const exceptions = getItemFromLocalStorage<string>(KubescapeSettings.Exceptions) ?? '';
-
-  const postureExceptionPolicies: PostureExceptionPolicy[] = YAML.parse(exceptions);
-  const policyName = `control-${control.controlID}-exception`;
-
-  let controlExceptions = postureExceptionPolicies.find(policy => policy.name === policyName);
-
-  if (!controlExceptions) {
-    controlExceptions = {
-      name: policyName,
-      creationTime: new Date(),
-      resources: [],
-      posturePolicies: [
-        {
-          controlID: control.controlID,
-        },
-      ],
-    };
-    postureExceptionPolicies.push(controlExceptions);
-  }
-
-  controlExceptions.resources = mutateResources(
-    controlExceptions.resources,
-    name,
-    namespace,
-    kind,
-    exclude
-  );
-
-  setItemInLocalStorage(KubescapeSettings.Exceptions, YAML.stringify(postureExceptionPolicies));
+  // const exceptions = getItemFromLocalStorage<string>(KubescapeSettings.Exceptions) ?? '';
+  // const postureExceptionPolicies: ExceptionPolicy[] = YAML.parse(exceptions);
+  // const policyName = `control-${control.controlID}-exception`;
+  // let controlExceptions = postureExceptionPolicies.find(policy => policy.name === policyName);
+  // if (!controlExceptions) {
+  //   controlExceptions = {
+  //     name: policyName,
+  //     creationTime: new Date(),
+  //     resources: [],
+  //     posturePolicies: [
+  //       {
+  //         controlID: control.controlID,
+  //       },
+  //     ],
+  //   };
+  //   postureExceptionPolicies.push(controlExceptions);
+  // }
+  // controlExceptions.resources = mutateResources(
+  //   controlExceptions.resources,
+  //   name,
+  //   namespace,
+  //   kind,
+  //   exclude
+  // );
+  // setItemInLocalStorage(KubescapeSettings.Exceptions, YAML.stringify(postureExceptionPolicies));
 }
 
 /**
@@ -114,32 +136,29 @@ export function mutateControlException(
  */
 
 export function mutateNamespaceException(namespace: string, exclude: boolean) {
-  const exceptions = getItemFromLocalStorage<string>(KubescapeSettings.Exceptions) ?? '';
-  const postureExceptionPolicies: PostureExceptionPolicy[] = YAML.parse(exceptions);
-  const policyName = `namespace-${namespace}-exception`;
-
-  let controlExceptions = postureExceptionPolicies.find(policy => policy.name === policyName);
-
-  if (!controlExceptions && exclude) {
-    controlExceptions = {
-      name: policyName,
-      creationTime: new Date(),
-      resources: [
-        {
-          designatorType: 'Attributes',
-          attributes: {
-            namespace: namespace,
-          },
-        },
-      ],
-    };
-    postureExceptionPolicies.push(controlExceptions);
-  }
-  if (controlExceptions && !exclude) {
-    postureExceptionPolicies.splice(postureExceptionPolicies.indexOf(controlExceptions), 1);
-  }
-
-  setItemInLocalStorage(KubescapeSettings.Exceptions, YAML.stringify(postureExceptionPolicies));
+  // const exceptions = getItemFromLocalStorage<string>(KubescapeSettings.Exceptions) ?? '';
+  // const postureExceptionPolicies: ExceptionPolicy[] = YAML.parse(exceptions);
+  // const policyName = `namespace-${namespace}-exception`;
+  // let controlExceptions = postureExceptionPolicies.find(policy => policy.name === policyName);
+  // if (!controlExceptions && exclude) {
+  //   controlExceptions = {
+  //     name: policyName,
+  //     creationTime: new Date(),
+  //     resources: [
+  //       {
+  //         designatorType: 'Attributes',
+  //         attributes: {
+  //           namespace: namespace,
+  //         },
+  //       },
+  //     ],
+  //   };
+  //   postureExceptionPolicies.push(controlExceptions);
+  // }
+  // if (controlExceptions && !exclude) {
+  //   postureExceptionPolicies.splice(postureExceptionPolicies.indexOf(controlExceptions), 1);
+  // }
+  // setItemInLocalStorage(KubescapeSettings.Exceptions, YAML.stringify(postureExceptionPolicies));
 }
 
 function mutateResources(

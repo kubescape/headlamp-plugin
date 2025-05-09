@@ -13,8 +13,13 @@ import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import {
   Box,
   Button,
+  FormControl,
   FormControlLabel,
+  InputLabel,
   Link,
+  MenuItem,
+  OutlinedInput,
+  Select,
   Stack,
   Switch,
   Tooltip,
@@ -25,12 +30,14 @@ import { isNewClusterContext } from '../common/clusterContext';
 import { ProgressIndicator } from '../common/ProgressIndicator';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
+import { getKubescapeNamespace } from '../custom-objects/api-queries';
 import {
   applyExceptionsToWorkloadScanData,
   countExcludedControls,
   countExcludedResources,
   countExcludedWorkloadsForControl,
 } from '../exceptions/apply-exceptions';
+import { ExceptionPolicy, ExceptionPolicyGroup } from '../exceptions/ExceptionPolicy';
 import { RoutingName } from '../index';
 import {
   customObjectLabel,
@@ -96,6 +103,12 @@ export default function ComplianceView(): JSX.Element {
     'AllControls'
   );
   const [customFrameworks, setCustomFrameworks] = useState<any[]>([]);
+  const [exceptionGroups, setExceptionGroups] = useLocalStorage<ExceptionPolicyGroup[]>(
+    KubescapeSettings.ExceptionPolicyGroups,
+    []
+  );
+  const [selectedExceptionGroup, setSelectedExceptionGroup] =
+    useLocalStorage<ExceptionPolicyGroup | null>(KubescapeSettings.SelectedExceptionGroup, null);
 
   const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] = useLocalStorage<boolean>(
     KubescapeSettings.FailedControls,
@@ -103,11 +116,21 @@ export default function ComplianceView(): JSX.Element {
   );
   const continueReading = useRef(true);
 
+  console.log(selectedExceptionGroup);
+
   const framework =
     frameworks.find(fw => fw.name === frameworkName) ??
     customFrameworks?.find(fw => fw.name === frameworkName) ??
     frameworks[0];
 
+  // get kubescape namespace
+  useEffect(() => {
+    getKubescapeNamespace().then(({ error }) => {
+      console.log(error);
+    });
+  }, []);
+
+  // fetch custom frameworks
   useEffect(() => {
     const queryParams = new URLSearchParams();
     queryParams.append('labelSelector', `${customObjectLabel}=framework`);
@@ -122,6 +145,7 @@ export default function ComplianceView(): JSX.Element {
               controls: controls.filter(c =>
                 controlsIDs?.some(controlID => controlID === c.controlID)
               ),
+              configmapManifestName: configMap.metadata.name,
             } as FrameWork;
           }) ?? [];
         setCustomFrameworks(customFrameworks);
@@ -131,6 +155,31 @@ export default function ComplianceView(): JSX.Element {
       });
   }, []);
 
+  // fetch exceptions
+  useEffect(() => {
+    const queryParams = new URLSearchParams();
+    queryParams.append('labelSelector', `${customObjectLabel}=exceptions`);
+    request(`api/v1/configmaps?${queryParams.toString()}`)
+      .then(response => {
+        const exceptions =
+          response?.items.map((configMap: any) => {
+            const exceptionPolicies: ExceptionPolicy[] =
+              JSON.parse(configMap.data.exceptionPolicies) ?? [];
+            return {
+              name: configMap?.data.name,
+              description: configMap.data.description,
+              exceptionPolicies: exceptionPolicies,
+              configmapManifestName: configMap.metadata.name,
+            } as ExceptionPolicyGroup;
+          }) ?? [];
+        setExceptionGroups(exceptions);
+      })
+      .catch(error => {
+        console.error(error);
+      });
+  }, []);
+
+  // fetch workload scans
   useEffect(() => {
     async function fetchData() {
       if (isNewClusterContext(configurationScanContext.context)) {
@@ -142,15 +191,19 @@ export default function ComplianceView(): JSX.Element {
       if (configurationScanContext.continuation !== undefined) {
         await fetchWorkloadScanData(continueReading, setProgressMessage, setLoading);
       }
-      applyExceptionsToWorkloadScanData(configurationScanContext.workloadScans, frameworkName);
-      setWorkloadScanData(configurationScanContext.workloadScans);
+      applyExceptionsToWorkloadScanData(
+        configurationScanContext.workloadScans,
+        frameworkName,
+        selectedExceptionGroup
+      );
+      setWorkloadScanData([...configurationScanContext.workloadScans]);
     }
 
     fetchData();
     return () => {
       continueReading.current = false;
     };
-  }, [frameworkName]);
+  }, [frameworkName, selectedExceptionGroup]);
 
   return (
     <>
@@ -196,6 +249,11 @@ export default function ComplianceView(): JSX.Element {
               frameworkName={frameworkName}
               customFrameworks={customFrameworks}
               setFrameworkName={setFrameworkName}
+            />
+            <ExceptionsDropdown
+              exceptionGroups={exceptionGroups}
+              selectedExceptionGroup={selectedExceptionGroup}
+              setSelectedExceptionGroup={setSelectedExceptionGroup}
             />
           </Stack>
           <Typography variant="body1" component="div" sx={{ padding: 2 }}>
@@ -426,4 +484,38 @@ async function fetchWorkloadScanData(
     }
   }
   setLoading(false);
+}
+
+function ExceptionsDropdown(
+  props: Readonly<{
+    exceptionGroups: ExceptionPolicyGroup[];
+    selectedExceptionGroup: ExceptionPolicyGroup | null;
+    setSelectedExceptionGroup: Function;
+  }>
+) {
+  const { exceptionGroups, selectedExceptionGroup, setSelectedExceptionGroup } = props;
+
+  return (
+    <FormControl sx={{ m: 1, minWidth: 200 }} size="small">
+      <InputLabel sx={{ marginLeft: 2 }} id="select-label">
+        Exceptions
+      </InputLabel>
+      <Select
+        labelId="select-label"
+        sx={{ height: 40, width: 160 }}
+        value={selectedExceptionGroup?.name ?? 'None'}
+        onChange={event =>
+          setSelectedExceptionGroup(exceptionGroups.find(g => g.name === event.target.value))
+        }
+        input={<OutlinedInput label="Exceptions" />}
+      >
+        <MenuItem value="None">None</MenuItem>
+        {exceptionGroups.map(exceptionGroup => (
+          <MenuItem key={exceptionGroup.name} value={exceptionGroup.name}>
+            {exceptionGroup.name}
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  );
 }

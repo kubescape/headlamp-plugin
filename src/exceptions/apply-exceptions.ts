@@ -1,21 +1,16 @@
-import YAML from 'yaml';
 import { getItemFromLocalStorage, KubescapeSettings } from '../common/webStorage';
-import { PostureExceptionPolicy, PosturePolicy } from '../exceptions/PostureExceptionPolicy';
 import { Control } from '../rego';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { KubernetesObject } from '../types/KubernetesObject';
+import { ExceptionPolicy, ExceptionPolicyGroup, PosturePolicy } from './ExceptionPolicy';
 
 export function applyExceptionsToWorkloadScanData(
   workloadScans: WorkloadConfigurationScanSummary[],
-  frameWorkName: string
+  frameWorkName: string,
+  exceptionGroup: ExceptionPolicyGroup | null
 ) {
-  const exceptions = getItemFromLocalStorage<string>(KubescapeSettings.Exceptions);
-  const postureExceptionPolicies = exceptions ? YAML.parse(exceptions) : undefined;
-
-  if (!postureExceptionPolicies) {
-    return;
-  }
+  const postureExceptionPolicies = exceptionGroup?.exceptionPolicies ?? [];
 
   for (const w of workloadScans) {
     Object.entries(w.spec.controls).forEach(([key, value]) => {
@@ -36,8 +31,10 @@ export function applyExceptionsToWorkloadScan(
   workloadScan: WorkloadConfigurationScan,
   frameWorkName: string
 ) {
-  const exceptions = getItemFromLocalStorage<string>(KubescapeSettings.Exceptions);
-  const postureExceptionPolicies = exceptions ? YAML.parse(exceptions) : undefined;
+  const exceptionGroup = getItemFromLocalStorage<ExceptionPolicyGroup>(
+    KubescapeSettings.SelectedExceptionGroup
+  );
+  const postureExceptionPolicies = exceptionGroup?.exceptionPolicies ?? [];
 
   if (!postureExceptionPolicies) {
     return;
@@ -131,10 +128,7 @@ function policyAttributesMatch(
   return true;
 }
 
-function isResourceMatchedInException(
-  workloadScan: KubernetesObject,
-  policies: PostureExceptionPolicy[]
-) {
+function isResourceMatchedInException(workloadScan: KubernetesObject, policies: ExceptionPolicy[]) {
   return policies.some(
     policy =>
       (!policy.posturePolicies || policy.posturePolicies.length === 0) &&
@@ -147,7 +141,7 @@ function isControlMatchedInException(
   control: WorkloadConfigurationScanSummary.Control,
   frameworkName: string,
   workloadScan: KubernetesObject,
-  policies: PostureExceptionPolicy[]
+  policies: ExceptionPolicy[]
 ) {
   return policies.some(
     policy =>

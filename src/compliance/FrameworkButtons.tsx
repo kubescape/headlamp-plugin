@@ -98,11 +98,14 @@ export function FrameworkButtons(
         </RadioGroup>
       </FormControl>
       <FormControl variant="filled" sx={{ m: 1, minWidth: 160 }} size="small">
-        <InputLabel id="select-label">Frameworks</InputLabel>
+        <InputLabel id="select-label" sx={{ height: 40 }}>
+          Frameworks
+        </InputLabel>
         <Select
           labelId="select-label"
           id="simple-select"
           label="Frameworks"
+          sx={{ height: 40, width: 160 }}
           value={selectedFrameworkNames}
           multiple
           onChange={handleChange}

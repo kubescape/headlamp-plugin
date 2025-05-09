@@ -19,11 +19,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import { useState } from 'react';
 import { ErrorContainer } from '../common/ErrorContainer';
-import {
-  PostureExceptionPolicy,
-  PosturePolicy,
-  ResourceDesignator,
-} from './PostureExceptionPolicy';
+import { ExceptionPolicy, PosturePolicy, ResourceDesignator } from './ExceptionPolicy';
 
 /**
  * EditPosturePolicyExceptionDialog renders
@@ -40,13 +36,13 @@ import {
  */
 export function EditPosturePolicyExceptionDialog(
   props: Readonly<{
-    exception: PostureExceptionPolicy;
-    onUpdate: (name: string, updatedException: PostureExceptionPolicy) => void;
+    exception: ExceptionPolicy;
+    onUpdate: (name: string, updatedException: ExceptionPolicy) => void;
   }>
 ) {
   const { exception, onUpdate } = props;
   const [open, setOpen] = useState(false);
-  const [editedException, setEditedException] = useState<PostureExceptionPolicy>(exception);
+  const [editedException, setEditedException] = useState<ExceptionPolicy>(exception);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   const handleClickOpen = () => {
@@ -92,6 +88,7 @@ export function EditPosturePolicyExceptionDialog(
             </InputLabel>
 
             <TextField
+              key="name"
               id="name"
               fullWidth
               variant="outlined"
@@ -107,6 +104,7 @@ export function EditPosturePolicyExceptionDialog(
             </InputLabel>
 
             <TextField
+              key="reason"
               id="reason"
               fullWidth
               multiline
@@ -141,7 +139,7 @@ export function EditPosturePolicyExceptionDialog(
 }
 
 function EditResourceMatchers(
-  props: Readonly<{ editedException: PostureExceptionPolicy; setEditedException: Function }>
+  props: Readonly<{ editedException: ExceptionPolicy; setEditedException: Function }>
 ) {
   const { editedException, setEditedException } = props;
 
@@ -227,7 +225,7 @@ function EditResourceMatchers(
 }
 
 function EditPolicyMatchers(
-  props: Readonly<{ editedException: PostureExceptionPolicy; setEditedException: Function }>
+  props: Readonly<{ editedException: ExceptionPolicy; setEditedException: Function }>
 ) {
   const { editedException, setEditedException } = props;
   const fields = ['controlID', 'frameworkName'];
@@ -335,12 +333,18 @@ function EditCell(
   }>
 ) {
   const { object, index, attribute, updateFunction } = props;
+  const [textFieldValue, setTextFieldValue] = useState(object[attribute] ?? '');
+
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setTextFieldValue(event.target.value);
+    updateFunction(index, attribute, event.target.value);
+  };
 
   return (
     <TableCell key={attribute} sx={{ padding: '0 4px', verticalAlign: 'middle' }}>
       <TextField
         key={attribute}
-        value={object[attribute] as string}
+        value={textFieldValue}
         variant="outlined"
         size="small"
         sx={{
@@ -351,7 +355,7 @@ function EditCell(
             border: 'none',
           },
         }}
-        onChange={event => updateFunction(index, attribute, event.target.value)}
+        onChange={event => handleChange(event)}
       />
     </TableCell>
   );
