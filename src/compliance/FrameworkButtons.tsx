@@ -14,7 +14,7 @@ import {
   Stack,
 } from '@mui/material';
 import React from 'react';
-import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
+import { kubescapeConfigStore } from '../common/config-store';
 import { defaultFrameworkNames, FrameWork, frameworks } from '../rego';
 import { configurationScanContext } from './Compliance';
 import { frameworkComplianceScore } from './workload-scanning';
@@ -23,18 +23,15 @@ export function FrameworkButtons(
   props: Readonly<{
     frameworkName: string;
     customFrameworks: FrameWork[];
-    setFrameworkName: React.Dispatch<React.SetStateAction<string>>;
   }>
 ) {
-  const { frameworkName, customFrameworks, setFrameworkName } = props;
+  const { frameworkName, customFrameworks } = props;
   function frameworkChange(event: React.ChangeEvent<HTMLInputElement>, value: string) {
-    setFrameworkName(value);
+    kubescapeConfigStore.update({ framework: value });
   }
 
-  const [selectedFrameworkNames, setSelectedFrameworkNames] = useLocalStorage<string[]>(
-    KubescapeSettings.FrameworkNames,
-    defaultFrameworkNames
-  );
+  const selectedFrameworkNames =
+    (kubescapeConfigStore.get().activeFrameworks as string[]) ?? defaultFrameworkNames;
 
   const labels: JSX.Element[] = [];
 
@@ -75,14 +72,7 @@ export function FrameworkButtons(
 
     const values = typeof value === 'string' ? value.split(',') : value;
 
-    // Save the updated configuration to the store
-    setSelectedFrameworkNames(
-      values.filter(
-        frameworkName =>
-          frameworks.some(fw => fw.name === frameworkName) ||
-          customFrameworks.some(fw => fw.name === frameworkName)
-      )
-    );
+    kubescapeConfigStore.update({ activeFrameworks: values });
   };
 
   return (
@@ -90,7 +80,7 @@ export function FrameworkButtons(
       <FormControl>
         <RadioGroup
           row
-          defaultValue={frameworkName}
+          value={frameworkName}
           name="row-radio-buttons-group"
           onChange={frameworkChange}
         >
@@ -98,11 +88,14 @@ export function FrameworkButtons(
         </RadioGroup>
       </FormControl>
       <FormControl variant="filled" sx={{ m: 1, minWidth: 160 }} size="small">
-        <InputLabel id="select-label">Frameworks</InputLabel>
+        <InputLabel id="select-label" sx={{ height: 40 }}>
+          Frameworks
+        </InputLabel>
         <Select
           labelId="select-label"
           id="simple-select"
           label="Frameworks"
+          sx={{ height: 40, width: 160 }}
           value={selectedFrameworkNames}
           multiple
           onChange={handleChange}

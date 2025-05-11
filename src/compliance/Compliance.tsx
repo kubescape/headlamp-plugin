@@ -13,8 +13,13 @@ import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import {
   Box,
   Button,
+  FormControl,
   FormControlLabel,
+  InputLabel,
   Link,
+  MenuItem,
+  OutlinedInput,
+  Select,
   Stack,
   Switch,
   Tooltip,
@@ -22,15 +27,23 @@ import {
 } from '@mui/material';
 import React, { useEffect, useRef, useState } from 'react';
 import { isNewClusterContext } from '../common/clusterContext';
+import { KubescapeConfig, kubescapeConfigStore } from '../common/config-store';
 import { ProgressIndicator } from '../common/ProgressIndicator';
+import {
+  getItemFromSessionStorage,
+  KubescapeSettings,
+  setItemInSessionStorage,
+  useSessionStorage,
+} from '../common/sessionStorage';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
-import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
+import { getKubescapeNamespace } from '../custom-objects/api-queries';
 import {
   applyExceptionsToWorkloadScanData,
   countExcludedControls,
   countExcludedResources,
   countExcludedWorkloadsForControl,
 } from '../exceptions/apply-exceptions';
+import { ExceptionPolicy, ExceptionPolicyGroup } from '../exceptions/ExceptionPolicy';
 import { RoutingName } from '../index';
 import {
   customObjectLabel,
@@ -85,52 +98,28 @@ fitControlsToFrameworks();
  * @returns The ComplianceView component.
  */
 export default function ComplianceView(): JSX.Element {
-  const [selectedTab, setSelectedTab] = useLocalStorage<number>(KubescapeSettings.ComplianceTab, 0);
+  const pluginConfig = kubescapeConfigStore.useConfig();
+  const kubescapeConfig = pluginConfig() as KubescapeConfig;
+
   const [workloadScanData, setWorkloadScanData] = useState<
     WorkloadConfigurationScanSummary[] | null
   >(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
-  const [frameworkName, setFrameworkName] = useLocalStorage<string>(
-    KubescapeSettings.Framework,
-    'AllControls'
-  );
-  const [customFrameworks, setCustomFrameworks] = useState<any[]>([]);
 
-  const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] = useLocalStorage<boolean>(
-    KubescapeSettings.FailedControls,
-    true
-  );
+  const [customFrameworks, setCustomFrameworks] = useState<any[]>([]);
+  const [exceptionGroups, setExceptionGroups] = useState<ExceptionPolicyGroup[]>([]);
+
+  const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] =
+    useSessionStorage<boolean>(KubescapeSettings.FailedControls, true);
   const continueReading = useRef(true);
 
   const framework =
-    frameworks.find(fw => fw.name === frameworkName) ??
-    customFrameworks?.find(fw => fw.name === frameworkName) ??
+    frameworks.find(fw => fw.name === kubescapeConfig?.framework) ??
+    customFrameworks?.find(fw => fw.name === kubescapeConfig?.framework) ??
     frameworks[0];
 
-  useEffect(() => {
-    const queryParams = new URLSearchParams();
-    queryParams.append('labelSelector', `${customObjectLabel}=framework`);
-    request(`api/v1/configmaps?${queryParams.toString()}`)
-      .then(response => {
-        const customFrameworks =
-          response.items?.map((configMap: any) => {
-            const controlsIDs: string[] = JSON.parse(configMap.data.controlsIDs) ?? [];
-            return {
-              name: configMap.data.name,
-              description: configMap.data.description,
-              controls: controls.filter(c =>
-                controlsIDs?.some(controlID => controlID === c.controlID)
-              ),
-            } as FrameWork;
-          }) ?? [];
-        setCustomFrameworks(customFrameworks);
-      })
-      .catch(error => {
-        console.error(error);
-      });
-  }, []);
-
+  // fetch workload scans
   useEffect(() => {
     async function fetchData() {
       if (isNewClusterContext(configurationScanContext.context)) {
@@ -138,19 +127,29 @@ export default function ComplianceView(): JSX.Element {
         configurationScanContext.workloadScans = [];
         configurationScanContext.context.currentCluster = getCluster() ?? '';
         configurationScanContext.context.allowedNamespaces = getAllowedNamespaces();
+
+        setItemInSessionStorage(KubescapeSettings.KubescapeNamespace, null);
+        getKubescapeNamespace().then(({ error }) => {
+          console.log(error);
+        });
       }
       if (configurationScanContext.continuation !== undefined) {
         await fetchWorkloadScanData(continueReading, setProgressMessage, setLoading);
       }
-      applyExceptionsToWorkloadScanData(configurationScanContext.workloadScans, frameworkName);
-      setWorkloadScanData(configurationScanContext.workloadScans);
+
+      await fetchCustomObjects(setExceptionGroups, setCustomFrameworks);
+      applyExceptionsToWorkloadScanData(
+        configurationScanContext.workloadScans,
+        kubescapeConfig?.framework
+      );
+      setWorkloadScanData([...configurationScanContext.workloadScans]);
     }
 
     fetchData();
     return () => {
       continueReading.current = false;
     };
-  }, [frameworkName]);
+  }, [kubescapeConfig]);
 
   return (
     <>
@@ -193,10 +192,10 @@ export default function ComplianceView(): JSX.Element {
               }}
             />
             <FrameworkButtons
-              frameworkName={frameworkName}
+              frameworkName={kubescapeConfig?.framework}
               customFrameworks={customFrameworks}
-              setFrameworkName={setFrameworkName}
             />
+            <ExceptionsDropdown exceptionGroups={exceptionGroups} />
           </Stack>
           <Typography variant="body1" component="div" sx={{ padding: 2 }}>
             {`${workloadScanData.length} total checks, ${countFailedScans(
@@ -207,8 +206,10 @@ export default function ComplianceView(): JSX.Element {
             ${countExcludedControls(workloadScanData)} controls`}
           </Typography>
           <HeadlampTabs
-            defaultIndex={selectedTab}
-            onTabChanged={tabIndex => setSelectedTab(tabIndex)}
+            defaultIndex={getItemFromSessionStorage(KubescapeSettings.ComplianceTab) ?? 0}
+            onTabChanged={tabIndex =>
+              setItemInSessionStorage(KubescapeSettings.ComplianceTab, tabIndex)
+            }
             tabs={[
               {
                 label: 'Controls',
@@ -426,4 +427,85 @@ async function fetchWorkloadScanData(
     }
   }
   setLoading(false);
+}
+
+function ExceptionsDropdown(
+  props: Readonly<{
+    exceptionGroups: ExceptionPolicyGroup[];
+  }>
+) {
+  const { exceptionGroups } = props;
+
+  const selectedExceptionGroupName = kubescapeConfigStore.get().exceptionGroupName ?? 'None';
+
+  if (!exceptionGroups || exceptionGroups.length === 0) {
+    return <></>;
+  }
+  return (
+    <FormControl sx={{ m: 1, minWidth: 200 }} size="small">
+      <InputLabel sx={{ marginLeft: 2 }} id="select-label">
+        Exceptions
+      </InputLabel>
+      <Select
+        labelId="select-label"
+        sx={{ height: 40, width: 160 }}
+        value={selectedExceptionGroupName}
+        onChange={event => kubescapeConfigStore.update({ exceptionGroupName: event.target.value })}
+        input={<OutlinedInput label="Exceptions" />}
+      >
+        <MenuItem value="None">None</MenuItem>
+        {exceptionGroups.map(exceptionGroup => (
+          <MenuItem key={exceptionGroup.name} value={exceptionGroup.name}>
+            {exceptionGroup.name}
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  );
+}
+
+async function fetchCustomObjects(
+  setExceptionGroups: (exceptionGroups: ExceptionPolicyGroup[]) => void,
+  setCustomFrameworks: (customFrameworks: FrameWork[]) => void
+) {
+  const queryParams = new URLSearchParams();
+
+  queryParams.append('labelSelector', `${customObjectLabel} in (framework,exceptions)`);
+  const response = await request(`api/v1/configmaps?${queryParams.toString()}`).catch(error => {
+    console.error(error);
+  });
+
+  const customFrameworks: FrameWork[] = [];
+  const customExceptions: ExceptionPolicyGroup[] = [];
+
+  response.items?.map((configMap: any) => {
+    const label = configMap.metadata.labels[customObjectLabel];
+    if (label === 'framework') {
+      const controlsIDs: string[] = JSON.parse(configMap.data.controlsIDs) ?? [];
+      customFrameworks.push({
+        name: configMap.data.name,
+        description: configMap.data.description,
+        controls: controls.filter(c => controlsIDs?.some(controlID => controlID === c.controlID)),
+        configmapManifestName: configMap.metadata.name,
+      });
+    } else if (label === 'exceptions') {
+      const exceptionPolicies: ExceptionPolicy[] =
+        JSON.parse(configMap.data.exceptionPolicies) ?? [];
+      customExceptions.push({
+        name: configMap.data.name,
+        description: configMap.data.description,
+        exceptionPolicies: exceptionPolicies,
+        configmapManifestName: configMap.metadata.name,
+      });
+    }
+  });
+
+  setExceptionGroups(customExceptions);
+  setCustomFrameworks(customFrameworks);
+
+  // storing selected exception group in session for use by mutate exceptions.
+  setItemInSessionStorage(
+    KubescapeSettings.SelectedExceptionGroup,
+    customExceptions.find(eg => eg.name === kubescapeConfigStore.get().exceptionGroupName)
+  );
 }

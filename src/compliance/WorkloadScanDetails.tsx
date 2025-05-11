@@ -11,9 +11,11 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Link } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { kubescapeConfigStore } from '../common/config-store';
+import { getItemFromSessionStorage, KubescapeSettings } from '../common/sessionStorage';
 import { getURLSegments } from '../common/url';
-import { getItemFromLocalStorage, KubescapeSettings } from '../common/webStorage';
 import { applyExceptionsToWorkloadScan } from '../exceptions/apply-exceptions';
+import { ExceptionPolicyGroup } from '../exceptions/ExceptionPolicy';
 import { RoutingName } from '../index';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
 import { controls } from '../rego';
@@ -24,12 +26,20 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
   const [configurationScan, setConfigurationScan] = useState<WorkloadConfigurationScan | null>(
     null
   );
-  const frameworkName = getItemFromLocalStorage<string>(KubescapeSettings.Framework) ?? '';
 
   useEffect(() => {
     fetchObject(name, namespace, workloadConfigurationScanClass).then(
       (result: WorkloadConfigurationScan) => {
-        applyExceptionsToWorkloadScan(result, frameworkName);
+        const exceptionGroup = getItemFromSessionStorage<ExceptionPolicyGroup>(
+          KubescapeSettings.SelectedExceptionGroup
+        );
+        if (exceptionGroup) {
+          applyExceptionsToWorkloadScan(
+            result,
+            kubescapeConfigStore.get().framework,
+            exceptionGroup
+          );
+        }
         setConfigurationScan(result);
       }
     );

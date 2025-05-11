@@ -9,7 +9,7 @@ import {
 import { IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useHistory } from 'react-router-dom';
-import { ErrorMessage } from '../common/ErrorMessage';
+import { getKubescapeNamespace } from '../custom-objects/api-queries';
 import { RoutingName } from '../index';
 import { customObjectLabel } from '../model';
 import { controls, FrameWork, frameworks } from '../rego';
@@ -24,7 +24,7 @@ export function FrameworksPage() {
 
   const customFrameworks =
     customFrameworkConfigmaps?.map((configMap: any) => {
-      const controlsIDs: string[] = JSON.parse(configMap.jsonData.data.controlsIDs) ?? [];
+      const controlsIDs: string[] = JSON.parse(configMap.jsonData.data.controlsIDs ?? '[]') ?? [];
       return {
         name: configMap?.jsonData.data.name,
         description: configMap.jsonData.data.description,
@@ -32,14 +32,6 @@ export function FrameworksPage() {
         configmapManifestName: configMap.metadata.name,
       } as FrameWork;
     }) ?? [];
-
-  const [kubescapeOperator, error] = K8s.ResourceClasses.Pod.useList({
-    labelSelector: 'app.kubernetes.io/name=kubescape-operator,app.kubernetes.io/instance=kubescape',
-  });
-
-  if (error) return <ErrorMessage error={error} />;
-
-  const kubeScapeNamespace = kubescapeOperator?.[0]?.metadata.namespace ?? '';
 
   return (
     <Stack direction="column" sx={{ marginTop: '20px' }} spacing={0}>
@@ -49,7 +41,6 @@ export function FrameworksPage() {
       <FrameworksTable
         frameworks={frameworks}
         routeName={RoutingName.FrameworkControls}
-        kubeScapeNamespace={kubeScapeNamespace}
         allowDelete={false}
       />
 
@@ -66,7 +57,6 @@ export function FrameworksPage() {
       <FrameworksTable
         frameworks={customFrameworks}
         routeName={RoutingName.FrameworkEdit}
-        kubeScapeNamespace={kubeScapeNamespace}
         allowDelete
       />
     </Stack>
@@ -77,14 +67,14 @@ function FrameworksTable(
   props: Readonly<{
     frameworks: FrameWork[];
     routeName: string;
-    kubeScapeNamespace: string;
     allowDelete: boolean;
   }>
 ) {
-  const { frameworks, routeName, kubeScapeNamespace, allowDelete } = props;
+  const { frameworks, routeName, allowDelete } = props;
   const { enqueueSnackbar } = useSnackbar();
 
   const handleDelete = async (framework: FrameWork) => {
+    const kubeScapeNamespace = await getKubescapeNamespace();
     await remove(
       `/api/v1/namespaces/${kubeScapeNamespace}/configmaps/${framework.configmapManifestName}`
     );

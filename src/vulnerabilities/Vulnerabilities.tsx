@@ -17,8 +17,13 @@ import { RotatingLines } from 'react-loader-spinner';
 import { isNewClusterContext } from '../common/clusterContext';
 import { ErrorMessage } from '../common/ErrorMessage';
 import { ProgressIndicator } from '../common/ProgressIndicator';
+import {
+  getItemFromSessionStorage,
+  KubescapeSettings,
+  setItemInSessionStorage,
+  useSessionStorage,
+} from '../common/sessionStorage';
 import makeSeverityLabel from '../common/SeverityLabel';
-import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { RoutingName } from '../index';
 import { fetchVulnerabilities, ImageScan, WorkloadScan } from './fetch-vulnerabilities';
 import ImageListView from './ImageList';
@@ -60,10 +65,6 @@ export const vulnerabilityContext: VulnerabilityContext = {
 };
 
 export default function KubescapeVulnerabilities() {
-  const [selectedTab, setSelectedTab] = useLocalStorage<number>(
-    KubescapeSettings.VulnerabilityTab,
-    0
-  );
   const [workloadScanData, setWorkloadScanData] = useState<WorkloadScan[] | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
@@ -126,8 +127,10 @@ export default function KubescapeVulnerabilities() {
 
       {!error && !loading && workloadScanData && (
         <HeadlampTabs
-          defaultIndex={selectedTab}
-          onTabChanged={tabIndex => setSelectedTab(tabIndex)}
+          defaultIndex={getItemFromSessionStorage(KubescapeSettings.VulnerabilityTab) ?? 0}
+          onTabChanged={tabIndex =>
+            setItemInSessionStorage(KubescapeSettings.VulnerabilityTab, tabIndex)
+          }
           tabs={[
             {
               label: 'CVEs',
@@ -151,11 +154,11 @@ export default function KubescapeVulnerabilities() {
 
 function CVEListView(props: Readonly<{ loading: boolean; workloadScans: WorkloadScan[] | null }>) {
   const { loading, workloadScans } = props;
-  const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useLocalStorage<boolean>(
+  const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useSessionStorage<boolean>(
     KubescapeSettings.RelevantCVEs,
     false
   );
-  const [isFixedCVESwitchChecked, setIsFixedCVESwitchChecked] = useLocalStorage<boolean>(
+  const [isFixedCVESwitchChecked, setIsFixedCVESwitchChecked] = useSessionStorage<boolean>(
     KubescapeSettings.FixedCVEs,
     false
   );
