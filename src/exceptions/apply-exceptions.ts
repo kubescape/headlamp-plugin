@@ -1,4 +1,3 @@
-import { getItemFromSessionStorage, KubescapeSettings } from '../common/sessionStorage';
 import { Control } from '../rego';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
@@ -7,11 +6,9 @@ import { ExceptionPolicy, ExceptionPolicyGroup, PosturePolicy } from './Exceptio
 
 export function applyExceptionsToWorkloadScanData(
   workloadScans: WorkloadConfigurationScanSummary[],
-  frameWorkName: string
+  frameWorkName: string,
+  exceptionGroup: ExceptionPolicyGroup | undefined
 ) {
-  const exceptionGroup = getItemFromSessionStorage(
-    KubescapeSettings.SelectedExceptionGroup
-  ) as ExceptionPolicyGroup;
   const postureExceptionPolicies = exceptionGroup?.exceptionPolicies ?? [];
 
   for (const w of workloadScans) {

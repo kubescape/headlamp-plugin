@@ -6,7 +6,6 @@ export enum KubescapeSettings {
   FixedCVEs,
   KubescapeNamespace,
   RelevantCVEs,
-  SelectedExceptionGroup,
   VulnerabilityTab,
 }
 
@@ -29,7 +28,6 @@ export function setItemInSessionStorage<T>(key: KubescapeSettings, value: T) {
   const storageKey = `kubescape.${KubescapeSettings[key]}`;
 
   if (value) {
-    //console.log('Updating session storage', storageKey, value);
     sessionStorage.setItem(storageKey, JSON.stringify(value));
   } else {
     sessionStorage.removeItem(storageKey);

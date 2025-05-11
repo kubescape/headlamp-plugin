@@ -1,5 +1,5 @@
 import { Icon } from '@iconify/react';
-import { post, put, request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
+import { patch, post, request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   Link as HeadlampLink,
   NameValueTable,
@@ -73,7 +73,7 @@ function ExceptionGroup(
   }>
 ) {
   const [configMap, setConfigMap] = useState<KubeConfigMap | undefined>(props.configMap);
-  const [policyGroup, setPolicyGroup] = useState<ExceptionPolicyGroup>(props.group);
+  const [exceptionGroup, setExceptionGroup] = useState<ExceptionPolicyGroup>(props.group);
   const [exceptionPolicies, setExceptionPolicies] = useState<ExceptionPolicy[]>(
     props.group.exceptionPolicies
   );
@@ -83,16 +83,16 @@ function ExceptionGroup(
     getItemFromSessionStorage<string>(KubescapeSettings.KubescapeNamespace) ?? 'kubescape';
 
   const handleSave = async () => {
-    if (!policyGroup.name) {
+    if (!exceptionGroup.name) {
       return setErrorMessage('Name must not be empty');
     }
-    if (!/^[a-z0-9]([-a-z0-9 ]*[a-z0-9])?$/.test(policyGroup.name.toLocaleLowerCase())) {
+    if (!/^[a-z0-9]([-a-z0-9 ]*[a-z0-9])?$/.test(exceptionGroup.name.toLocaleLowerCase())) {
       return setErrorMessage(
         'Only lettters, numbers, spaces and dashes are allowed in the name (e.g. "Dev Framework")'
       );
     }
 
-    if (!(await checkUniqueness(policyGroup.name, configMap?.metadata.uid, 'exceptions'))) {
+    if (!(await checkUniqueness(exceptionGroup.name, configMap?.metadata.uid, 'exceptions'))) {
       return setErrorMessage('Please provide a unique name for the exception group.');
     }
 
@@ -110,17 +110,18 @@ function ExceptionGroup(
         metadata: {
           creationTimestamp: new Date().toISOString(),
           uid: '',
-          name: `${policyGroup.name
+          name: `${exceptionGroup.name
             .replace(' ', '')
             ?.toLocaleLowerCase()}-exceptions-${randomSuffix}`,
           namespace: kubeScapeNamespace,
           labels: {
             [customObjectLabel]: 'exceptions',
+            'app.kubernetes.io/name': exceptionGroup.name,
           },
         },
         data: {
-          name: policyGroup.name,
-          description: policyGroup.description,
+          name: exceptionGroup.name,
+          description: exceptionGroup.description,
           exceptionPolicies: JSON.stringify(exceptionPolicies),
         },
       };
@@ -131,15 +132,15 @@ function ExceptionGroup(
       setConfigMap(configMapUpdated);
     } else {
       configMap.data.exceptionPolicies = JSON.stringify(exceptionPolicies);
-      configMap.data.description = policyGroup.description ?? '';
-      configMap.data.name = policyGroup.name ?? '';
-      const configMapUpdated = await put(
+      configMap.data.description = exceptionGroup.description ?? '';
+      configMap.data.name = exceptionGroup.name ?? '';
+      const configMapUpdated = await patch(
         `/api/v1/namespaces/${configMap.metadata.namespace}/configmaps/${configMap.metadata.name}`,
         configMap
       );
       setConfigMap(configMapUpdated);
     }
-    enqueueSnackbar(`${policyGroup.name} saved successfully`, { variant: 'success' });
+    enqueueSnackbar(`${exceptionGroup.name} saved successfully`, { variant: 'success' });
     setErrorMessage('');
   };
 
@@ -175,7 +176,7 @@ function ExceptionGroup(
 
     saveToFile(
       JSON.stringify(exceptionPolicies, null, 2),
-      `${policyGroup.name}.json`,
+      `${exceptionGroup.name}.json`,
       enqueueSnackbar
     );
   };
@@ -212,8 +213,10 @@ function ExceptionGroup(
                 placeholder="Enter Group Name"
                 id="name"
                 variant="outlined"
-                value={policyGroup.name}
-                onChange={event => setPolicyGroup({ ...policyGroup, name: event.target.value })}
+                value={exceptionGroup.name}
+                onChange={event =>
+                  setExceptionGroup({ ...exceptionGroup, name: event.target.value })
+                }
               />
             ),
           },
@@ -225,9 +228,9 @@ function ExceptionGroup(
                 id="description"
                 fullWidth
                 variant="outlined"
-                value={policyGroup?.description ?? ''}
+                value={exceptionGroup?.description ?? ''}
                 onChange={event => {
-                  setPolicyGroup({ ...policyGroup, description: event.target.value });
+                  setExceptionGroup({ ...exceptionGroup, description: event.target.value });
                 }}
               />
             ),

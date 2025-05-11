@@ -107,7 +107,7 @@ export default function ComplianceView(): JSX.Element {
   const [loading, setLoading] = useState<boolean>(false);
   const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
 
-  const [customFrameworks, setCustomFrameworks] = useState<any[]>([]);
+  const [customFrameworks, setCustomFrameworks] = useState<FrameWork[]>([]);
   const [exceptionGroups, setExceptionGroups] = useState<ExceptionPolicyGroup[]>([]);
 
   const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] =
@@ -137,10 +137,12 @@ export default function ComplianceView(): JSX.Element {
         await fetchWorkloadScanData(continueReading, setProgressMessage, setLoading);
       }
 
-      await fetchCustomObjects(setExceptionGroups, setCustomFrameworks);
+      const exceptionGroup = await fetchCustomObjects(setExceptionGroups, setCustomFrameworks);
+
       applyExceptionsToWorkloadScanData(
         configurationScanContext.workloadScans,
-        kubescapeConfig?.framework
+        kubescapeConfig?.framework,
+        exceptionGroup
       );
       setWorkloadScanData([...configurationScanContext.workloadScans]);
     }
@@ -436,7 +438,7 @@ function ExceptionsDropdown(
 ) {
   const { exceptionGroups } = props;
 
-  const selectedExceptionGroupName = kubescapeConfigStore.get().exceptionGroupName ?? 'None';
+  const selectedExceptionGroupName = kubescapeConfigStore.get().exceptionGroupName ?? '';
 
   if (!exceptionGroups || exceptionGroups.length === 0) {
     return <></>;
@@ -453,7 +455,7 @@ function ExceptionsDropdown(
         onChange={event => kubescapeConfigStore.update({ exceptionGroupName: event.target.value })}
         input={<OutlinedInput label="Exceptions" />}
       >
-        <MenuItem value="None">None</MenuItem>
+        <MenuItem value="">None</MenuItem>
         {exceptionGroups.map(exceptionGroup => (
           <MenuItem key={exceptionGroup.name} value={exceptionGroup.name}>
             {exceptionGroup.name}
@@ -503,9 +505,5 @@ async function fetchCustomObjects(
   setExceptionGroups(customExceptions);
   setCustomFrameworks(customFrameworks);
 
-  // storing selected exception group in session for use by mutate exceptions.
-  setItemInSessionStorage(
-    KubescapeSettings.SelectedExceptionGroup,
-    customExceptions.find(eg => eg.name === kubescapeConfigStore.get().exceptionGroupName)
-  );
+  return customExceptions.find(eg => eg.name === kubescapeConfigStore.get().exceptionGroupName);
 }

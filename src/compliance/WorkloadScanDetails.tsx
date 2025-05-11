@@ -11,15 +11,12 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Link } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { kubescapeConfigStore } from '../common/config-store';
-import { getItemFromSessionStorage, KubescapeSettings } from '../common/sessionStorage';
 import { getURLSegments } from '../common/url';
-import { applyExceptionsToWorkloadScan } from '../exceptions/apply-exceptions';
-import { ExceptionPolicyGroup } from '../exceptions/ExceptionPolicy';
 import { RoutingName } from '../index';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
 import { controls } from '../rego';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
+import { configurationScanContext } from './Compliance';
 
 export default function KubescapeWorkloadConfigurationScanDetails() {
   const [name, namespace] = getURLSegments(-1, -2);
@@ -30,15 +27,19 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
   useEffect(() => {
     fetchObject(name, namespace, workloadConfigurationScanClass).then(
       (result: WorkloadConfigurationScan) => {
-        const exceptionGroup = getItemFromSessionStorage<ExceptionPolicyGroup>(
-          KubescapeSettings.SelectedExceptionGroup
+        const workloadConfigurationScanSummary = configurationScanContext.workloadScans.find(
+          w =>
+            w.metadata.name === result.metadata.name &&
+            w.metadata.namespace === result.metadata.namespace
         );
-        if (exceptionGroup) {
-          applyExceptionsToWorkloadScan(
-            result,
-            kubescapeConfigStore.get().framework,
-            exceptionGroup
-          );
+
+        if (workloadConfigurationScanSummary) {
+          result.exceptedByPolicy = workloadConfigurationScanSummary.exceptedByPolicy;
+          Object.values(result.spec.controls).forEach(control => {
+            control.exceptedByPolicy = Object.values(
+              workloadConfigurationScanSummary.spec.controls
+            ).some(scan => scan.controlID === control.controlID && scan.exceptedByPolicy);
+          });
         }
         setConfigurationScan(result);
       }
