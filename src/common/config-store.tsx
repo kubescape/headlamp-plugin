@@ -10,3 +10,8 @@ export type KubescapeConfig = {
 };
 
 export const kubescapeConfigStore = new ConfigStore<KubescapeConfig>(PLUGIN_NAME);
+
+if (!kubescapeConfigStore.get()) {
+  console.log('initialize kubescape settings');
+  kubescapeConfigStore.set({ framework: '', exceptionGroupName: '' });
+}

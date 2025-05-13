@@ -7,7 +7,6 @@ import {
   StatusLabel,
   StatusLabelProps,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { KubeObjectInterface } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { KubeConfigMap } from '@kinvolk/headlamp-plugin/lib/k8s/configMap';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import {
@@ -126,10 +125,18 @@ function FrameworkEditor(
       return setErrorMessage('Please provide a unique name for the framework.');
     }
 
+    function updateConfigMapData(configMap: KubeConfigMap) {
+      configMap.data = {
+        name: framework.name,
+        description: framework.description ?? '',
+        controlsIDs: JSON.stringify(frameworkControls.map(c => c.controlID)),
+      };
+    }
+
     if (!configMap?.metadata.uid) {
       const randomSuffix = Math.random().toString(36).substring(2, 8);
 
-      const configMapNew: KubeObjectInterface = {
+      const configMapNew: KubeConfigMap = {
         apiVersion: 'v1',
         kind: 'ConfigMap',
         metadata: {
@@ -139,23 +146,20 @@ function FrameworkEditor(
           namespace: kubeScapeNamespace,
           labels: {
             [customObjectLabel]: 'framework',
+            'app.kubernetes.io/name': framework.name,
+            'app.kubernetes.io/managed-by': 'headlamp',
           },
         },
-        data: {
-          name: framework.name,
-          description: framework.description,
-          controlsIDs: JSON.stringify(frameworkControls.map(c => c.controlID)),
-        },
+        data: {},
       };
+      updateConfigMapData(configMapNew);
       const configMapUpdated = await post(
         `/api/v1/namespaces/${configMapNew.metadata.namespace}/configmaps`,
         configMapNew
       );
       setConfigMap(configMapUpdated);
     } else {
-      configMap.data.controlsIDs = JSON.stringify(frameworkControls.map(c => c.controlID));
-      configMap.data.description = framework.description ?? '';
-      configMap.data.name = framework.name ?? '';
+      updateConfigMapData(configMap);
       const configMapUpdated = await put(
         `/api/v1/namespaces/${configMap.metadata.namespace}/configmaps/${configMap.metadata.name}`,
         configMap

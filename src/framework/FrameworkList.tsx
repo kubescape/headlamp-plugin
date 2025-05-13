@@ -74,7 +74,7 @@ function FrameworksTable(
   const { enqueueSnackbar } = useSnackbar();
 
   const handleDelete = async (framework: FrameWork) => {
-    const kubeScapeNamespace = await getKubescapeNamespace();
+    const { kubeScapeNamespace } = await getKubescapeNamespace();
     await remove(
       `/api/v1/namespaces/${kubeScapeNamespace}/configmaps/${framework.configmapManifestName}`
     );

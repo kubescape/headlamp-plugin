@@ -7,7 +7,6 @@ import {
   ShowHideLabel,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { KubeObjectInterface } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { KubeConfigMap } from '@kinvolk/headlamp-plugin/lib/k8s/configMap';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { Box, IconButton, Stack, TextField, Tooltip, Typography } from '@mui/material';
@@ -101,10 +100,18 @@ function ExceptionGroup(
       policy.actions = ['alertOnly'];
     });
 
+    function updateConfigMapData(configMap: KubeConfigMap) {
+      configMap.data = {
+        name: exceptionGroup.name,
+        description: exceptionGroup.description ?? '',
+        exceptionPolicies: JSON.stringify(exceptionPolicies),
+      };
+    }
+
     if (!configMap?.metadata.uid) {
       const randomSuffix = Math.random().toString(36).substring(2, 8);
 
-      const configMapNew: KubeObjectInterface = {
+      const configMapNew: KubeConfigMap = {
         apiVersion: 'v1',
         kind: 'ConfigMap',
         metadata: {
@@ -117,23 +124,19 @@ function ExceptionGroup(
           labels: {
             [customObjectLabel]: 'exceptions',
             'app.kubernetes.io/name': exceptionGroup.name,
+            'app.kubernetes.io/managed-by': 'headlamp',
           },
         },
-        data: {
-          name: exceptionGroup.name,
-          description: exceptionGroup.description,
-          exceptionPolicies: JSON.stringify(exceptionPolicies),
-        },
+        data: {},
       };
+      updateConfigMapData(configMapNew);
       const configMapUpdated = await post(
         `/api/v1/namespaces/${configMapNew.metadata.namespace}/configmaps`,
         configMapNew
       );
       setConfigMap(configMapUpdated);
     } else {
-      configMap.data.exceptionPolicies = JSON.stringify(exceptionPolicies);
-      configMap.data.description = exceptionGroup.description ?? '';
-      configMap.data.name = exceptionGroup.name ?? '';
+      updateConfigMapData(configMap);
       const configMapUpdated = await patch(
         `/api/v1/namespaces/${configMap.metadata.namespace}/configmaps/${configMap.metadata.name}`,
         configMap
