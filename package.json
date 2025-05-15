@@ -34,8 +34,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.4",
-    "@xyflow/react": "^12.6.4",
-    "react-loader-spinner": "^6.1.6"
+    "@xyflow/react": "^12.6.4"
   },
   "overrides": {
     "typescript": "5.8.2"

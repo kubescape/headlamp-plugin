@@ -13,7 +13,6 @@ import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { Box, Button, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
-import { RotatingLines } from 'react-loader-spinner';
 import { isNewClusterContext } from '../common/clusterContext';
 import { ErrorMessage } from '../common/ErrorMessage';
 import { ProgressIndicator } from '../common/ProgressIndicator';
@@ -134,7 +133,7 @@ export default function KubescapeVulnerabilities() {
           tabs={[
             {
               label: 'CVEs',
-              component: <CVEListView loading={loading} workloadScans={workloadScanData} />,
+              component: <CVEListView workloadScans={workloadScanData} />,
             },
             {
               label: 'Resources',
@@ -152,8 +151,8 @@ export default function KubescapeVulnerabilities() {
   );
 }
 
-function CVEListView(props: Readonly<{ loading: boolean; workloadScans: WorkloadScan[] | null }>) {
-  const { loading, workloadScans } = props;
+function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
+  const { workloadScans } = props;
   const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useSessionStorage<boolean>(
     KubescapeSettings.RelevantCVEs,
     false
@@ -162,13 +161,6 @@ function CVEListView(props: Readonly<{ loading: boolean; workloadScans: Workload
     KubescapeSettings.FixedCVEs,
     false
   );
-
-  if (loading || !workloadScans)
-    return (
-      <Box sx={{ padding: 2 }}>
-        <RotatingLines />
-      </Box>
-    );
 
   const cveList = getCVEList(workloadScans);
 
