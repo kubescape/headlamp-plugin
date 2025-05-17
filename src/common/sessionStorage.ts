@@ -28,15 +28,15 @@ export function setItemInSessionStorage<T>(key: KubescapeSettings, value: T) {
   const storageKey = `kubescape.${KubescapeSettings[key]}`;
 
   if (value) {
-    sessionStorage.setItem(storageKey, JSON.stringify(value));
+    window.sessionStorage.setItem(storageKey, JSON.stringify(value));
   } else {
-    sessionStorage.removeItem(storageKey);
+    window.sessionStorage.removeItem(storageKey);
   }
 }
 
 export function getItemFromSessionStorage<T>(key: KubescapeSettings) {
   const storageKey = `kubescape.${KubescapeSettings[key]}`;
-  const saved = sessionStorage.getItem(storageKey);
+  const saved = window.sessionStorage.getItem(storageKey);
   if (saved) {
     return JSON.parse(saved) as T;
   }
