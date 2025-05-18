@@ -86,7 +86,7 @@ jobs:
       - name: create-archive
         run: |
           mkdir -p kubescape-plugin
-          cp package.json dist/*.js dist/*.wasm dist/*.yaml kubescape-plugin
+          cp package.json dist/* kubescape-plugin
           tar -czf ${RELEASE_TAR} kubescape-plugin
 
       - name: create-checksum
