@@ -30,8 +30,13 @@ The plugin has been tested with current versions of Headlamp (browser and deskto
 - Generated Network policies viewer.
 - Playground for Validation Admission Policies.
 - eBPF-based runtime threat detection
+- Custom frameworks and exceptions
 
-The queries to the Kubescape database use Headlamps feature for `Allowed namespaces`, supporting multi tenant clusters. Configuration of this setting is done per user in Settings/Cluster.
+The queries to the Kubescape database use Headlamps feature `Allowed namespaces`, supporting multi tenant clusters. Configuration of this setting is done per user in Settings/Cluster.
+
+You can create custom frameworks by combining one or more controls. These frameworks are stored as a ConfigMap in the Kubernetes cluster, within the namespace where Kubescape is installed, making them reusable. Additionally, you can export the frameworks to a JSON file, which can be used with the Kubescape CLI for scanning.
+
+You can customize the compliance scan by adding an exception policy, which allows you to exclude specific namespaces, resources, or controls from the scan. These exceptions are stored in a ConfigMap within the Kubernetes cluster. You can also export them to a JSON file and use it with the Kubescape CLI `kubescape scan --exceptions /path/to/exceptions.json`. For more information, check out the Kubescape documentation on accepting risk: https://kubescape.io/docs/accepting-risk/.
 
 ## Installation
 

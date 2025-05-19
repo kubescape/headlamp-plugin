@@ -1,6 +1,7 @@
 /* 
   Overview  page for configuration controls and resources. 
 */
+import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   Link as HeadlampLink,
   SectionBox,
@@ -12,8 +13,13 @@ import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import {
   Box,
   Button,
+  FormControl,
   FormControlLabel,
+  InputLabel,
   Link,
+  MenuItem,
+  OutlinedInput,
+  Select,
   Stack,
   Switch,
   Tooltip,
@@ -21,23 +27,40 @@ import {
 } from '@mui/material';
 import React, { useEffect, useRef, useState } from 'react';
 import { isNewClusterContext } from '../common/clusterContext';
+import { KubescapeConfig, kubescapeConfigStore } from '../common/config-store';
 import { ProgressIndicator } from '../common/ProgressIndicator';
+import {
+  getItemFromSessionStorage,
+  KubescapeSettings,
+  setItemInSessionStorage,
+  useSessionStorage,
+} from '../common/sessionStorage';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
-import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
+import { getKubescapeNamespace } from '../custom-objects/api-queries';
+import {
+  applyExceptionsToWorkloadScanData,
+  countExcludedControls,
+  countExcludedResources,
+  countExcludedWorkloadsForControl,
+} from '../exceptions/apply-exceptions';
+import { ExceptionPolicy, ExceptionPolicyGroup } from '../exceptions/ExceptionPolicy';
 import { RoutingName } from '../index';
-import { paginatedListQuery, workloadConfigurationScanSummaryClass } from '../model';
+import {
+  customObjectLabel,
+  paginatedListQuery,
+  workloadConfigurationScanSummaryClass,
+} from '../model';
+import { Control, controls, fitControlsToFrameworks, FrameWork, frameworks } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
-import { Control, FrameWork } from './FrameWork';
 import { FrameworkButtons } from './FrameworkButtons';
-import { frameworks } from './frameworks';
 import NamespaceView from './NamespaceView';
 import KubescapeWorkloadConfigurationScanList from './ResourceList';
 import {
   controlComplianceScore,
   countFailedScans,
   countScans,
-  filterWorkloadScanData,
   getControlsWithFindings,
+  hasFailedScans,
 } from './workload-scanning';
 import { useSelectedClusters } from '@kinvolk/headlamp-plugin/lib/k8s';
 
@@ -66,32 +89,44 @@ export const configurationScanContext: ConfigurationScanContext = {
   },
 };
 
-export default function ComplianceView() {
-  const [selectedTab, setSelectedTab] = useLocalStorage<number>(KubescapeSettings.ComplianceTab, 0);
+fitControlsToFrameworks();
+
+/**
+ * Overview page for configuration controls and resources.
+ *
+ * This page is the main entry point for viewing the compliance posture of the cluster.
+ * It displays a list of all controls and resources that have been scanned by Kubescape,
+ * along with information about the compliance posture of each control and resource.
+ * The page also provides a filter for viewing the compliance posture of specific
+ * resources and controls.
+ *
+ * @returns The ComplianceView component.
+ */
+export default function ComplianceView(): JSX.Element {
+  const pluginConfig = kubescapeConfigStore.useConfig();
+  const kubescapeConfig = pluginConfig() as KubescapeConfig;
+
   const [workloadScanData, setWorkloadScanData] = useState<
     WorkloadConfigurationScanSummary[] | null
   >(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
-  const [exceptions, setExceptions] = useState<{
-    controlsExcepted: number;
-    resourcesExcepted: number;
-  }>({ controlsExcepted: 0, resourcesExcepted: 0 });
-  const [frameworkName, setFrameworkName] = useLocalStorage<string>(
-    KubescapeSettings.Framework,
-    'AllControls'
-  );
-  const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] = useLocalStorage<boolean>(
-    KubescapeSettings.FailedControls,
-    true
-  );
 
   const useHLSelectedClusters = useSelectedClusters ?? (() => null); // Needed for backwards compatibility
   const clusters = useHLSelectedClusters() ?? [getCluster()];
+  const [customFrameworks, setCustomFrameworks] = useState<FrameWork[]>([]);
+  const [exceptionGroups, setExceptionGroups] = useState<ExceptionPolicyGroup[]>([]);
+
+  const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] =
+    useSessionStorage<boolean>(KubescapeSettings.FailedControls, true);
   const continueReading = useRef(true);
 
-  const framework = frameworks.find(fw => fw.name === frameworkName) ?? frameworks[0];
+  const framework =
+    frameworks.find(fw => fw.name === kubescapeConfig?.framework) ??
+    customFrameworks?.find(fw => fw.name === kubescapeConfig?.framework) ??
+    frameworks[0];
 
+  // fetch workload scans
   useEffect(() => {
     async function fetchData() {
       if (isNewClusterContext(configurationScanContext.context)) {
@@ -101,6 +136,11 @@ export default function ComplianceView() {
         configurationScanContext.workloadScans = [];
         configurationScanContext.context.currentCluster = getCluster() ?? '';
         configurationScanContext.context.allowedNamespaces = getAllowedNamespaces();
+
+        setItemInSessionStorage(KubescapeSettings.KubescapeNamespace, null);
+        getKubescapeNamespace().then(({ error }) => {
+          console.log(error);
+        });
       }
       if (
         configurationScanContext.continuation !== undefined &&
@@ -108,19 +148,22 @@ export default function ComplianceView() {
       ) {
         await fetchWorkloadScanData(continueReading, setProgressMessage, setLoading);
       }
-      const [filteredWorkloadScans, controlsExcepted, resourcesExcepted] = filterWorkloadScanData(
+
+      const exceptionGroup = await fetchCustomObjects(setExceptionGroups, setCustomFrameworks);
+
+      applyExceptionsToWorkloadScanData(
         configurationScanContext.workloadScans,
-        framework
+        kubescapeConfig?.framework,
+        exceptionGroup
       );
-      setExceptions({ resourcesExcepted, controlsExcepted });
-      setWorkloadScanData(filteredWorkloadScans);
+      setWorkloadScanData([...configurationScanContext.workloadScans]);
     }
 
     fetchData();
     return () => {
       continueReading.current = false;
     };
-  }, [frameworkName]);
+  }, [kubescapeConfig]);
 
   return (
     <>
@@ -162,17 +205,25 @@ export default function ComplianceView() {
                 setIsFailedControlSwitchChecked(checked);
               }}
             />
-            <FrameworkButtons frameworkName={frameworkName} setFrameworkName={setFrameworkName} />
+            <FrameworkButtons
+              frameworkName={kubescapeConfig?.framework}
+              customFrameworks={customFrameworks}
+            />
+            <ExceptionsDropdown exceptionGroups={exceptionGroups} />
           </Stack>
           <Typography variant="body1" component="div" sx={{ padding: 2 }}>
             {`${workloadScanData.length} total checks, ${countFailedScans(
               workloadScanData
-            )} configuration issues, excluding ${exceptions.resourcesExcepted} resources and 
-            ${exceptions.controlsExcepted} controls`}
+            )} configuration issues, excluding ${countExcludedResources(
+              workloadScanData
+            )} resources and 
+            ${countExcludedControls(workloadScanData)} controls`}
           </Typography>
           <HeadlampTabs
-            defaultIndex={selectedTab}
-            onTabChanged={tabIndex => setSelectedTab(tabIndex)}
+            defaultIndex={getItemFromSessionStorage(KubescapeSettings.ComplianceTab) ?? 0}
+            onTabChanged={tabIndex =>
+              setItemInSessionStorage(KubescapeSettings.ComplianceTab, tabIndex)
+            }
             tabs={[
               {
                 label: 'Controls',
@@ -189,6 +240,7 @@ export default function ComplianceView() {
                 component: (
                   <KubescapeWorkloadConfigurationScanList
                     workloadScanData={workloadScanData}
+                    setWorkloadScanData={setWorkloadScanData}
                     framework={framework}
                     isFailedControlSwitchChecked={isFailedControlSwitchChecked}
                   />
@@ -196,7 +248,12 @@ export default function ComplianceView() {
               },
               {
                 label: 'Namespaces',
-                component: <NamespaceView workloadScanData={workloadScanData} />,
+                component: (
+                  <NamespaceView
+                    workloadScanData={workloadScanData}
+                    setWorkloadScanData={setWorkloadScanData}
+                  />
+                ),
               },
             ]}
             ariaLabel="Navigation Tabs"
@@ -228,7 +285,7 @@ function ConfigurationScanningListView(
           {
             header: 'Severity',
             accessorFn: (control: Control) =>
-              makeCVSSLabel(control.baseScore, hasFailedScans(workloadScanData, control)),
+              makeSeverityLabel(control.baseScore, hasFailedScans(workloadScanData, control)),
             gridTemplate: 'min-content',
           },
           {
@@ -276,6 +333,13 @@ function ConfigurationScanningListView(
             gridTemplate: 'auto',
           },
           {
+            header: 'Excluded',
+            accessorFn: (control: Control) =>
+              countExcludedWorkloadsForControl(workloadScanData, control),
+            Cell: ({ cell }: any) => cell.getValue(),
+            gridTemplate: 'auto',
+          },
+          {
             header: 'Resources',
             accessorFn: (control: Control) =>
               workloadScanData ? makeResultsLabel(workloadScanData, control) : '',
@@ -297,22 +361,9 @@ function ConfigurationScanningListView(
   );
 }
 
-function makeCVSSLabel(baseScore: number, hasFailedScans: boolean) {
+function makeSeverityLabel(baseScore: number, hasFailedScans: boolean) {
+  const severity = complianceSeverity(baseScore);
   let status: StatusLabelProps['status'] = '';
-  let severity: string;
-
-  // https://nvd.nist.gov/vuln-metrics/cvss
-  if (baseScore < 0.1) {
-    severity = 'None';
-  } else if (baseScore < 4.0) {
-    severity = 'Low';
-  } else if (baseScore < 7.0) {
-    severity = 'Medium';
-  } else if (baseScore < 9.0) {
-    severity = 'High';
-  } else {
-    severity = 'Critical';
-  }
 
   if (hasFailedScans) {
     status = 'error';
@@ -325,6 +376,23 @@ function makeCVSSLabel(baseScore: number, hasFailedScans: boolean) {
   } else {
     return severity;
   }
+}
+
+export function complianceSeverity(baseScore: number) {
+  let severity: string;
+
+  if (baseScore < 0.1) {
+    severity = 'None';
+  } else if (baseScore < 4.0) {
+    severity = 'Low';
+  } else if (baseScore < 7.0) {
+    severity = 'Medium';
+  } else if (baseScore < 9.0) {
+    severity = 'High';
+  } else {
+    severity = 'Critical';
+  }
+  return severity;
 }
 
 function makeResultsLabel(workloadScanData: WorkloadConfigurationScanSummary[], control: Control) {
@@ -347,14 +415,6 @@ function makeResultsLabel(workloadScanData: WorkloadConfigurationScanSummary[], 
   } else {
     return failCount;
   }
-}
-
-function hasFailedScans(workloadScanData: WorkloadConfigurationScanSummary[], control: Control) {
-  return workloadScanData?.some(w =>
-    Object.values(w.spec.controls).some(
-      scan => scan.controlID === control.controlID && scan.status.status === 'failed'
-    )
-  );
 }
 
 async function fetchWorkloadScanData(
@@ -389,4 +449,81 @@ async function fetchWorkloadScanData(
   }
 
   setLoading(false);
+}
+
+function ExceptionsDropdown(
+  props: Readonly<{
+    exceptionGroups: ExceptionPolicyGroup[];
+  }>
+) {
+  const { exceptionGroups } = props;
+
+  const selectedExceptionGroupName = kubescapeConfigStore.get().exceptionGroupName ?? '';
+
+  if (!exceptionGroups || exceptionGroups.length === 0) {
+    return <></>;
+  }
+  return (
+    <FormControl sx={{ m: 1, minWidth: 200 }} size="small">
+      <InputLabel sx={{ marginLeft: 2 }} id="select-label">
+        Exceptions
+      </InputLabel>
+      <Select
+        labelId="select-label"
+        sx={{ height: 40, width: 160 }}
+        value={selectedExceptionGroupName}
+        onChange={event => kubescapeConfigStore.update({ exceptionGroupName: event.target.value })}
+        input={<OutlinedInput label="Exceptions" />}
+      >
+        <MenuItem value="">None</MenuItem>
+        {exceptionGroups.map(exceptionGroup => (
+          <MenuItem key={exceptionGroup.name} value={exceptionGroup.name}>
+            {exceptionGroup.name}
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  );
+}
+
+async function fetchCustomObjects(
+  setExceptionGroups: (exceptionGroups: ExceptionPolicyGroup[]) => void,
+  setCustomFrameworks: (customFrameworks: FrameWork[]) => void
+) {
+  const queryParams = new URLSearchParams();
+
+  queryParams.append('labelSelector', `${customObjectLabel} in (framework,exceptions)`);
+  const response = await request(`api/v1/configmaps?${queryParams.toString()}`).catch(error => {
+    console.error(error);
+  });
+
+  const customFrameworks: FrameWork[] = [];
+  const customExceptions: ExceptionPolicyGroup[] = [];
+
+  response.items?.map((configMap: any) => {
+    const label = configMap.metadata.labels[customObjectLabel];
+    if (label === 'framework') {
+      const controlsIDs: string[] = JSON.parse(configMap.data.controlsIDs) ?? [];
+      customFrameworks.push({
+        name: configMap.data.name,
+        description: configMap.data.description,
+        controls: controls.filter(c => controlsIDs?.some(controlID => controlID === c.controlID)),
+        configmapManifestName: configMap.metadata.name,
+      });
+    } else if (label === 'exceptions') {
+      const exceptionPolicies: ExceptionPolicy[] =
+        JSON.parse(configMap.data.exceptionPolicies) ?? [];
+      customExceptions.push({
+        name: configMap.data.name,
+        description: configMap.data.description,
+        exceptionPolicies: exceptionPolicies,
+        configmapManifestName: configMap.metadata.name,
+      });
+    }
+  });
+
+  setExceptionGroups(customExceptions);
+  setCustomFrameworks(customFrameworks);
+
+  return customExceptions.find(eg => eg.name === kubescapeConfigStore.get().exceptionGroupName);
 }

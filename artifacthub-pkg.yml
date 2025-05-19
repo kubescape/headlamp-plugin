@@ -1,7 +1,7 @@
-version: v0.8.0
+version: v0.9.1
 name: headlamp_kubescape
 displayName: Kubescape Headlamp Plugin
-createdAt: '2025-04-19T14:41:34Z'
+createdAt: '2025-05-18T07:21:39Z'
 description: Kubescape compliance and vulnerabilities in Headlamp.
 homeURL: https://github.com/kubescape/headlamp-plugin
 logoURL: https://avatars.githubusercontent.com/u/100554170
@@ -16,8 +16,8 @@ screenshots:
   - title: Vulnerabilities
     url: https://raw.githubusercontent.com/kubescape/headlamp-plugin/693d664b433f3f3c03e7a8337cd665eb4be32b8e/demo/vulnerabilities.png
 annotations:
-  headlamp/plugin/archive-url: https://github.com/kubescape/headlamp-plugin/releases/download/v0.8.0/headlamp-plugin-v0.8.0.tar.gz
-  headlamp/plugin/archive-checksum: SHA256:904722ca5b6e3966be03cc12201e082a03eddf379227a02523727b0c1ecab832
+  headlamp/plugin/archive-url: https://github.com/kubescape/headlamp-plugin/releases/download/v0.9.1/headlamp-plugin-v0.9.1.tar.gz
+  headlamp/plugin/archive-checksum: SHA256:029138c7491e0644eccfff69c2abdbc29219dec3b0bd0cca980b2cf807ce8cda
   headlamp/plugin/version-compat: '>=0.29'
   headlamp/plugin/distro-compat: in-cluster,web,docker-desktop,desktop
 readme: |
@@ -61,8 +61,9 @@ readme: |
   - Generated Network policies viewer.
   - Playground for Validation Admission Policies.
   - eBPF-based runtime threat detection
+  - Custom frameworks and exceptions
 
-  The queries to the Kubescape database use Headlamps feature for `Allowed namespaces`, supporting multi tenant clusters. Configuration of this setting is done per user in Settings/Cluster.
+  The queries to the Kubescape database use Headlamps feature `Allowed namespaces`, supporting multi tenant clusters. Configuration of this setting is done per user in Settings/Cluster.
 install: |
   Desktop Headlamp 
   - Install Headlamp (https://headlamp.dev/docs/latest/installation/desktop/)

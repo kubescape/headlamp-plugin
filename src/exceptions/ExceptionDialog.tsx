@@ -18,12 +18,8 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useState } from 'react';
-import styled from 'styled-components';
-import {
-  PostureExceptionPolicy,
-  PosturePolicy,
-  ResourceDesignator,
-} from './PostureExceptionPolicy';
+import { ErrorContainer } from '../common/ErrorContainer';
+import { ExceptionPolicy, PosturePolicy, ResourceDesignator } from './ExceptionPolicy';
 
 /**
  * EditPosturePolicyExceptionDialog renders
@@ -40,13 +36,13 @@ import {
  */
 export function EditPosturePolicyExceptionDialog(
   props: Readonly<{
-    exception: PostureExceptionPolicy;
-    onUpdate: (name: string, updatedException: PostureExceptionPolicy) => void;
+    exception: ExceptionPolicy;
+    onUpdate: (name: string, updatedException: ExceptionPolicy) => void;
   }>
 ) {
   const { exception, onUpdate } = props;
   const [open, setOpen] = useState(false);
-  const [editedException, setEditedException] = useState<PostureExceptionPolicy>(exception);
+  const [editedException, setEditedException] = useState<ExceptionPolicy>(exception);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   const handleClickOpen = () => {
@@ -92,6 +88,7 @@ export function EditPosturePolicyExceptionDialog(
             </InputLabel>
 
             <TextField
+              key="name"
               id="name"
               fullWidth
               variant="outlined"
@@ -107,6 +104,7 @@ export function EditPosturePolicyExceptionDialog(
             </InputLabel>
 
             <TextField
+              key="reason"
               id="reason"
               fullWidth
               multiline
@@ -140,21 +138,12 @@ export function EditPosturePolicyExceptionDialog(
   );
 }
 
-const ErrorContainer = styled.div`
-  padding: 1rem;
-  background-color: #f44336;
-  color: white;
-  border-radius: 4px;
-  margin: 1rem 0;
-  text-align: center;
-`;
-
 function EditResourceMatchers(
-  props: Readonly<{ editedException: PostureExceptionPolicy; setEditedException: Function }>
+  props: Readonly<{ editedException: ExceptionPolicy; setEditedException: Function }>
 ) {
   const { editedException, setEditedException } = props;
 
-  const fields = ['kind', 'name', 'namespace'];
+  const fields = ['namespace', 'name', 'kind'];
 
   const handleAddRow = () => {
     const newResources = editedException.resources ? [...editedException.resources] : [];
@@ -204,9 +193,9 @@ function EditResourceMatchers(
         <Table>
           <TableHead>
             <TableRow key="header">
-              <HeaderCell title="Kind" />
-              <HeaderCell title="Name" />
               <HeaderCell title="Namespace" />
+              <HeaderCell title="Name" />
+              <HeaderCell title="Kind" />
             </TableRow>
           </TableHead>
           <TableBody>
@@ -236,10 +225,10 @@ function EditResourceMatchers(
 }
 
 function EditPolicyMatchers(
-  props: Readonly<{ editedException: PostureExceptionPolicy; setEditedException: Function }>
+  props: Readonly<{ editedException: ExceptionPolicy; setEditedException: Function }>
 ) {
   const { editedException, setEditedException } = props;
-  const fields = ['controlID', 'controlName', 'frameworkName'];
+  const fields = ['controlID', 'frameworkName'];
 
   const handleAddRow = () => {
     const newPosturePolicies = editedException.posturePolicies
@@ -288,7 +277,6 @@ function EditPolicyMatchers(
           <TableHead>
             <TableRow key="header">
               <HeaderCell title="Control ID" />
-              <HeaderCell title="Control Name" />
               <HeaderCell title="Framework" />
             </TableRow>
           </TableHead>
@@ -345,12 +333,18 @@ function EditCell(
   }>
 ) {
   const { object, index, attribute, updateFunction } = props;
+  const [textFieldValue, setTextFieldValue] = useState(object[attribute] ?? '');
+
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setTextFieldValue(event.target.value);
+    updateFunction(index, attribute, event.target.value);
+  };
 
   return (
     <TableCell key={attribute} sx={{ padding: '0 4px', verticalAlign: 'middle' }}>
       <TextField
         key={attribute}
-        value={object[attribute] as string}
+        value={textFieldValue}
         variant="outlined"
         size="small"
         sx={{
@@ -361,7 +355,7 @@ function EditCell(
             border: 'none',
           },
         }}
-        onChange={event => updateFunction(index, attribute, event.target.value)}
+        onChange={event => handleChange(event)}
       />
     </TableCell>
   );

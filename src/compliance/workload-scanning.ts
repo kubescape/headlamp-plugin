@@ -1,163 +1,18 @@
-import YAML from 'yaml';
-import { getItemFromLocalStorage, KubescapeSettings } from '../common/webStorage';
-import { PostureExceptionPolicy, PosturePolicy } from '../exceptions/PostureExceptionPolicy';
+import { Control, FrameWork } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
-import { Control, FrameWork } from './FrameWork';
 
-/**
- * Filters the given workload scans based on the given frameWork and postureExceptionPolicies.
- *
- * It filters the controls in each workload scan to only include those that belong to the given frameWork.
- * It also filters the controls and resources in each workload scan to exclude those that are matched by the given postureExceptionPolicies.
- *
- * @param workloadScans - The list of workload scans to filter.
- * @param frameWork - The frameWork to filter by.
- * @returns The filtered list of workload scans.
- */
-export function filterWorkloadScanData(
-  workloadScans: WorkloadConfigurationScanSummary[],
-  frameWork: FrameWork
-): [WorkloadConfigurationScanSummary[], number, number] {
-  const filteredWorkloadScans: WorkloadConfigurationScanSummary[] = [];
-
-  const exceptions = getItemFromLocalStorage<string>(KubescapeSettings.Exceptions);
-  const postureExceptionPolicies = exceptions ? YAML.parse(exceptions) : undefined;
-  let controlsExcepted = 0;
-
-  for (const workloadScan of workloadScans) {
-    const w: WorkloadConfigurationScanSummary = structuredClone(workloadScan);
-
-    if (frameWork) {
-      w.spec.controls = Object.fromEntries(
-        Object.entries(workloadScan.spec.controls).filter(([, value]) =>
-          frameWork.controls.find(control => control.controlID === value.controlID)
-        )
-      );
-    }
-
-    // Filter controls by postureExceptionPolicies
-    if (postureExceptionPolicies) {
-      const numControls = Object.entries(w.spec.controls).length;
-      w.spec.controls = Object.fromEntries(
-        Object.entries(w.spec.controls).filter(
-          ([key, value]) =>
-            !isControlMatchedInException(key, value, frameWork.name, w, postureExceptionPolicies)
-        )
-      );
-      controlsExcepted += numControls - Object.entries(w.spec.controls).length;
-    }
-    filteredWorkloadScans.push(w);
-  }
-
-  // Filter resources by postureExceptionPolicies
-  if (postureExceptionPolicies) {
-    const numResources = filteredWorkloadScans.length;
-    const workloadScans = filteredWorkloadScans.filter(
-      w => !isResourceMatchedInException(w, postureExceptionPolicies)
-    );
-
-    return [workloadScans, numResources - workloadScans.length, controlsExcepted];
-  }
-
-  return [filteredWorkloadScans, 0, controlsExcepted];
-}
-
-function resourceAttributesMatch(
-  attributes: { [key: string]: string },
-  workloadScan: WorkloadConfigurationScanSummary
+// The framework compliance score provides an overall assessment of your cluster's compliance with a specific framework.
+// It is calculated by averaging the Control Compliance Scores of all controls within the framework.
+// https://kubescape.io/docs/frameworks-and-controls/frameworks/
+export function frameworkComplianceScore(
+  workloadScanData: WorkloadConfigurationScanSummary[],
+  framework: FrameWork
 ) {
-  if (Object.keys(attributes).length === 0) {
-    return false;
-  }
-
-  for (const [key, value] of Object.entries(attributes)) {
-    let compareValue: string;
-    if (!value) {
-      continue;
-    }
-    switch (key) {
-      case 'kind':
-        compareValue = workloadScan.metadata.labels['kubescape.io/workload-kind'];
-        break;
-      case 'name':
-        compareValue = workloadScan.metadata.labels['kubescape.io/workload-name'];
-        break;
-      case 'namespace':
-        compareValue = workloadScan.metadata.namespace;
-        break;
-      default:
-        // TODO get the resource and match on labels
-        return false;
-    }
-
-    if (!new RegExp(value).test(compareValue)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function policyAttributesMatch(
-  posturePolicy: PosturePolicy,
-  frameworkName: string,
-  controlName: string,
-  control: WorkloadConfigurationScanSummary.Control
-) {
-  if (Object.keys(posturePolicy).length === 0) {
-    return false;
-  }
-
-  for (const [key, value] of Object.entries(posturePolicy)) {
-    let compareValue: string;
-    if (!value) {
-      continue;
-    }
-
-    switch (key) {
-      case 'controlID':
-        compareValue = control.controlID;
-        break;
-      case 'frameworkName':
-        compareValue = frameworkName;
-        break;
-      case 'controlName':
-        compareValue = controlName;
-        break;
-      default:
-        return false;
-    }
-    if (!new RegExp(value).test(compareValue)) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-function isResourceMatchedInException(
-  workloadScan: WorkloadConfigurationScanSummary,
-  policies: PostureExceptionPolicy[]
-) {
-  return policies.some(
-    policy =>
-      (!policy.posturePolicies || policy.posturePolicies.length === 0) &&
-      policy.resources?.some(r => resourceAttributesMatch(r.attributes, workloadScan))
+  const controlComplianceScores = framework.controls.map(control =>
+    controlComplianceScore(workloadScanData, control)
   );
-}
 
-function isControlMatchedInException(
-  controlName: string,
-  control: WorkloadConfigurationScanSummary.Control,
-  frameworkName: string,
-  workloadScan: WorkloadConfigurationScanSummary,
-  policies: PostureExceptionPolicy[]
-) {
-  return policies.some(
-    policy =>
-      policy.posturePolicies?.some(pp =>
-        policyAttributesMatch(pp, frameworkName, controlName, control)
-      ) && policy.resources.some(r => resourceAttributesMatch(r.attributes, workloadScan))
-  );
+  return controlComplianceScores.reduce((a, b) => a + b, 0) / controlComplianceScores.length;
 }
 
 /**
@@ -165,6 +20,8 @@ function isControlMatchedInException(
  *
  * The control compliance score measures the compliance of individual controls within a framework.
  * It is calculated by evaluating the ratio of resources that passed to the total number of resources evaluated against that control.
+ *
+ * See also https://github.com/kubescape/opa-utils/blob/main/score/score.go for method used in kubescape-cli.
  *
  * @param {WorkloadConfigurationScanSummary[]} workloadScanData - The list of scans to calculate the score for.
  * @param {Control} control - The control to calculate the score for.
@@ -174,12 +31,33 @@ export function controlComplianceScore(
   workloadScanData: WorkloadConfigurationScanSummary[],
   control: Control
 ) {
-  const total = countScansForControl(workloadScanData, control);
-  if (total === 0) {
+  const [passedCount, workloadsAffected] = passedOrExcludedCount(workloadScanData, control);
+  if (workloadsAffected === 0) {
     return 100;
   }
-  const passedCount = countScans(workloadScanData, control, 'passed');
-  return (passedCount / total) * 100;
+  return (passedCount / workloadsAffected) * 100;
+}
+
+export function passedOrExcludedCount(
+  workloadScanData: WorkloadConfigurationScanSummary[],
+  control: Control
+) {
+  const workloadsAffected = workloadScanData.filter(w =>
+    Object.values(w.spec.controls).some(scan => scan.controlID === control.controlID)
+  );
+
+  const passedOrExcluded = workloadsAffected.filter(
+    w =>
+      w.exceptedByPolicy ||
+      Object.values(w.spec.controls).some(
+        scan =>
+          scan.controlID === control.controlID &&
+          (scan.exceptedByPolicy ||
+            scan.status.status === WorkloadConfigurationScanSummary.Status.Passed)
+      )
+  ).length;
+
+  return [passedOrExcluded, workloadsAffected.length];
 }
 
 /**
@@ -196,7 +74,9 @@ export function countScans(
   status: string
 ): number {
   return workloadScanData
+    .filter(w => !w.exceptedByPolicy)
     .flatMap(w => Object.values(w.spec.controls))
+    .filter(scan => !scan.exceptedByPolicy)
     .filter(scan => scan.controlID === control.controlID)
     .filter(scan => scan.status.status === status).length;
 }
@@ -209,24 +89,10 @@ export function countScans(
  */
 export function countFailedScans(workloadScanData: WorkloadConfigurationScanSummary[]): number {
   return workloadScanData
+    .filter(w => !w.exceptedByPolicy)
     .flatMap(w => Object.values(w.spec.controls))
+    .filter(scan => !scan.exceptedByPolicy)
     .filter(scan => scan.status.status === 'failed').length;
-}
-
-/**
- * Count the number of scans that match the given control ID.
- *
- * @param {WorkloadConfigurationScanSummary[]} workloadScanData
- * @param {Control} control
- * @returns {number}
- */
-export function countScansForControl(
-  workloadScanData: WorkloadConfigurationScanSummary[],
-  control: Control
-): number {
-  return workloadScanData.filter(w =>
-    Object.values(w.spec.controls).some(scan => scan.controlID === control.controlID)
-  ).length;
 }
 
 /**
@@ -247,10 +113,36 @@ export function getControlsWithFindings(
   frameWork: FrameWork
 ) {
   return frameWork.controls.filter(control =>
-    workloadScanData?.some(w =>
-      Object.values(w.spec.controls).some(
-        scan => control.controlID === scan.controlID && scan.status.status === 'failed'
-      )
+    workloadScanData?.some(
+      w =>
+        !w.exceptedByPolicy &&
+        Object.values(w.spec.controls).some(
+          scan =>
+            control.controlID === scan.controlID &&
+            !scan.exceptedByPolicy &&
+            scan.status.status === 'failed'
+        )
+    )
+  );
+}
+
+/**
+ * Checks if there are any failed scans for the given control.
+ *
+ * This function will return true if any of the scans in the workload scan data
+ * have a status of 'failed' for the given control, and false otherwise.
+ *
+ * @param {WorkloadConfigurationScanSummary[]} workloadScanData
+ * @param {Control} control
+ * @returns {boolean}
+ */
+export function hasFailedScans(
+  workloadScanData: WorkloadConfigurationScanSummary[],
+  control: Control
+) {
+  return workloadScanData?.some(w =>
+    Object.values(w.spec.controls).some(
+      scan => scan.controlID === control.controlID && scan.status.status === 'failed'
     )
   );
 }

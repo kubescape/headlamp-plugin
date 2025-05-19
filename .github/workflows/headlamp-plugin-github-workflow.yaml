@@ -20,6 +20,7 @@ jobs:
       matrix:
         node-version: [22.x]
         go-version: [1.24.x]
+        jq-version: ['1.7']
 
     steps:
       - uses: actions/checkout@v4
@@ -33,6 +34,11 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
+
+      - name: Setup jq
+        uses: dcarbone/install-jq-action@v3
+        with:
+          version: ${{ matrix.jq-version }}
 
       - run: npx @kinvolk/headlamp-plugin lint .
       - run: npx @kinvolk/headlamp-plugin format --check .
@@ -51,7 +57,7 @@ jobs:
       - name: Create Plugin Archive
         run: |
           mkdir -p kubescape-plugin
-          cp package.json dist/*.js dist/*.wasm dist/*.yaml kubescape-plugin
+          cp package.json dist/* kubescape-plugin
           tar -czf ${{ github.event.repository.name }}-latest.tar.gz kubescape-plugin
 
       - name: Set up QEMU

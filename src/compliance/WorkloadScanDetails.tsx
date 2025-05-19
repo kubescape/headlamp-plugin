@@ -12,11 +12,11 @@ import {
 import { Link } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { getURLSegments } from '../common/url';
-import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { RoutingName } from '../index';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
+import { controls } from '../rego';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
-import { frameworks } from './frameworks';
+import { configurationScanContext } from './Compliance';
 
 export default function KubescapeWorkloadConfigurationScanDetails() {
   const [name, namespace, cluster] = getURLSegments(-1, -2, -3);
@@ -29,6 +29,19 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
       (result: WorkloadConfigurationScan) => {
         if (result) {
           result.metadata.cluster = cluster;
+        const workloadConfigurationScanSummary = configurationScanContext.workloadScans.find(
+          w =>
+            w.metadata.name === result.metadata.name &&
+            w.metadata.namespace === result.metadata.namespace
+        );
+
+        if (workloadConfigurationScanSummary) {
+          result.exceptedByPolicy = workloadConfigurationScanSummary.exceptedByPolicy;
+          Object.values(result.spec.controls).forEach(control => {
+            control.exceptedByPolicy = Object.values(
+              workloadConfigurationScanSummary.spec.controls
+            ).some(scan => scan.controlID === control.controlID && scan.exceptedByPolicy);
+          });
         }
         setConfigurationScan(result);
       }
@@ -78,22 +91,17 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
 
 function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigurationScan }>) {
   const { workloadConfigurationScan } = props;
-  const controls = workloadConfigurationScan.spec.controls;
-  const entries = Object.keys(controls).map(key => controls[key]);
-  const [frameworkName] = useLocalStorage<string>(KubescapeSettings.Framework, 'AllControls');
-
-  const framework = frameworks.find(fw => fw.name === frameworkName) ?? frameworks[0];
 
   return (
     <SectionBox title="Controls">
       <HeadlampTable
-        data={entries}
+        data={Object.values(workloadConfigurationScan.spec.controls)}
         columns={[
           {
             id: 'Status',
             header: 'Status',
             accessorKey: 'status.status',
-            Cell: ({ row }: any) => makeStatusLabel(row.original),
+            Cell: ({ row }: any) => makeStatusLabel(workloadConfigurationScan, row.original),
             gridTemplate: 'min-content',
           },
           {
@@ -118,7 +126,7 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
           {
             header: 'Category',
             accessorFn: (control: WorkloadConfigurationScan.Control) => {
-              const controlInfo = framework.controls.find(
+              const controlInfo = controls.find(
                 controlInfo => controlInfo.controlID === control.controlID
               );
               return controlInfo?.category?.subCategory?.name ?? controlInfo?.category?.name;
@@ -133,13 +141,13 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
           {
             header: 'Explain',
             accessorFn: (control: WorkloadConfigurationScan.Control) =>
-              framework.controls.find(controlInfo => controlInfo.controlID === control.controlID)
+              controls.find(controlInfo => controlInfo.controlID === control.controlID)
                 ?.description,
           },
           {
             header: 'Remediation',
             accessorFn: (control: WorkloadConfigurationScan.Control) =>
-              framework.controls.find(controlInfo => controlInfo.controlID === control.controlID)
+              controls.find(controlInfo => controlInfo.controlID === control.controlID)
                 ?.remediation,
           },
           {
@@ -176,35 +184,49 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
   );
 }
 
-function getResults(scan: WorkloadConfigurationScan): string {
+function getResults(workloadConfigurationScan: WorkloadConfigurationScan): string {
   let failCount: number = 0;
   let passedCount: number = 0;
   let skippedCount: number = 0;
-  for (const data of Object.values(scan.spec.controls)) {
-    switch (data.status.status) {
-      case 'failed': {
-        failCount++;
-        break;
+  let excludedCount: number = 0;
+  if (workloadConfigurationScan.exceptedByPolicy) {
+    excludedCount = Object.values(workloadConfigurationScan.spec.controls).length;
+  } else {
+    for (const scan of Object.values(workloadConfigurationScan.spec.controls)) {
+      if (scan.exceptedByPolicy) {
+        excludedCount++;
+        continue;
       }
-      case 'passed': {
-        passedCount++;
-        break;
-      }
-      case 'skipped': {
-        skippedCount++;
-        break;
+      switch (scan.status.status) {
+        case 'failed': {
+          failCount++;
+          break;
+        }
+        case 'passed': {
+          passedCount++;
+          break;
+        }
+        case 'skipped': {
+          skippedCount++;
+          break;
+        }
       }
     }
   }
 
-  return `Failed ${failCount}, Passed ${passedCount}, Skipped ${skippedCount}`;
+  return `Failed ${failCount}, Passed ${passedCount}, Skipped ${skippedCount}, Excluded ${excludedCount}`;
 }
 
-function makeStatusLabel(control: WorkloadConfigurationScan.Control) {
+function makeStatusLabel(
+  workloadConfigurationScan: WorkloadConfigurationScan,
+  control: WorkloadConfigurationScan.Control
+) {
   let status: StatusLabelProps['status'] = '';
-  const statusLabel: string = control.status.status;
+  let statusLabel: string = control.status.status;
 
-  if (statusLabel === 'failed') {
+  if (workloadConfigurationScan.exceptedByPolicy || control.exceptedByPolicy) {
+    statusLabel = 'excluded';
+  } else if (statusLabel === 'failed') {
     status = 'error';
   } else {
     status = 'success';

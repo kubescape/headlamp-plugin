@@ -1,15 +1,15 @@
 // https://github.com/kubescape/kubescape/tree/master/examples/exceptions
 // PostureExceptionPolicy defines the format for the exception file used by Kubescape
 
-export type PostureExceptionPolicyActions = 'alertOnly';
+export type ExceptionPolicyActions = 'alertOnly';
 
 export type PolicyType = 'postureExceptionPolicy';
 
-export interface PostureExceptionPolicy {
+export interface ExceptionPolicy {
   name: string;
   policyType?: PolicyType;
   creationTime?: Date;
-  actions?: PostureExceptionPolicyActions[];
+  actions?: ExceptionPolicyActions[];
   resources: ResourceDesignator[];
   posturePolicies?: PosturePolicy[];
   reason?: string | null;
@@ -24,6 +24,12 @@ export interface ResourceDesignator {
 export interface PosturePolicy {
   [key: string]: string | undefined;
   frameworkName?: string;
-  controlName?: string;
   controlID?: string;
+}
+
+export interface ExceptionPolicyGroup {
+  name: string;
+  description?: string;
+  exceptionPolicies: ExceptionPolicy[];
+  configmapManifestName?: string;
 }

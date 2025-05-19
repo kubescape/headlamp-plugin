@@ -7,6 +7,9 @@ import {
   Table,
   TableColumn,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { FormControlLabel, Switch } from '@mui/material';
+import { useSnackbar } from 'notistack';
+import { mutateNamespaceException } from '../exceptions/mutate-exception';
 import { RoutingName } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { useSelectedClusters } from '@kinvolk/headlamp-plugin/lib/k8s';
@@ -23,6 +26,8 @@ class NamespaceResult {
   unknownCount: number = 0;
   passed: number = 0;
   failed: number = 0;
+  exceptedControls: number = 0;
+  exceptedNamespace: boolean = false;
 
   constructor(namespace: string, cluster: string) {
     this.namespace = namespace;
@@ -33,14 +38,30 @@ class NamespaceResult {
 export default function NamespaceView(
   props: Readonly<{
     workloadScanData: WorkloadConfigurationScanSummary[] | null;
+    setWorkloadScanData: (workloadScanData: WorkloadConfigurationScanSummary[]) => void;
   }>
 ) {
-  const { workloadScanData } = props;
   const useHLSelectedClusters = useSelectedClusters ?? (() => null); // Needed for backwards compatibility
   const clusters = useHLSelectedClusters() ?? [getCluster()];
+  const { enqueueSnackbar } = useSnackbar();
+  const { workloadScanData, setWorkloadScanData } = props;
   if (!workloadScanData) {
     return <></>;
   }
+
+  const handleExcludeNamespace = async (namespace: NamespaceResult, checked: boolean) => {
+    const errorMessage = await mutateNamespaceException(namespace.namespace, checked);
+    if (errorMessage) {
+      enqueueSnackbar(errorMessage, { variant: 'error' });
+    } else {
+      workloadScanData.forEach(w => {
+        if (w.metadata.namespace === namespace.namespace) {
+          w.exceptedByPolicy = checked;
+        }
+      });
+      setWorkloadScanData([...workloadScanData]);
+    }
+  };
 
   return (
     <SectionBox>
@@ -71,17 +92,39 @@ export default function NamespaceView(
           {
             header: 'Passed',
             accessorFn: (namespaceResult: NamespaceResult) =>
-              namespaceResult.passed / namespaceResult.total,
+              namespaceResult.total === namespaceResult.exceptedControls
+                ? 100
+                : namespaceResult.passed / namespaceResult.total,
             Cell: ({ cell }: any) => <progress value={cell.getValue()} />,
+          },
+          {
+            header: 'Excluded Namespace',
+            accessorKey: 'exceptedNamespace',
+            Cell: ({ cell }: any) => (
+              <FormControlLabel
+                label=""
+                checked={cell.getValue() === true}
+                control={<Switch color="primary" />}
+                onChange={(event: any, checked: boolean) => {
+                  handleExcludeNamespace(cell.row.original, checked);
+                }}
+              />
+            ),
+            gridTemplate: 'auto',
           },
           {
             header: 'Compliance',
             accessorFn: (namespaceResult: NamespaceResult) =>
-              namespaceResult.total === 0
+              namespaceResult.total === namespaceResult.exceptedControls
                 ? 100
                 : Math.trunc((namespaceResult.passed / namespaceResult.total) * 100),
             Cell: ({ cell }: any) => cell.getValue() + '%',
             gridTemplate: 'auto',
+          },
+          {
+            header: 'Excluded Controls',
+            accessorKey: 'exceptedControls',
+            gridTemplate: 'min-content',
           },
           {
             header: 'Critical',
@@ -138,12 +181,17 @@ function getNamespaceResults(
     if (!namespaceResult) {
       namespaceResult = new NamespaceResult(scan.metadata.namespace, scan.metadata.cluster);
       namespaces.push(namespaceResult);
+      namespaceResult.exceptedNamespace = !workloadScanData
+        .filter(w => w.metadata.namespace === scan.metadata.namespace)
+        .some(w => !w.exceptedByPolicy);
     }
 
     for (const controlResult of Object.values(scan.spec.controls)) {
       namespaceResult.total++;
 
-      if (controlResult.status.status === WorkloadConfigurationScanSummary.Status.Failed) {
+      if (scan.exceptedByPolicy || controlResult.exceptedByPolicy) {
+        namespaceResult.exceptedControls++;
+      } else if (controlResult.status.status === WorkloadConfigurationScanSummary.Status.Failed) {
         namespaceResult.failed++;
         switch (controlResult.severity?.severity?.toLowerCase()) {
           case 'critical': {
@@ -172,5 +220,6 @@ function getNamespaceResults(
       }
     }
   }
+
   return namespaces;
 }

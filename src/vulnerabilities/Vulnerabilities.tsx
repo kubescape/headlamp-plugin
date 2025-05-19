@@ -13,12 +13,16 @@ import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { Box, Button, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
-import { RotatingLines } from 'react-loader-spinner';
 import { isNewClusterContext } from '../common/clusterContext';
 import { ErrorMessage } from '../common/ErrorMessage';
 import { ProgressIndicator } from '../common/ProgressIndicator';
+import {
+  getItemFromSessionStorage,
+  KubescapeSettings,
+  setItemInSessionStorage,
+  useSessionStorage,
+} from '../common/sessionStorage';
 import makeSeverityLabel from '../common/SeverityLabel';
-import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
 import { RoutingName } from '../index';
 import { fetchVulnerabilities, ImageScan, WorkloadScan } from './fetch-vulnerabilities';
 import ImageListView from './ImageList';
@@ -60,10 +64,6 @@ export const vulnerabilityContext: VulnerabilityContext = {
 };
 
 export default function KubescapeVulnerabilities() {
-  const [selectedTab, setSelectedTab] = useLocalStorage<number>(
-    KubescapeSettings.VulnerabilityTab,
-    0
-  );
   const [workloadScanData, setWorkloadScanData] = useState<WorkloadScan[] | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
@@ -126,12 +126,14 @@ export default function KubescapeVulnerabilities() {
 
       {!error && !loading && workloadScanData && (
         <HeadlampTabs
-          defaultIndex={selectedTab}
-          onTabChanged={tabIndex => setSelectedTab(tabIndex)}
+          defaultIndex={getItemFromSessionStorage(KubescapeSettings.VulnerabilityTab) ?? 0}
+          onTabChanged={tabIndex =>
+            setItemInSessionStorage(KubescapeSettings.VulnerabilityTab, tabIndex)
+          }
           tabs={[
             {
               label: 'CVEs',
-              component: <CVEListView loading={loading} workloadScans={workloadScanData} />,
+              component: <CVEListView workloadScans={workloadScanData} />,
             },
             {
               label: 'Resources',
@@ -149,23 +151,16 @@ export default function KubescapeVulnerabilities() {
   );
 }
 
-function CVEListView(props: Readonly<{ loading: boolean; workloadScans: WorkloadScan[] | null }>) {
-  const { loading, workloadScans } = props;
-  const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useLocalStorage<boolean>(
+function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
+  const { workloadScans } = props;
+  const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useSessionStorage<boolean>(
     KubescapeSettings.RelevantCVEs,
     false
   );
-  const [isFixedCVESwitchChecked, setIsFixedCVESwitchChecked] = useLocalStorage<boolean>(
+  const [isFixedCVESwitchChecked, setIsFixedCVESwitchChecked] = useSessionStorage<boolean>(
     KubescapeSettings.FixedCVEs,
     false
   );
-
-  if (loading || !workloadScans)
-    return (
-      <Box sx={{ padding: 2 }}>
-        <RotatingLines />
-      </Box>
-    );
 
   const cveList = getCVEList(workloadScans);
 

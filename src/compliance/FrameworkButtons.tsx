@@ -14,44 +14,35 @@ import {
   Stack,
 } from '@mui/material';
 import React from 'react';
-import { KubescapeSettings, useLocalStorage } from '../common/webStorage';
-import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
+import { kubescapeConfigStore } from '../common/config-store';
+import { defaultFrameworkNames, FrameWork, frameworks } from '../rego';
 import { configurationScanContext } from './Compliance';
-import { FrameWork } from './FrameWork';
-import { frameworks } from './frameworks';
-import { controlComplianceScore, filterWorkloadScanData } from './workload-scanning';
+import { frameworkComplianceScore } from './workload-scanning';
 
 export function FrameworkButtons(
   props: Readonly<{
     frameworkName: string;
-    setFrameworkName: React.Dispatch<React.SetStateAction<string>>;
+    customFrameworks: FrameWork[];
   }>
 ) {
-  const { frameworkName, setFrameworkName } = props;
+  const { frameworkName, customFrameworks } = props;
   function frameworkChange(event: React.ChangeEvent<HTMLInputElement>, value: string) {
-    setFrameworkName(value);
+    kubescapeConfigStore.update({ framework: value });
   }
 
-  const defaultFrameworkNames = ['AllControls', 'cis-v1.10.0', 'MITRE', 'NSA'];
-
-  const [selectedFrameworkNames, setSelectedFrameworkNames] = useLocalStorage<string[]>(
-    KubescapeSettings.FrameworkNames,
-    defaultFrameworkNames
-  );
+  const selectedFrameworkNames =
+    (kubescapeConfigStore.get().activeFrameworks as string[]) ?? defaultFrameworkNames;
 
   const labels: JSX.Element[] = [];
 
   selectedFrameworkNames
     .toSorted((a, b) => a.localeCompare(b))
     .forEach(name => {
-      const framework = frameworks.find(fw => fw.name === name);
+      const framework =
+        frameworks.find(fw => fw.name === name) ?? customFrameworks?.find(fw => fw.name === name);
       if (framework) {
-        const [filteredWorkloadScans] = filterWorkloadScanData(
-          configurationScanContext.workloadScans,
-          framework
-        );
-        const percentage = filteredWorkloadScans
-          ? Math.trunc(frameworkComplianceScore(filteredWorkloadScans, framework))
+        const percentage = configurationScanContext.workloadScans
+          ? Math.trunc(frameworkComplianceScore(configurationScanContext.workloadScans, framework))
           : 0;
         labels.push(
           <FormControlLabel
@@ -71,16 +62,17 @@ export function FrameworkButtons(
 
   const frameworkNames: string[] = frameworks
     .map(framework => framework.name)
+    .concat(customFrameworks.map(framework => framework.name))
     .sort((a, b) => a.localeCompare(b));
 
   const handleChange = (event: SelectChangeEvent<typeof selectedFrameworkNames>) => {
     const {
       target: { value },
     } = event;
-    setSelectedFrameworkNames(
-      // On autofill we get a stringified value.
-      typeof value === 'string' ? value.split(',') : value
-    );
+
+    const values = typeof value === 'string' ? value.split(',') : value;
+
+    kubescapeConfigStore.update({ activeFrameworks: values });
   };
 
   return (
@@ -88,7 +80,7 @@ export function FrameworkButtons(
       <FormControl>
         <RadioGroup
           row
-          defaultValue={frameworkName}
+          value={frameworkName}
           name="row-radio-buttons-group"
           onChange={frameworkChange}
         >
@@ -96,11 +88,14 @@ export function FrameworkButtons(
         </RadioGroup>
       </FormControl>
       <FormControl variant="filled" sx={{ m: 1, minWidth: 160 }} size="small">
-        <InputLabel id="select-label">Frameworks</InputLabel>
+        <InputLabel id="select-label" sx={{ height: 40 }}>
+          Frameworks
+        </InputLabel>
         <Select
           labelId="select-label"
           id="simple-select"
           label="Frameworks"
+          sx={{ height: 40, width: 160 }}
           value={selectedFrameworkNames}
           multiple
           onChange={handleChange}
@@ -117,18 +112,4 @@ export function FrameworkButtons(
       </FormControl>
     </>
   );
-}
-
-// The framework compliance score provides an overall assessment of your cluster's compliance with a specific framework.
-// It is calculated by averaging the Control Compliance Scores of all controls within the framework.
-// https://kubescape.io/docs/frameworks-and-controls/frameworks/
-function frameworkComplianceScore(
-  workloadScanData: WorkloadConfigurationScanSummary[],
-  framework: FrameWork
-) {
-  const controlComplianceScores = framework.controls.map(control =>
-    controlComplianceScore(workloadScanData, control)
-  );
-
-  return controlComplianceScores.reduce((a, b) => a + b, 0) / controlComplianceScores.length;
 }

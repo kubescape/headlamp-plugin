@@ -9,6 +9,7 @@ export interface WorkloadConfigurationScan {
     controls: WorkloadConfigurationScan.Controls;
     relatedObjects: WorkloadConfigurationScan.RelatedObject[];
   };
+  exceptedByPolicy: boolean; // maintained from the UI
 }
 
 export namespace WorkloadConfigurationScan {
@@ -28,6 +29,8 @@ export namespace WorkloadConfigurationScan {
       status: string;
     };
     rules: Rule[];
+
+    exceptedByPolicy: boolean; // maintained from the UI
   }
 
   export interface RelatedObject {

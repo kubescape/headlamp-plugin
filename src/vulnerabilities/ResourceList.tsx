@@ -22,12 +22,14 @@ export default function WorkloadScanListView(
     return <></>;
   }
 
+  const filteredWorkloadScans = workloadScans.filter(w => w.name && w.namespace);
+
   return (
     <>
-      <h5>{workloadScans.length} resources</h5>
+      <h5>{filteredWorkloadScans.length} resources</h5>
       <SectionBox>
         <HeadlampTable
-          data={workloadScans}
+          data={filteredWorkloadScans}
           columns={[
             {
               header: 'Name',

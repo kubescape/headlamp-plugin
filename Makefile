@@ -10,9 +10,13 @@ vap_test_files:=\
 	pod.yaml
 
 controls-download:  
-	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/frameworks -o src/compliance/frameworks.ts; 
-	sed -i '1s/^/export const frameworks: FrameWork[] = \n/' src/compliance/frameworks.ts; 
-	sed -i '1s/^/import { FrameWork } from ".\/FrameWork" \n/' src/compliance/frameworks.ts; 
+	# note: controls are removed from frameworks as they are also available in controls.ts 
+	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/frameworks | jq '.[].controls = []' > src/rego/frameworks.ts; 
+	sed -i '1s/^/export const frameworks: FrameWork[] = \n/' src/rego/frameworks.ts; 
+	sed -i '1s/^/import { FrameWork } from ".\/FrameWork" \n/' src/rego/frameworks.ts; 
+	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/controls -o src/rego/controls.ts; 
+	sed -i '1s/^/export const controls: Control[] = \n/' src/rego/controls.ts; 
+	sed -i '1s/^/import { Control } from ".\/Control" \n/' src/rego/controls.ts; 
 
 wasm-download: 
 	# Download WASM exec.js 
@@ -22,6 +26,9 @@ kubescape-download:
 	# Download policy files from Kubescape to dist 
 	curl -L https://github.com/kubescape/cel-admission-library/releases/latest/download/basic-control-configuration.yaml -o dist/basic-control-configuration.yaml; 
 	curl -L https://github.com/kubescape/cel-admission-library/releases/latest/download/kubescape-validating-admission-policies.yaml -o dist/validating-admission-policies.yaml; 
+
+	# Download rego rules files to dist
+	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/rules -o dist/rego-rules.json; 
 
 	# Download test files from KubeScape to dist 
 	rm -f dist/vap-test-files*;
@@ -37,5 +44,4 @@ build:
 	GOOS=js GOARCH=wasm go -C go build -ldflags="-s -w" -o ../dist/main.wasm cmd/main.go 
 
 local: build
-	cp dist/main.wasm ~/.config/Headlamp/plugins/kubescape-plugin/
-	cp dist/*.yaml ~/.config/Headlamp/plugins/kubescape-plugin/
+	cp dist/main.wasm dist/*.yaml dist/*.json ~/.config/Headlamp/plugins/kubescape-plugin/

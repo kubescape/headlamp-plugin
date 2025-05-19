@@ -8,6 +8,7 @@ export interface WorkloadConfigurationScanSummary {
     controls: WorkloadConfigurationScanSummary.Controls;
     severities: WorkloadConfigurationScanSummary.Severities;
   };
+  exceptedByPolicy: boolean; // maintained from the UI
 }
 
 export namespace WorkloadConfigurationScanSummary {
@@ -20,6 +21,7 @@ export namespace WorkloadConfigurationScanSummary {
   }
   export interface Control {
     controlID: string;
+
     severity: {
       scoreFactor: number;
       severity: string;
@@ -27,6 +29,7 @@ export namespace WorkloadConfigurationScanSummary {
     status: {
       status: Status;
     };
+    exceptedByPolicy: boolean; // maintained from the UI
   }
   export interface Severities {
     critical: number;

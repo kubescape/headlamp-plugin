@@ -25,7 +25,13 @@ namespace RoutingPath {
     '/kubescape/vulnerabilities/namespaces/:namespace/:name';
   export const KubescapeCVEResults = '/kubescape/vulnerabilities/cves/:cve';
   export const ImageVulnerabilityDetails = '/kubescape/vulnerabilities/images/:namespace/:name';
-  export const KubescapePostureExceptionPolicies = 'KubescapeExceptions';
+  export const KubescapeFrameworks = '/kubescape/frameworks';
+  export const FrameworkControls = '/kubescape/frameworks/:name/controls';
+  export const FrameworkNew = '/kubescape/framework';
+  export const FrameworkEdit = '/kubescape/framework/:name';
+  export const ExceptionGroupNew = '/kubescape/exception-group';
+  export const ExceptionGroupEdit = '/kubescape/exception-group/:name';
+  export const ExceptionGroups = '/kubescape/exception-groups';
   export const KubescapeVulnerabilities = '/kubescape/vulnerabilities';
   export const KubescapeNetworkPolicies = '/kubescape/networkpolicies';
   export const KubescapeNetworkPolicyDiagram = '/kubescape/networkpolicies/:namespace/:name';
@@ -36,23 +42,30 @@ namespace RoutingPath {
 }
 
 export namespace RoutingName {
+  export const ApplicationProfiles = 'Application Profile';
   export const ComplianceView = 'Compliance';
-  export const KubescapeConfigurationScanNamespaceSummary = 'Namespace Configuration Scan';
-  export const KubescapeWorkloadConfigurationScanDetails = 'Configuration Scan';
-  export const KubescapeControlResults = 'Control Configuration Scan';
-  export const KubescapeWorkloadConfigurationScanFixes = 'Workload Configuration Fixes';
-  export const VulnerabilitiesNamespaceSummary = 'Namespace Vulnerabilities';
-  export const KubescapePostureExceptionPolicies = 'KubescapeExceptions';
-  export const KubescapeVulnerabilityDetails = 'Vulnerability';
-  export const KubescapeCVEResults = 'CVE Vulnerabilities';
   export const ImageVulnerabilityDetails = 'Image Vulnerabilities';
-  export const KubescapeVulnerabilities = 'Vulnerabilities';
+  export const KubescapeConfigurationScanNamespaceSummary = 'Namespace Configuration Scan';
+  export const KubescapeControlResults = 'Control Configuration Scan';
+  export const KubescapeCVEResults = 'CVE Vulnerabilities';
+  export const KubescapeFrameworks = 'Frameworks';
+  export const FrameworkControls = 'FrameworkControls';
+  export const FrameworkNew = 'New Framework';
+  export const FrameworkEdit = 'Edit Framework';
   export const KubescapeNetworkPolicies = 'Network Policies';
   export const KubescapeNetworkPolicyDiagram = 'Network Policy Diagram';
+  export const ExceptionGroupNew = 'New Kubescape Exceptions';
+  export const ExceptionGroupEdit = 'Edit Kubescape Exceptions';
+  export const ExceptionGroup = 'Kubescape Exceptions';
+  export const ExceptionGroups = 'Kubescape Exception Groups';
   export const KubescapeSBOMDetails = 'Software Bill of Materials';
-  export const VAP = 'Validation Admission Policies';
-  export const ApplicationProfiles = 'Application Profile';
+  export const KubescapeVulnerabilityDetails = 'Vulnerability';
+  export const KubescapeVulnerabilities = 'Vulnerabilities';
+  export const KubescapeWorkloadConfigurationScanDetails = 'Configuration Scan';
+  export const KubescapeWorkloadConfigurationScanFixes = 'Workload Configuration Fixes';
   export const RuntimeDetection = 'Runtime Detection';
+  export const VAP = 'Validation Admission Policies';
+  export const VulnerabilitiesNamespaceSummary = 'Namespace Vulnerabilities';
 }
 
 // Kubescape main sidebar
@@ -102,8 +115,15 @@ registerSidebarEntry({
 registerSidebarEntry({
   parent: kubescape,
   name: 'exceptions',
-  label: 'Policy Exceptions',
-  url: RoutingPath.KubescapePostureExceptionPolicies,
+  label: 'Exceptions',
+  url: RoutingPath.ExceptionGroups,
+});
+
+registerSidebarEntry({
+  parent: kubescape,
+  name: 'frameworks',
+  label: 'Frameworks',
+  url: RoutingPath.KubescapeFrameworks,
 });
 
 import ComplianceView from './compliance/Compliance';
@@ -146,14 +166,32 @@ registerRoute({
   name: RoutingName.KubescapeControlResults,
 });
 
-import KubescapePostureExceptionPolicies from './exceptions/PostureExceptionPolicies';
+import { ExceptionGroupEdit, ExceptionGroupNew } from './exceptions/ExceptionGroup';
 
 registerRoute({
-  path: RoutingPath.KubescapePostureExceptionPolicies,
+  path: RoutingPath.ExceptionGroupEdit,
   sidebar: compliance,
-  component: () => <KubescapePostureExceptionPolicies />,
+  component: () => <ExceptionGroupEdit />,
   exact: true,
-  name: 'RoutingName.KubescapePostureExceptionPolicies',
+  name: RoutingName.ExceptionGroupEdit,
+});
+
+registerRoute({
+  path: RoutingPath.ExceptionGroupNew,
+  sidebar: compliance,
+  component: () => <ExceptionGroupNew />,
+  exact: true,
+  name: RoutingName.ExceptionGroupNew,
+});
+
+import { ExceptionGroupList } from './exceptions/ExceptionGroups';
+
+registerRoute({
+  path: RoutingPath.ExceptionGroups,
+  sidebar: compliance,
+  component: () => <ExceptionGroupList />,
+  exact: true,
+  name: RoutingName.ExceptionGroups,
 });
 
 import KubescapeWorkloadConfigurationScanFixes from './compliance/WorkloadScanFixes';
@@ -274,6 +312,44 @@ registerRoute({
   component: () => <RuntimeDetection />,
   exact: true,
   name: RoutingName.RuntimeDetection,
+});
+
+import { FrameworksPage } from './framework/FrameworkList';
+
+registerRoute({
+  path: RoutingPath.KubescapeFrameworks,
+  sidebar: 'frameworks',
+  component: () => <FrameworksPage />,
+  exact: true,
+  name: RoutingName.KubescapeFrameworks,
+});
+
+import { FrameworkControls } from './framework/FrameworkControls';
+
+registerRoute({
+  path: RoutingPath.FrameworkControls,
+  sidebar: 'frameworks',
+  component: () => <FrameworkControls />,
+  exact: true,
+  name: RoutingName.FrameworkControls,
+});
+
+import { FrameworkEdit, FrameworkNew } from './framework/FrameworkEdit';
+
+registerRoute({
+  path: RoutingPath.FrameworkNew,
+  sidebar: 'frameworks',
+  component: () => <FrameworkNew />,
+  exact: true,
+  name: RoutingName.FrameworkNew,
+});
+
+registerRoute({
+  path: RoutingPath.FrameworkEdit,
+  sidebar: 'frameworks',
+  component: () => <FrameworkEdit />,
+  exact: true,
+  name: RoutingName.FrameworkEdit,
 });
 
 // Detail panel for workloads

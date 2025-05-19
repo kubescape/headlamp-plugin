@@ -1,14 +1,4 @@
-export interface FrameWork {
-  name: string;
-  description: string;
-  attributes: any;
-  scanningScope: any;
-  typeTags: string[];
-  version: any;
-  controls: Control[];
-  ControlsIDs: string[];
-  subSections?: any;
-}
+import { Rule } from './Rule';
 
 export interface Control {
   name: string;
@@ -23,6 +13,7 @@ export interface Control {
   description: string;
   remediation: string;
   manual_test?: string;
+  rulesNames?: string[];
 
   long_description?: string;
   test?: string;
@@ -41,7 +32,7 @@ export interface Control {
     matches: string[];
   };
   references?: string[];
-  rules: [];
+  rules: Rule[];
   impact_statement?: string;
   default_value?: string;
 }
