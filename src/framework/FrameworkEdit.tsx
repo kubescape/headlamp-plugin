@@ -362,7 +362,7 @@ function Controls(
               sx={{
                 width: `5%`,
                 verticalAlign: 'middle',
-                backgroundColor: theme.palette.metadataBgColor,
+                backgroundColor: theme.palette.background.default,
               }}
             >
               <Checkbox
@@ -428,7 +428,7 @@ function HeaderCell(
       sx={{
         width: `${width}`,
         verticalAlign: 'middle',
-        backgroundColor: theme.palette.metadataBgColor,
+        backgroundColor: theme.palette.background.default,
         color: 'white',
         cursor: 'pointer',
       }}

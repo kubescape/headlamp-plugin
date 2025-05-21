@@ -315,7 +315,7 @@ function HeaderCell(props: Readonly<{ title: string }>) {
       sx={{
         padding: '0 4px',
         verticalAlign: 'middle',
-        backgroundColor: theme.palette.metadataBgColor,
+        backgroundColor: theme.palette.background.default,
         color: 'white',
       }}
     >

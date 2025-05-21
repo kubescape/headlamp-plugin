@@ -103,24 +103,6 @@ export const knownServersClass = makeCustomResourceClass({
   pluralName: 'knownservers',
 });
 
-export function proxyRequest(
-  name: string,
-  namespace: string,
-  cluster: string,
-  group: string,
-  version: string,
-  pluralName: string
-): Promise<any> {
-  const api = group ? '/apis/' : '/api';
-
-  return request(
-    `${api}${group}/${version}/${namespace ? 'namespaces/' : ''}${namespace}/${pluralName}/${name}`,
-    {
-      cluster: cluster,
-    }
-  );
-}
-
 export async function listQuery(objectClass: KubeObjectClass): Promise<any> {
   const namespaces: string[] = getAllowedNamespaces();
   const group = objectClass.apiEndpoint.apiInfo[0].group;
@@ -140,41 +122,6 @@ export async function listQuery(objectClass: KubeObjectClass): Promise<any> {
     return overviewList.items;
   }
 }
-export async function paginatedListQuery(
-  cluster: string,
-  objectClass: KubeObjectClass,
-  continuation: number | undefined,
-  pageSize: number | undefined,
-  allowedNamespaces: string[] = []
-): Promise<any> {
-  const group = objectClass.apiEndpoint.apiInfo[0].group;
-  const version = objectClass.apiEndpoint.apiInfo[0].version;
-  const pluralName = objectClass.pluralName;
-
-  let queryFragment = `${pluralName}?resourceVersion=fullSpec&continue=${continuation}`;
-  if (pageSize !== undefined) {
-    queryFragment += `&limit=${pageSize}`;
-  }
-  if (allowedNamespaces.length > 0) {
-    const listOfLists: any[] = await Promise.all(
-      allowedNamespaces.map(namespace =>
-        request(`/apis/${group}/${version}/namespaces/${namespace}/${queryFragment}`)
-      )
-    );
-
-    return { items: listOfLists.flatMap(list => list.items), continuation: undefined };
-  } else {
-    //await new Promise(resolve => setTimeout(resolve, 2000));
-    const overviewList = await request(`/apis/${group}/${version}/${queryFragment}`, {
-      cluster: cluster,
-    });
-    overviewList.items.forEach((item: any) => {
-      item.metadata.cluster = cluster;
-    });
-    return { items: overviewList.items, continuation: overviewList.metadata.continue };
-  }
-}
-
 export function fetchObject(
   name: string,
   namespace: string,
@@ -184,5 +131,12 @@ export function fetchObject(
   const group = objectClass.apiEndpoint.apiInfo[0].group;
   const version = objectClass.apiEndpoint.apiInfo[0].version;
 
-  return proxyRequest(name, namespace, cluster, group, version, objectClass.pluralName);
+  return request(
+    `/apis/${group}/${version}/${namespace ? 'namespaces/' : ''}${namespace}/${
+      objectClass.pluralName
+    }/${name}`,
+    {
+      cluster: cluster,
+    }
+  );
 }

@@ -5,11 +5,9 @@ import { Link, Table, TableColumn } from '@kinvolk/headlamp-plugin/lib/CommonCom
 import { Box, FormControlLabel, Stack, Switch, Tooltip } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { mutateResourceException } from '../exceptions/mutate-exception';
-import { RoutingName } from '../index';
+import { RoutingName, useHLSelectedClusters } from '../index';
 import { FrameWork } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
-import { useSelectedClusters } from '@kinvolk/headlamp-plugin/lib/k8s';
-import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 
 export default function KubescapeWorkloadConfigurationScanList(
   props: Readonly<{
@@ -19,8 +17,7 @@ export default function KubescapeWorkloadConfigurationScanList(
     isFailedControlSwitchChecked: boolean;
   }>
 ) {
-  const useHLSelectedClusters = useSelectedClusters ?? (() => null); // Needed for backwards compatibility
-  const clusters = useHLSelectedClusters() ?? [getCluster()];
+  const clusters = useHLSelectedClusters();
 
   const { enqueueSnackbar } = useSnackbar();
   const { workloadScanData, setWorkloadScanData, framework, isFailedControlSwitchChecked } = props;

@@ -5,11 +5,12 @@ import {
   Link,
   SectionBox,
   Table as HeadlampTable,
+  TableColumn,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, Stack, Tooltip } from '@mui/material';
 import { makeNamespaceLink } from '../common/Namespace';
-import { RoutingName } from '../index';
-import { WorkloadScan } from './fetch-vulnerabilities';
+import { RoutingName, useHLSelectedClusters } from '../index';
+import { WorkloadScan } from './Vulnerabilities';
 
 export default function WorkloadScanListView(
   props: Readonly<{
@@ -17,6 +18,7 @@ export default function WorkloadScanListView(
   }>
 ) {
   const { workloadScans } = props;
+  const clusters = useHLSelectedClusters();
 
   if (!workloadScans) {
     return <></>;
@@ -65,6 +67,12 @@ export default function WorkloadScanListView(
               Cell: ({ cell }: any) => makeNamespaceLink(cell.getValue()),
               gridTemplate: 'min-content',
             },
+            clusters.length > 1
+              ? {
+                  header: 'Cluster',
+                  accessorKey: 'cluster',
+                }
+              : ({} as TableColumn<WorkloadScan>),
             {
               header: 'Image',
               accessorFn: (workloadScan: WorkloadScan) => workloadScan.imageScan?.imageName,

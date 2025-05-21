@@ -29,21 +29,22 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
       (result: WorkloadConfigurationScan) => {
         if (result) {
           result.metadata.cluster = cluster;
-        const workloadConfigurationScanSummary = configurationScanContext.workloadScans.find(
-          w =>
-            w.metadata.name === result.metadata.name &&
-            w.metadata.namespace === result.metadata.namespace
-        );
+          const workloadConfigurationScanSummary = configurationScanContext.workloadScans.find(
+            w =>
+              w.metadata.name === result.metadata.name &&
+              w.metadata.namespace === result.metadata.namespace
+          );
 
-        if (workloadConfigurationScanSummary) {
-          result.exceptedByPolicy = workloadConfigurationScanSummary.exceptedByPolicy;
-          Object.values(result.spec.controls).forEach(control => {
-            control.exceptedByPolicy = Object.values(
-              workloadConfigurationScanSummary.spec.controls
-            ).some(scan => scan.controlID === control.controlID && scan.exceptedByPolicy);
-          });
+          if (workloadConfigurationScanSummary) {
+            result.exceptedByPolicy = workloadConfigurationScanSummary.exceptedByPolicy;
+            Object.values(result.spec.controls).forEach(control => {
+              control.exceptedByPolicy = Object.values(
+                workloadConfigurationScanSummary.spec.controls
+              ).some(scan => scan.controlID === control.controlID && scan.exceptedByPolicy);
+            });
+          }
+          setConfigurationScan(result);
         }
-        setConfigurationScan(result);
       }
     );
   }, []);

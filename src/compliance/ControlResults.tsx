@@ -15,18 +15,15 @@ import { makeNamespaceLink } from '../common/Namespace';
 import { KubescapeSettings, useSessionStorage } from '../common/sessionStorage';
 import { getLastURLSegment } from '../common/url';
 import { mutateControlException } from '../exceptions/mutate-exception';
-import { RoutingName } from '../index';
+import { RoutingName, useHLSelectedClusters } from '../index';
 import { Control, controls } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';
-import { useSelectedClusters } from '@kinvolk/headlamp-plugin/lib/k8s';
-import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 
 export default function KubescapeControlResults() {
   const { enqueueSnackbar } = useSnackbar();
   const controlID = getLastURLSegment();
-  const useHLSelectedClusters = useSelectedClusters ?? (() => null); // Needed for backwards compatibility
-  const clusters = useHLSelectedClusters() ?? [getCluster()];
+  const clusters = useHLSelectedClusters();
 
   const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] =
     useSessionStorage<boolean>(KubescapeSettings.FailedControls, true);
@@ -202,6 +199,7 @@ export default function KubescapeControlResults() {
                     params={{
                       name: workloadScan.metadata.name,
                       namespace: workloadScan.metadata.namespace,
+                      cluster: workloadScan.metadata.cluster,
                       control: control.controlID,
                     }}
                   >

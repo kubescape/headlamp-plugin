@@ -7,10 +7,15 @@ import {
   registerRoute,
   registerSidebarEntry,
 } from '@kinvolk/headlamp-plugin/lib';
+// @ts-ignore
+import { useSelectedClusters } from '@kinvolk/headlamp-plugin/lib/k8s';
+import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 
 const kubescape = 'kubescape';
 const vulnerabilities: string = 'vulnerabilities';
 const compliance: string = 'compliance';
+
+export const useHLSelectedClusters = useSelectedClusters ?? (() => [getCluster()]); //For backwards compatibility
 
 namespace RoutingPath {
   export const ComplianceView = '/kubescape/compliance';
@@ -19,7 +24,7 @@ namespace RoutingPath {
     '/kubescape/compliance/:cluster/:namespace/:name';
   export const KubescapeControlResults = '/kubescape/compliance/controls/:control';
   export const KubescapeWorkloadConfigurationScanFixes =
-    '/kubescape/compliance/namespaces/:namespace/:name/:control';
+    '/kubescape/compliance/:cluster/namespaces/:namespace/:name/:control';
   export const VulnerabilitiesNamespaceSummary = '/kubescape/vulnerabilities/:namespace';
   export const KubescapeVulnerabilityDetails =
     '/kubescape/vulnerabilities/namespaces/:namespace/:name';

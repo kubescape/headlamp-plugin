@@ -8,14 +8,11 @@ import {
   Table as HeadlampTable,
   Tabs as HeadlampTabs,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { useEffect, useState } from 'react';
 import { RoutingName } from '../index';
-import {
-  generatedNetworkPolicyClass,
-  knownServersClass,
-  listQuery,
-  paginatedListQuery,
-} from '../model';
+import { generatedNetworkPolicyClass, knownServersClass, listQuery } from '../model';
+import { paginatedListQuery } from '../query';
 import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
 import { KnownServer } from '../softwarecomposition/KnownServer';
 
@@ -123,9 +120,12 @@ function KnownServerList() {
 
   useEffect(() => {
     async function fetchData() {
-      await paginatedListQuery(knownServersClass, 0, undefined).then((result: any) => {
-        setKnownServers(result.items);
-      });
+      const cluster = getCluster();
+      if (cluster) {
+        await paginatedListQuery(cluster, knownServersClass, 0, 50).then((result: any) => {
+          setKnownServers(result.items);
+        });
+      }
     }
     fetchData().catch(console.error);
   }, []);

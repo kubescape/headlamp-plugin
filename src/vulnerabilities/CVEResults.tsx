@@ -10,8 +10,7 @@ import {
 import { Link } from '@mui/material';
 import { getURLSegments } from '../common/url';
 import { RoutingName } from '../index';
-import { WorkloadScan } from './fetch-vulnerabilities';
-import { vulnerabilityContext } from './Vulnerabilities';
+import { vulnerabilityContext, WorkloadScan } from './Vulnerabilities';
 
 export default function KubescapeCVEResults() {
   const [cve] = getURLSegments(-1);

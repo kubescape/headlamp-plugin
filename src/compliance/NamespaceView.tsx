@@ -10,10 +10,8 @@ import {
 import { FormControlLabel, Switch } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { mutateNamespaceException } from '../exceptions/mutate-exception';
-import { RoutingName } from '../index';
+import { RoutingName, useHLSelectedClusters } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
-import { useSelectedClusters } from '@kinvolk/headlamp-plugin/lib/k8s';
-import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 
 class NamespaceResult {
   namespace: string;
@@ -41,8 +39,7 @@ export default function NamespaceView(
     setWorkloadScanData: (workloadScanData: WorkloadConfigurationScanSummary[]) => void;
   }>
 ) {
-  const useHLSelectedClusters = useSelectedClusters ?? (() => null); // Needed for backwards compatibility
-  const clusters = useHLSelectedClusters() ?? [getCluster()];
+  const clusters = useHLSelectedClusters();
   const { enqueueSnackbar } = useSnackbar();
   const { workloadScanData, setWorkloadScanData } = props;
   if (!workloadScanData) {
