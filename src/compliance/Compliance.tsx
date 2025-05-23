@@ -5,8 +5,6 @@ import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   Link as HeadlampLink,
   SectionBox,
-  StatusLabel,
-  StatusLabelProps,
   Table,
   Tabs as HeadlampTabs,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
@@ -36,6 +34,7 @@ import {
   setItemInSessionStorage,
   useSessionStorage,
 } from '../common/sessionStorage';
+import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { getKubescapeNamespace } from '../custom-objects/api-queries';
 import {
   applyExceptionsToWorkloadScanData,
