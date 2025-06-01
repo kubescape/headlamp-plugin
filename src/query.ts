@@ -38,10 +38,15 @@ export async function handleListPaginationTasks(
           task.continuation,
           task.pageSize,
           task.allowedNamespaces
-        ).then(response => {
-          task.continuation = response.continuation;
-          task.handleData(task, response.items);
-        });
+        )
+          .then(response => {
+            task.continuation = response.continuation;
+            task.handleData(task, response.items);
+          })
+          .catch(error => {
+            console.error(`Error fetching data in cluster ${task.cluster}:`, error);
+            task.continuation = undefined; // Stop further requests on error
+          });
       }
     }
   }
