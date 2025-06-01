@@ -1,11 +1,11 @@
 /* 
   List configuration scans for all workloads.  
 */
-import { Link, Table } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { Link, Table, TableColumn } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, FormControlLabel, Stack, Switch, Tooltip } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { mutateResourceException } from '../exceptions/mutate-exception';
-import { RoutingName } from '../index';
+import { RoutingName, useHLSelectedClusters } from '../index';
 import { FrameWork } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 
@@ -17,6 +17,8 @@ export default function KubescapeWorkloadConfigurationScanList(
     isFailedControlSwitchChecked: boolean;
   }>
 ) {
+  const clusters = useHLSelectedClusters();
+
   const { enqueueSnackbar } = useSnackbar();
   const { workloadScanData, setWorkloadScanData, framework, isFailedControlSwitchChecked } = props;
   if (!workloadScanData) {
@@ -57,6 +59,7 @@ export default function KubescapeWorkloadConfigurationScanList(
                 params={{
                   name: row.original.metadata.name,
                   namespace: row.original.metadata.namespace,
+                  cluster: row.original.metadata.cluster,
                 }}
               >
                 {cell.getValue()}
@@ -104,6 +107,12 @@ export default function KubescapeWorkloadConfigurationScanList(
             },
             gridTemplate: 'auto',
           },
+          clusters.length > 1
+            ? {
+                header: 'Cluster',
+                accessorKey: 'metadata.cluster',
+              }
+            : ({} as TableColumn<WorkloadConfigurationScanSummary>),
           {
             header: 'Passed',
             accessorFn: (workloadScan: WorkloadConfigurationScanSummary) => {

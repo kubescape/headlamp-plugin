@@ -9,7 +9,7 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, Stack, Tooltip } from '@mui/material';
 import { RoutingName } from '../index';
-import { ImageScan, WorkloadScan } from './fetch-vulnerabilities';
+import { ImageScan, WorkloadScan } from './Vulnerabilities';
 
 export default function ImageListView(props: Readonly<{ workloadScans: WorkloadScan[] | null }>) {
   const { workloadScans } = props;

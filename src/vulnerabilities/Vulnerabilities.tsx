@@ -10,10 +10,9 @@ import {
   Tabs as HeadlampTabs,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
-import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { Box, Button, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
-import { isNewClusterContext } from '../common/clusterContext';
+import { isAllowedNamespaceUpdated } from '../common/clusterContext';
 import { ErrorMessage } from '../common/ErrorMessage';
 import { ProgressIndicator } from '../common/ProgressIndicator';
 import {
@@ -23,10 +22,37 @@ import {
   useSessionStorage,
 } from '../common/sessionStorage';
 import makeSeverityLabel from '../common/SeverityLabel';
-import { RoutingName } from '../index';
-import { fetchVulnerabilities, ImageScan, WorkloadScan } from './fetch-vulnerabilities';
+import { RoutingName, useHLSelectedClusters } from '../index';
+import { vulnerabilityManifestClass, vulnerabilityManifestSummaryClass } from '../model';
+import { handleListPaginationTasks, QueryTask } from '../query';
+import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
+import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
 import ImageListView from './ImageList';
 import WorkloadScanListView from './ResourceList';
+
+const pageSize: number = 50;
+
+// WorkloadScan is derived from VulnerabilityManifestSummary
+export interface WorkloadScan {
+  manifestName: string;
+  name: string;
+  kind: string;
+  container: string;
+  namespace: string;
+  cluster: string;
+  imageScan: ImageScan | undefined;
+  relevant: ImageScan | undefined;
+}
+
+// ImageScan is derived from VulnerabilityManifest
+export interface ImageScan {
+  manifestName: string;
+  namespace: string;
+  cluster: string;
+  imageName: string;
+  creationTimestamp: string;
+  matches: VulnerabilityManifest.Match[];
+}
 
 interface CVEScan {
   CVE: string;
@@ -44,23 +70,13 @@ interface CVEScan {
 type VulnerabilityContext = {
   workloadScans: WorkloadScan[];
   imageScans: Map<string, ImageScan>;
-  vulnerabilityManifestContinuation: number | undefined;
-  vulnerabilityManifestSummaryContinuation: number | undefined;
-  context: {
-    currentCluster: string;
-    allowedNamespaces: string[];
-  };
+  queryTasks: QueryTask[];
 };
 
 export const vulnerabilityContext: VulnerabilityContext = {
   workloadScans: [],
   imageScans: new Map<string, ImageScan>(),
-  vulnerabilityManifestContinuation: 0,
-  vulnerabilityManifestSummaryContinuation: 0,
-  context: {
-    currentCluster: '',
-    allowedNamespaces: [],
-  },
+  queryTasks: [],
 };
 
 export default function KubescapeVulnerabilities() {
@@ -69,24 +85,18 @@ export default function KubescapeVulnerabilities() {
   const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
   const continueReading = useRef(true);
   const [error, setError] = useState<ApiError | null>(null);
+  const clusters = useHLSelectedClusters();
 
   useEffect(() => {
     const fetchData = async () => {
-      if (isNewClusterContext(vulnerabilityContext.context)) {
-        vulnerabilityContext.imageScans.clear();
-        vulnerabilityContext.workloadScans = [];
-        vulnerabilityContext.vulnerabilityManifestContinuation = 0;
-        vulnerabilityContext.vulnerabilityManifestSummaryContinuation = 0;
-        vulnerabilityContext.context.currentCluster = getCluster() ?? '';
-        vulnerabilityContext.context.allowedNamespaces = getAllowedNamespaces();
-      }
+      initQueryTasks(clusters, setProgressMessage);
 
-      await fetchVulnerabilities(continueReading, setProgressMessage, setLoading, setError);
+      await handleListPaginationTasks(vulnerabilityContext.queryTasks, continueReading, setLoading);
 
-      setWorkloadScanData(vulnerabilityContext.workloadScans);
+      setWorkloadScanData([...vulnerabilityContext.workloadScans]);
     };
 
-    fetchData().catch(console.error);
+    fetchData().catch(error => setError(error));
     return () => {
       continueReading.current = false;
     };
@@ -101,12 +111,16 @@ export default function KubescapeVulnerabilities() {
           <Typography variant="body1" component="div">
             {vulnerabilityContext.workloadScans.length} scans{' '}
           </Typography>
-          {vulnerabilityContext.vulnerabilityManifestSummaryContinuation !== undefined && (
+          {vulnerabilityContext.queryTasks.some(q => q.continuation !== undefined) && (
             <Button
               onClick={() => {
                 setTimeout(() => {
                   continueReading.current = true;
-                  fetchVulnerabilities(continueReading, setProgressMessage, setLoading, setError);
+                  handleListPaginationTasks(
+                    vulnerabilityContext.queryTasks,
+                    continueReading,
+                    setLoading
+                  );
                 });
               }}
               variant="contained"
@@ -335,4 +349,105 @@ function getCVEList(workloadScans: WorkloadScan[]): CVEScan[] {
   }
 
   return vulnerabilityList;
+}
+
+async function initQueryTasks(
+  clusters: string[],
+  setProgressMessage: React.Dispatch<React.SetStateAction<string>>
+) {
+  const storeVulnerabilityManifests = (task: QueryTask, items: VulnerabilityManifest[]) => {
+    for (const v of items) {
+      const imageScan: ImageScan = {
+        manifestName: v.metadata.name,
+        namespace: v.metadata.namespace,
+        cluster: v.metadata.cluster,
+        imageName: v.metadata.annotations['kubescape.io/image-tag'],
+        creationTimestamp: v.metadata.creationTimestamp,
+        matches: v.spec.payload.matches ?? [],
+      };
+
+      vulnerabilityContext.imageScans.set(v.metadata.name, imageScan);
+    }
+    setProgressMessage(
+      `${task.cluster}: Reading ${vulnerabilityContext.imageScans.size} Images...`
+    );
+  };
+
+  const storeVulnerabilityManifestSummaries = (
+    task: QueryTask,
+    items: VulnerabilityManifestSummary[]
+  ) => {
+    for (const item of items) {
+      const detailedSummary: VulnerabilityManifestSummary = item;
+      const w: WorkloadScan = {
+        manifestName: detailedSummary.metadata.name,
+        name: detailedSummary.metadata.labels['kubescape.io/workload-name'],
+        namespace: detailedSummary.metadata.labels['kubescape.io/workload-namespace'],
+        cluster: detailedSummary.metadata.cluster,
+        container: detailedSummary.metadata.labels['kubescape.io/workload-container-name'],
+        kind: detailedSummary.metadata.labels['kubescape.io/workload-kind'],
+        imageScan: undefined,
+        relevant: undefined,
+      };
+      vulnerabilityContext.workloadScans.push(w);
+
+      if (detailedSummary.spec.vulnerabilitiesRef?.all?.name) {
+        w.imageScan = vulnerabilityContext.imageScans.get(
+          detailedSummary.spec.vulnerabilitiesRef.all.name
+        );
+      }
+
+      if (detailedSummary.spec.vulnerabilitiesRef?.relevant?.name) {
+        w.relevant = vulnerabilityContext.imageScans.get(
+          detailedSummary.spec.vulnerabilitiesRef.relevant.name
+        );
+      }
+    }
+
+    setProgressMessage(
+      `${task.cluster}: Reading ${vulnerabilityContext.workloadScans.length} Workloads...`
+    );
+  };
+
+  // remove queryTask and data from clusters that are no more selected or where allowed namespaces are changed
+  for (const queryTask of vulnerabilityContext.queryTasks) {
+    if (clusters.indexOf(queryTask.cluster) === -1 || isAllowedNamespaceUpdated(queryTask)) {
+      console.log(`remove query task for scans for ${queryTask.cluster}`);
+      vulnerabilityContext.queryTasks.splice(vulnerabilityContext.queryTasks.indexOf(queryTask), 1);
+      vulnerabilityContext.workloadScans = vulnerabilityContext.workloadScans.filter(
+        scan => scan.cluster !== queryTask.cluster
+      );
+      vulnerabilityContext.imageScans.forEach((value, key) => {
+        if (value.cluster !== queryTask.cluster) {
+          vulnerabilityContext.imageScans.delete(key);
+        }
+      });
+    }
+  }
+
+  // add new query tasks
+  for (const cluster of clusters) {
+    if (!vulnerabilityContext.queryTasks.find(q => q.cluster === cluster)) {
+      console.log(`new query task for scans for ${cluster}`);
+
+      const task = {
+        cluster: cluster,
+        allowedNamespaces: getAllowedNamespaces(cluster),
+        continuation: 0,
+        pageSize: pageSize,
+      };
+      vulnerabilityContext.queryTasks.push({
+        ...task,
+        objectClass: vulnerabilityManifestClass,
+        handleData: storeVulnerabilityManifests,
+      });
+      vulnerabilityContext.queryTasks.push({
+        ...task,
+        objectClass: vulnerabilityManifestSummaryClass,
+        handleData: storeVulnerabilityManifestSummaries,
+      });
+    }
+  }
+
+  return vulnerabilityContext.queryTasks;
 }

@@ -5,14 +5,17 @@ import {
   Link as HeadlampLink,
   SectionBox,
   Table,
+  TableColumn,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { FormControlLabel, Switch } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { mutateNamespaceException } from '../exceptions/mutate-exception';
-import { RoutingName } from '../index';
+import { RoutingName, useHLSelectedClusters } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
+
 class NamespaceResult {
   namespace: string;
+  cluster: string;
   criticalCount: number = 0;
   highCount: number = 0;
   mediumCount: number = 0;
@@ -24,8 +27,9 @@ class NamespaceResult {
   exceptedControls: number = 0;
   exceptedNamespace: boolean = false;
 
-  constructor(namespace: string) {
+  constructor(namespace: string, cluster: string) {
     this.namespace = namespace;
+    this.cluster = cluster;
   }
 }
 
@@ -35,6 +39,7 @@ export default function NamespaceView(
     setWorkloadScanData: (workloadScanData: WorkloadConfigurationScanSummary[]) => void;
   }>
 ) {
+  const clusters = useHLSelectedClusters();
   const { enqueueSnackbar } = useSnackbar();
   const { workloadScanData, setWorkloadScanData } = props;
   if (!workloadScanData) {
@@ -75,6 +80,12 @@ export default function NamespaceView(
               </HeadlampLink>
             ),
           },
+          clusters.length > 1
+            ? {
+                header: 'Cluster',
+                accessorKey: 'cluster',
+              }
+            : ({} as TableColumn<NamespaceResult>),
           {
             header: 'Passed',
             accessorFn: (namespaceResult: NamespaceResult) =>
@@ -165,7 +176,7 @@ function getNamespaceResults(
   for (const scan of workloadScanData) {
     let namespaceResult = namespaces.find(ns => ns.namespace === scan.metadata.namespace);
     if (!namespaceResult) {
-      namespaceResult = new NamespaceResult(scan.metadata.namespace);
+      namespaceResult = new NamespaceResult(scan.metadata.namespace, scan.metadata.cluster);
       namespaces.push(namespaceResult);
       namespaceResult.exceptedNamespace = !workloadScanData
         .filter(w => w.metadata.namespace === scan.metadata.namespace)

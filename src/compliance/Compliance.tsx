@@ -9,7 +9,6 @@ import {
   Tabs as HeadlampTabs,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
-import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import {
   Box,
   Button,
@@ -26,7 +25,7 @@ import {
   Typography,
 } from '@mui/material';
 import React, { useEffect, useRef, useState } from 'react';
-import { isNewClusterContext } from '../common/clusterContext';
+import { isAllowedNamespaceUpdated } from '../common/clusterContext';
 import { KubescapeConfig, kubescapeConfigStore } from '../common/config-store';
 import { ProgressIndicator } from '../common/ProgressIndicator';
 import {
@@ -44,12 +43,9 @@ import {
   countExcludedWorkloadsForControl,
 } from '../exceptions/apply-exceptions';
 import { ExceptionPolicy, ExceptionPolicyGroup } from '../exceptions/ExceptionPolicy';
-import { RoutingName } from '../index';
-import {
-  customObjectLabel,
-  paginatedListQuery,
-  workloadConfigurationScanSummaryClass,
-} from '../model';
+import { RoutingName, useHLSelectedClusters } from '../index';
+import { customObjectLabel, workloadConfigurationScanSummaryClass } from '../model';
+import { handleListPaginationTasks as handleQueryTasks, QueryTask } from '../query';
 import { Control, controls, fitControlsToFrameworks, FrameWork, frameworks } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { FrameworkButtons } from './FrameworkButtons';
@@ -68,20 +64,12 @@ const pageSize: number = 50;
 // workloadScans are cached in global scope because it is an expensive query for the API server
 type ConfigurationScanContext = {
   workloadScans: WorkloadConfigurationScanSummary[];
-  continuation: number | undefined;
-  context: {
-    currentCluster: string;
-    allowedNamespaces: string[];
-  };
+  queryTasks: QueryTask[];
 };
 
 export const configurationScanContext: ConfigurationScanContext = {
   workloadScans: [],
-  continuation: 0,
-  context: {
-    currentCluster: '',
-    allowedNamespaces: [],
-  },
+  queryTasks: [],
 };
 
 fitControlsToFrameworks();
@@ -107,6 +95,7 @@ export default function ComplianceView(): JSX.Element {
   const [loading, setLoading] = useState<boolean>(false);
   const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
 
+  const clusters = useHLSelectedClusters();
   const [customFrameworks, setCustomFrameworks] = useState<FrameWork[]>([]);
   const [exceptionGroups, setExceptionGroups] = useState<ExceptionPolicyGroup[]>([]);
 
@@ -119,23 +108,20 @@ export default function ComplianceView(): JSX.Element {
     customFrameworks?.find(fw => fw.name === kubescapeConfig?.framework) ??
     frameworks[0];
 
+  // kubescape namespace
+  useEffect(() => {
+    setItemInSessionStorage(KubescapeSettings.KubescapeNamespace, null);
+    getKubescapeNamespace().then(({ error }) => {
+      console.log(error);
+    });
+  }, []);
+
   // fetch workload scans
   useEffect(() => {
     async function fetchData() {
-      if (isNewClusterContext(configurationScanContext.context)) {
-        configurationScanContext.continuation = 0;
-        configurationScanContext.workloadScans = [];
-        configurationScanContext.context.currentCluster = getCluster() ?? '';
-        configurationScanContext.context.allowedNamespaces = getAllowedNamespaces();
+      initQueryTasks(clusters, setProgressMessage);
 
-        setItemInSessionStorage(KubescapeSettings.KubescapeNamespace, null);
-        getKubescapeNamespace().then(({ error }) => {
-          console.log(error);
-        });
-      }
-      if (configurationScanContext.continuation !== undefined) {
-        await fetchWorkloadScanData(continueReading, setProgressMessage, setLoading);
-      }
+      await handleQueryTasks(configurationScanContext.queryTasks, continueReading, setLoading);
 
       const exceptionGroup = await fetchCustomObjects(setExceptionGroups, setCustomFrameworks);
 
@@ -159,12 +145,16 @@ export default function ComplianceView(): JSX.Element {
 
       {!loading && (
         <Stack direction="row" spacing={2}>
-          {configurationScanContext.continuation !== undefined && (
+          {configurationScanContext.queryTasks.some(task => task.continuation !== undefined) && (
             <Button
               onClick={() => {
                 setTimeout(() => {
                   continueReading.current = true;
-                  fetchWorkloadScanData(continueReading, setProgressMessage, setLoading);
+                  handleQueryTasks(
+                    configurationScanContext.queryTasks,
+                    continueReading,
+                    setLoading
+                  );
                 });
               }}
               variant="contained"
@@ -405,32 +395,6 @@ function makeResultsLabel(workloadScanData: WorkloadConfigurationScanSummary[], 
   }
 }
 
-async function fetchWorkloadScanData(
-  continueReading: React.MutableRefObject<boolean>,
-  setProgress: (progress: string) => void,
-  setLoading: (loading: boolean) => void
-): Promise<void> {
-  while (continueReading.current && configurationScanContext.continuation !== undefined) {
-    setLoading(true);
-    await paginatedListQuery(
-      workloadConfigurationScanSummaryClass,
-      configurationScanContext.continuation,
-      pageSize,
-      getAllowedNamespaces()
-    ).then(response => {
-      const { items, continuation } = response;
-
-      configurationScanContext.continuation = continuation;
-      configurationScanContext.workloadScans.push(...items);
-    });
-
-    if (configurationScanContext.continuation !== undefined) {
-      setProgress(`Reading ${configurationScanContext.workloadScans.length} scans...`);
-    }
-  }
-  setLoading(false);
-}
-
 function ExceptionsDropdown(
   props: Readonly<{
     exceptionGroups: ExceptionPolicyGroup[];
@@ -506,4 +470,41 @@ async function fetchCustomObjects(
   setCustomFrameworks(customFrameworks);
 
   return customExceptions.find(eg => eg.name === kubescapeConfigStore.get().exceptionGroupName);
+}
+
+function initQueryTasks(
+  clusters: string[],
+  setProgressMessage: React.Dispatch<React.SetStateAction<string>>
+) {
+  // remove queryTask and data from clusters that are no more selected or where allowed namespaces are changed
+  for (const queryTask of configurationScanContext.queryTasks) {
+    if (clusters.indexOf(queryTask.cluster) === -1 || isAllowedNamespaceUpdated(queryTask)) {
+      configurationScanContext.queryTasks.splice(
+        configurationScanContext.queryTasks.indexOf(queryTask),
+        1
+      );
+      configurationScanContext.workloadScans = configurationScanContext.workloadScans.filter(
+        scan => scan.metadata.cluster !== queryTask.cluster
+      );
+    }
+  }
+
+  // add queryTask for new selected clusters
+  for (const cluster of clusters) {
+    if (!configurationScanContext.queryTasks.find(q => q.cluster === cluster)) {
+      console.log(`new query task for scans for ${cluster}`);
+
+      configurationScanContext.queryTasks.push({
+        cluster: cluster,
+        allowedNamespaces: getAllowedNamespaces(cluster),
+        continuation: 0,
+        objectClass: workloadConfigurationScanSummaryClass,
+        pageSize: pageSize,
+        handleData: (queryTask: QueryTask, items: any[]) => {
+          configurationScanContext.workloadScans.push(...items);
+          setProgressMessage(`Reading ${configurationScanContext.workloadScans.length} scans...`);
+        },
+      });
+    }
+  }
 }

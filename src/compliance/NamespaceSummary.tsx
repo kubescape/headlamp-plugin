@@ -66,6 +66,7 @@ function ConfigurationScans(props: Readonly<{ namespace: string }>) {
               params={{
                 name: cell.row.original.metadata.name,
                 namespace: cell.row.original.metadata.namespace,
+                cluster: cell.row.original.metadata.cluster,
               }}
             >
               {cell.getValue()}

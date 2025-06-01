@@ -1,15 +1,9 @@
 import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
-import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
+import { QueryTask } from '../query';
 
-export function isNewClusterContext(context: {
-  currentCluster: string;
-  allowedNamespaces: string[];
-}) {
+export function isAllowedNamespaceUpdated(queryTask: QueryTask) {
   const arraysEqual = (a: string[], b: string[]) =>
     a.length === b.length && a.every((element, index) => element === b[index]);
 
-  return (
-    context.currentCluster !== getCluster() || // check if user switched to another cluster
-    !arraysEqual(getAllowedNamespaces(), context.allowedNamespaces) // check if user changed namespace selection
-  );
+  return !arraysEqual(queryTask.allowedNamespaces, getAllowedNamespaces(queryTask.cluster));
 }

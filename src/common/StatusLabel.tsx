@@ -6,23 +6,20 @@ export interface StatusLabelProps {
   [otherProps: string]: any;
 }
 
-export function StatusLabel(props: StatusLabelProps) {
+export function StatusLabel(props: Readonly<StatusLabelProps>) {
   const { status, ...other } = props;
   const theme = useTheme();
 
-  const statuses = ['success', 'warning', 'error'];
-
-  // Assign to a status color if it exists.
-  const bgColor = statuses.includes(status)
-    ? theme.palette[status].light
-    : theme.palette.normalEventBg;
-  const color =
-    /* statuses.includes(status) ? theme.palette[status].main : */ theme.palette.text.primary;
+  const palette =
+    status && Object.keys(theme.palette).some(key => key === status)
+      ? theme.palette[status]
+      : theme.palette.primary;
 
   return (
     <Typography
       sx={{
-        color: theme.palette.primary.contrastText,
+        backgroundColor: palette.main,
+        color: palette.contrastText,
         fontSize: theme.typography.pxToRem(14),
         paddingLeft: theme.spacing(1),
         paddingRight: theme.spacing(1),
@@ -32,10 +29,6 @@ export function StatusLabel(props: StatusLabelProps) {
         alignItems: 'normal',
         gap: theme.spacing(0.5),
         borderRadius: theme.spacing(0.5),
-      }}
-      style={{
-        backgroundColor: bgColor,
-        color,
       }}
       component="span"
       {...other}

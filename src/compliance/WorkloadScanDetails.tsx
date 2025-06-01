@@ -5,12 +5,11 @@ import {
   Link as HeadlampLink,
   NameValueTable,
   SectionBox,
-  StatusLabel,
-  StatusLabelProps,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Link } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { getURLSegments } from '../common/url';
 import { RoutingName } from '../index';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
@@ -19,29 +18,32 @@ import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfig
 import { configurationScanContext } from './Compliance';
 
 export default function KubescapeWorkloadConfigurationScanDetails() {
-  const [name, namespace] = getURLSegments(-1, -2);
+  const [name, namespace, cluster] = getURLSegments(-1, -2, -3);
   const [configurationScan, setConfigurationScan] = useState<WorkloadConfigurationScan | null>(
     null
   );
 
   useEffect(() => {
-    fetchObject(name, namespace, workloadConfigurationScanClass).then(
+    fetchObject(name, namespace, cluster, workloadConfigurationScanClass).then(
       (result: WorkloadConfigurationScan) => {
-        const workloadConfigurationScanSummary = configurationScanContext.workloadScans.find(
-          w =>
-            w.metadata.name === result.metadata.name &&
-            w.metadata.namespace === result.metadata.namespace
-        );
+        if (result) {
+          result.metadata.cluster = cluster;
+          const workloadConfigurationScanSummary = configurationScanContext.workloadScans.find(
+            w =>
+              w.metadata.name === result.metadata.name &&
+              w.metadata.namespace === result.metadata.namespace
+          );
 
-        if (workloadConfigurationScanSummary) {
-          result.exceptedByPolicy = workloadConfigurationScanSummary.exceptedByPolicy;
-          Object.values(result.spec.controls).forEach(control => {
-            control.exceptedByPolicy = Object.values(
-              workloadConfigurationScanSummary.spec.controls
-            ).some(scan => scan.controlID === control.controlID && scan.exceptedByPolicy);
-          });
+          if (workloadConfigurationScanSummary) {
+            result.exceptedByPolicy = workloadConfigurationScanSummary.exceptedByPolicy;
+            Object.values(result.spec.controls).forEach(control => {
+              control.exceptedByPolicy = Object.values(
+                workloadConfigurationScanSummary.spec.controls
+              ).some(scan => scan.controlID === control.controlID && scan.exceptedByPolicy);
+            });
+          }
+          setConfigurationScan(result);
         }
-        setConfigurationScan(result);
       }
     );
   }, []);
@@ -61,6 +63,10 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
             {
               name: 'Namespace',
               value: configurationScan.metadata.labels['kubescape.io/workload-namespace'],
+            },
+            {
+              name: 'Cluster',
+              value: configurationScan.metadata.cluster,
             },
             {
               name: 'Kind',

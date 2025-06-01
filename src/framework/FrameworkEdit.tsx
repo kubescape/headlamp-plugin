@@ -1,12 +1,7 @@
 import { Icon } from '@iconify/react';
 import { K8s } from '@kinvolk/headlamp-plugin/lib';
 import { ApiError, post, put } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
-import {
-  NameValueTable,
-  SectionBox,
-  StatusLabel,
-  StatusLabelProps,
-} from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { NameValueTable, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeConfigMap } from '@kinvolk/headlamp-plugin/lib/k8s/configMap';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import {
@@ -41,6 +36,7 @@ import { ErrorMessage } from '../common/ErrorMessage';
 import { saveToFile } from '../common/filedialog';
 import { getKubescapePluginUrl } from '../common/PluginHelper';
 import { getItemFromSessionStorage, KubescapeSettings } from '../common/sessionStorage';
+import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { getURLSegments } from '../common/url';
 import { complianceSeverity } from '../compliance/Compliance';
 import { checkUniqueness } from '../custom-objects/api-queries';
@@ -362,7 +358,7 @@ function Controls(
               sx={{
                 width: `5%`,
                 verticalAlign: 'middle',
-                backgroundColor: theme.palette.metadataBgColor,
+                backgroundColor: theme.palette.background.default,
               }}
             >
               <Checkbox
@@ -428,7 +424,7 @@ function HeaderCell(
       sx={{
         width: `${width}`,
         verticalAlign: 'middle',
-        backgroundColor: theme.palette.metadataBgColor,
+        backgroundColor: theme.palette.background.default,
         color: 'white',
         cursor: 'pointer',
       }}

@@ -6,6 +6,7 @@ import {
   NameValueTable,
   SectionBox,
   Table,
+  TableColumn,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { FormControlLabel, Link, Switch } from '@mui/material';
 import { useSnackbar } from 'notistack';
@@ -14,7 +15,7 @@ import { makeNamespaceLink } from '../common/Namespace';
 import { KubescapeSettings, useSessionStorage } from '../common/sessionStorage';
 import { getLastURLSegment } from '../common/url';
 import { mutateControlException } from '../exceptions/mutate-exception';
-import { RoutingName } from '../index';
+import { RoutingName, useHLSelectedClusters } from '../index';
 import { Control, controls } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';
@@ -22,6 +23,8 @@ import { configurationScanContext } from './Compliance';
 export default function KubescapeControlResults() {
   const { enqueueSnackbar } = useSnackbar();
   const controlID = getLastURLSegment();
+  const clusters = useHLSelectedClusters();
+
   const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] =
     useSessionStorage<boolean>(KubescapeSettings.FailedControls, true);
   const [resourceList, setResourceList] = useState<WorkloadConfigurationScanSummary[]>(
@@ -132,6 +135,7 @@ export default function KubescapeControlResults() {
                   params={{
                     name: cell.row.original.metadata.name,
                     namespace: cell.row.original.metadata.namespace,
+                    cluster: cell.row.original.metadata.cluster,
                   }}
                 >
                   {cell.getValue()}
@@ -151,6 +155,12 @@ export default function KubescapeControlResults() {
                 workloadScan.metadata.labels['kubescape.io/workload-namespace'],
               Cell: ({ cell }: any) => (cell.getValue() ? makeNamespaceLink(cell.getValue()) : ''),
             },
+            clusters.length > 1
+              ? {
+                  header: 'Cluster',
+                  accessorKey: 'metadata.cluster',
+                }
+              : ({} as TableColumn<WorkloadConfigurationScanSummary>),
             {
               header: 'Excluded',
               accessorFn: (workloadScan: WorkloadConfigurationScanSummary) =>
@@ -189,6 +199,7 @@ export default function KubescapeControlResults() {
                     params={{
                       name: workloadScan.metadata.name,
                       namespace: workloadScan.metadata.namespace,
+                      cluster: workloadScan.metadata.cluster,
                       control: control.controlID,
                     }}
                   >

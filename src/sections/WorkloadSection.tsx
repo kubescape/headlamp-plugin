@@ -53,7 +53,9 @@ function KubescapeInfo(props: Readonly<{ resource: KubeObject }>) {
   const scanName = `${kind.toLowerCase()}-${resourceName.toLowerCase()}`;
   const [vulnerabilityScans, setVulnerabilityScans] = useState<Array<KubeObject> | null>(null);
 
-  const [configurationScan] = workloadConfigurationScanSummaryClass.useGet(scanName, namespace);
+  const [configurationScan] = workloadConfigurationScanSummaryClass.useGet(scanName, namespace, {
+    cluster: resource.cluster,
+  });
 
   const manifestNames: string[] = [];
   for (const container of resource.jsonData.spec.template.spec.containers) {
@@ -67,7 +69,9 @@ function KubescapeInfo(props: Readonly<{ resource: KubeObject }>) {
 
   useEffect(() => {
     Promise.all(
-      manifestNames.map(name => fetchObject(name, namespace, vulnerabilityManifestSummaryClass))
+      manifestNames.map(name =>
+        fetchObject(name, namespace, resource.cluster, vulnerabilityManifestSummaryClass)
+      )
     ).then((results: any[]) => setVulnerabilityScans(results));
   }, []);
 

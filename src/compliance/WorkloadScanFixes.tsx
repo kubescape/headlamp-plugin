@@ -2,6 +2,7 @@
   Show fix suggestion for a workload. 
 */
 import { K8s } from '@kinvolk/headlamp-plugin/lib';
+import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import { NameValueTable, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { DiffEditor } from '@monaco-editor/react';
 import { Link } from '@mui/material';
@@ -9,17 +10,19 @@ import * as yaml from 'js-yaml';
 import { cloneDeep } from 'lodash';
 import { useEffect, useState } from 'react';
 import { getURLSegments } from '../common/url';
-import { fetchObject, proxyRequest, workloadConfigurationScanClass } from '../model';
+import { fetchObject, workloadConfigurationScanClass } from '../model';
 import { controls } from '../rego';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
 
 export default function KubescapeWorkloadConfigurationScanFixes() {
-  const [controlID, name, namespace] = getURLSegments(-1, -2, -3);
+  const [controlID, name, namespace, cluster] = getURLSegments(-1, -2, -3, -5);
+
+  console.log(controlID, name, namespace, cluster);
   const [workloadConfigurationScan, setWorkloadConfigurationScan] =
     useState<WorkloadConfigurationScan | null>(null);
 
   useEffect(() => {
-    fetchObject(name, namespace, workloadConfigurationScanClass).then(
+    fetchObject(name, namespace, cluster, workloadConfigurationScanClass).then(
       (result: WorkloadConfigurationScan) => {
         setWorkloadConfigurationScan(result);
       }
@@ -88,14 +91,15 @@ export default function KubescapeWorkloadConfigurationScanFixes() {
         />
       </SectionBox>
 
-      {fixes(workloadConfigurationScan, controlID)}
+      {fixes(workloadConfigurationScan, controlID, cluster)}
     </>
   );
 }
 
 function fixes(
   workloadConfigurationScan: WorkloadConfigurationScan,
-  controlID: string
+  controlID: string,
+  cluster: string
 ): JSX.Element[] {
   const fixes: JSX.Element[] = [];
   const control = Object.values(workloadConfigurationScan.spec.controls).find(
@@ -109,10 +113,12 @@ function fixes(
   const labels = workloadConfigurationScan.metadata.labels;
   const primaryFix = (
     <Fix
+      key="primary-fix"
       control={control}
       kind={labels['kubescape.io/workload-kind']}
       name={labels['kubescape.io/workload-name']}
       namespace={labels['kubescape.io/workload-namespace']}
+      cluster={cluster}
     />
   );
   if (primaryFix) {
@@ -122,10 +128,12 @@ function fixes(
     workloadConfigurationScan.spec.relatedObjects.forEach((obj, index) => {
       const fix = (
         <Fix
+          key={`fix-${index}`}
           control={control}
           kind={obj.kind}
           name={obj.name}
           namespace={obj.namespace}
+          cluster={cluster}
           rulePathPrefix={`relatedObjects[${index}].`}
         />
       );
@@ -144,10 +152,11 @@ function Fix(
     kind: string;
     name: string;
     namespace: string;
+    cluster: string;
     rulePathPrefix?: string; // to filter rules for relatedObjects
   }>
 ) {
-  const { control, kind, name, namespace, rulePathPrefix } = props;
+  const { control, kind, name, namespace, cluster, rulePathPrefix } = props;
   const [resource, setResource] = useState<any>(null);
 
   useEffect(() => {
@@ -158,12 +167,14 @@ function Fix(
       return;
     }
 
-    proxyRequest(
-      name,
-      kubeObjectClass.isNamespaced ? namespace : '',
-      kubeObjectClass.apiEndpoint.apiInfo[0].group,
-      kubeObjectClass.apiEndpoint.apiInfo[0].version,
-      kubeObjectClass.pluralName
+    console.log('CLUSTER', cluster);
+    request(
+      `/apis/${kubeObjectClass.apiEndpoint.apiInfo[0].group}/${
+        kubeObjectClass.apiEndpoint.apiInfo[0].version
+      }/${namespace ? 'namespaces/' : ''}${namespace}/${kubeObjectClass.pluralName}/${name}`,
+      {
+        cluster: cluster,
+      }
     ).then((result: any) => {
       setResource(result);
     });
