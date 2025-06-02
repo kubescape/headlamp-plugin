@@ -48,6 +48,7 @@ import { customObjectLabel, workloadConfigurationScanSummaryClass } from '../mod
 import { handleListPaginationTasks as handleQueryTasks, QueryTask } from '../query';
 import { Control, controls, fitControlsToFrameworks, FrameWork, frameworks } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
+import ClusterView from './ClusterView';
 import { FrameworkButtons } from './FrameworkButtons';
 import NamespaceView from './NamespaceView';
 import KubescapeWorkloadConfigurationScanList from './ResourceList';
@@ -230,6 +231,15 @@ export default function ComplianceView(): JSX.Element {
                   <NamespaceView
                     workloadScanData={workloadScanData}
                     setWorkloadScanData={setWorkloadScanData}
+                  />
+                ),
+              },
+              {
+                label: 'Clusters',
+                component: (
+                  <ClusterView
+                    workloadScanData={workloadScanData}
+                    customFrameworks={customFrameworks}
                   />
                 ),
               },
