@@ -181,7 +181,8 @@ function NodeLog(props: Readonly<{ nodeAgent: Pod; setNodeAgentAlerts: any }>) {
     let callback: any = null;
     const nodeName = nodeAgent.jsonData.metadata.name;
 
-    function setlogChunks(lines: string[]) {
+    function setlogChunks(result: { logs: string[]; hasJsonLogs: boolean }) {
+      const lines = result.logs;
       const nodeAgentAlerts = parseLogChunks(nodeName, lines).filter(
         line => line.BaseRuntimeMetadata
       );
