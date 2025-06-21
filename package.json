@@ -33,7 +33,7 @@
     "@kinvolk/headlamp-plugin": "^0.12.0"
   },
   "dependencies": {
-    "@dagrejs/dagre": "^1.1.4",
+    "@dagrejs/dagre": "^1.1.5",
     "@xyflow/react": "^12.6.4"
   },
   "overrides": {
