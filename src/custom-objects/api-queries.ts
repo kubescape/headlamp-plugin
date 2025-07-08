@@ -41,7 +41,7 @@ export async function getKubescapeNamespace() {
   const queryParams = new URLSearchParams();
   queryParams.append(
     'labelSelector',
-    'app.kubernetes.io/name=kubescape-operator,app.kubernetes.io/instance=kubescape'
+    'app.kubernetes.io/name=kubescape-operator,app.kubernetes.io/component=kubescape'
   );
   const response = await request(`api/v1/pods?${queryParams.toString()}`);
   namespace = response.items[0]?.metadata?.namespace;
