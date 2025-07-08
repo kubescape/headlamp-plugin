@@ -15,7 +15,6 @@ import {
   FormControl,
   FormControlLabel,
   InputLabel,
-  Link,
   MenuItem,
   OutlinedInput,
   Select,
@@ -287,9 +286,7 @@ function ConfigurationScanningListView(
                   control: cell.getValue(),
                 }}
               >
-                <div>
-                  {cell.getValue()}
-                </div>
+                <div>{cell.getValue()}</div>
               </HeadlampLink>
             ),
             gridTemplate: 'auto',
