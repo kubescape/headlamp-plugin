@@ -281,12 +281,16 @@ function ConfigurationScanningListView(
             header: 'ID',
             accessorKey: 'controlID',
             Cell: ({ cell }: any) => (
-              <Link
-                target="_blank"
-                href={'https://hub.armosec.io/docs/' + cell.getValue().toLowerCase()}
+              <HeadlampLink
+                routeName={RoutingName.KubescapeControlResults}
+                params={{
+                  control: cell.getValue(),
+                }}
               >
-                <div>{cell.getValue()}</div>
-              </Link>
+                <div>
+                  {cell.getValue()}
+                </div>
+              </HeadlampLink>
             ),
             gridTemplate: 'auto',
           },
