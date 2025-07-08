@@ -405,7 +405,7 @@ function makeResultsLabel(workloadScanData: WorkloadConfigurationScanSummary[], 
       </HeadlampLink>
     );
   } else {
-    return failCount;
+    return passedCount;
   }
 }
 
