@@ -28,7 +28,7 @@ export async function checkUniqueness(name: string, uid: string | undefined, cus
  * Return the namespace of the Kubescape operator.
  * The namespace is read from SessionStorage. If not found,
  * it is determined by looking for a pod with labels
- * app.kubernetes.io/name=kubescape-operator and app.kubernetes.io/instance=kubescape.
+ * app.kubernetes.io/name=kubescape-operator and app.kubernetes.io/component=kubescape.
  * @returns An object with a namespace and an error.
  *          If the namespace is found, the error is null.
  *          If the namespace is not found, the error is "Kubescape operator namespace not found."
