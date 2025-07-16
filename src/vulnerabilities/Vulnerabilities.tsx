@@ -13,6 +13,7 @@ import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { Box, Button, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { isAllowedNamespaceUpdated } from '../common/clusterContext';
+import { KubescapeConfig, kubescapeConfigStore } from '../common/config-store';
 import { ErrorMessage } from '../common/ErrorMessage';
 import { ProgressIndicator } from '../common/ProgressIndicator';
 import {
@@ -29,8 +30,6 @@ import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManif
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
 import ImageListView from './ImageList';
 import WorkloadScanListView from './ResourceList';
-
-const pageSize: number = 50;
 
 // WorkloadScan is derived from VulnerabilityManifestSummary
 export interface WorkloadScan {
@@ -80,6 +79,9 @@ export const vulnerabilityContext: VulnerabilityContext = {
 };
 
 export default function KubescapeVulnerabilities() {
+  const pluginConfig = kubescapeConfigStore.useConfig();
+  const kubescapeConfig = pluginConfig() as KubescapeConfig;
+
   const [workloadScanData, setWorkloadScanData] = useState<WorkloadScan[] | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [progressMessage, setProgressMessage] = useState('Reading Kubescape scans');
@@ -89,7 +91,7 @@ export default function KubescapeVulnerabilities() {
 
   useEffect(() => {
     const fetchData = async () => {
-      initQueryTasks(clusters, setProgressMessage);
+      initQueryTasks(clusters, setProgressMessage, kubescapeConfig);
 
       await handleListPaginationTasks(vulnerabilityContext.queryTasks, continueReading, setLoading);
 
@@ -353,7 +355,8 @@ function getCVEList(workloadScans: WorkloadScan[]): CVEScan[] {
 
 async function initQueryTasks(
   clusters: string[],
-  setProgressMessage: React.Dispatch<React.SetStateAction<string>>
+  setProgressMessage: React.Dispatch<React.SetStateAction<string>>,
+  kubescapeConfig: KubescapeConfig
 ) {
   const storeVulnerabilityManifests = (task: QueryTask, items: VulnerabilityManifest[]) => {
     for (const v of items) {
@@ -434,7 +437,7 @@ async function initQueryTasks(
         cluster: cluster,
         allowedNamespaces: getAllowedNamespaces(cluster),
         continuation: 0,
-        pageSize: pageSize,
+        pageSize: kubescapeConfig?.pageSize || 50,
       };
       vulnerabilityContext.queryTasks.push({
         ...task,

@@ -59,8 +59,6 @@ import {
   hasFailedScans,
 } from './workload-scanning';
 
-const pageSize: number = 50;
-
 // workloadScans are cached in global scope because it is an expensive query for the API server
 type ConfigurationScanContext = {
   workloadScans: WorkloadConfigurationScanSummary[];
@@ -119,7 +117,7 @@ export default function ComplianceView(): JSX.Element {
   // fetch workload scans
   useEffect(() => {
     async function fetchData() {
-      initQueryTasks(clusters, setProgressMessage);
+      initQueryTasks(clusters, setProgressMessage, kubescapeConfig);
 
       await handleQueryTasks(configurationScanContext.queryTasks, continueReading, setLoading);
 
@@ -485,7 +483,8 @@ async function fetchCustomObjects(
 
 function initQueryTasks(
   clusters: string[],
-  setProgressMessage: React.Dispatch<React.SetStateAction<string>>
+  setProgressMessage: React.Dispatch<React.SetStateAction<string>>,
+  kubescapeConfig: KubescapeConfig
 ) {
   // remove queryTask and data from clusters that are no more selected or where allowed namespaces are changed
   for (const queryTask of configurationScanContext.queryTasks) {
@@ -510,7 +509,7 @@ function initQueryTasks(
         allowedNamespaces: getAllowedNamespaces(cluster),
         continuation: 0,
         objectClass: workloadConfigurationScanSummaryClass,
-        pageSize: pageSize,
+        pageSize: kubescapeConfig?.pageSize || 50,
         handleData: (queryTask: QueryTask, items: any[]) => {
           configurationScanContext.workloadScans.push(...items);
           setProgressMessage(`Reading ${configurationScanContext.workloadScans.length} scans...`);

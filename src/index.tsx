@@ -4,6 +4,7 @@
 import {
   // @ts-ignore
   registerDetailsViewSectionsProcessor,
+  registerPluginSettings,
   registerRoute,
   registerSidebarEntry,
 } from '@kinvolk/headlamp-plugin/lib';
@@ -366,3 +367,9 @@ registerDetailsViewSectionsProcessor(addKubescapeWorkloadSection);
 import addKubescapeNamespaceSection from './sections/NamespaceSection';
 
 registerDetailsViewSectionsProcessor(addKubescapeNamespaceSection);
+
+// Register plugin settings
+import { PLUGIN_NAME } from './common/config-store';
+import { KubescapeSettings } from './common/Settings';
+
+registerPluginSettings(PLUGIN_NAME, KubescapeSettings, true);
