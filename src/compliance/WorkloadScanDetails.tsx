@@ -111,7 +111,7 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
               return (
                 <Link
                   target="_blank"
-                  href={'https://hub.armosec.io/docs/' + cell.getValue().toLowerCase()}
+                  href={'https://kubescape.io/docs/controls/' + cell.getValue().toLowerCase()}
                 >
                   {cell.getValue()}
                 </Link>

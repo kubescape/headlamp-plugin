@@ -90,7 +90,7 @@ Start headlamp desktop, load the kubeconfig from the kind cluster. For the runti
 
 ## Dependencies
 
-- The plugin depends on documentation of configuration scanning in [Kubescape User Hub](https://hub.armosec.io/docs/controls).
+- The plugin depends on documentation of configuration scanning in [Kubescape User Hub](https://kubescape.io/docs/controls/).
 - The plugin depends on JSON documentation in the [kubescape regolibrary](https://github.com/kubescape/regolibrary/releases/download/v2/controls/). The [control libary](./src/ConfigurationScanning/controlLibrary.js) is copied for use in the plugin code.
 
 ## Contributing and Feedback
