@@ -87,9 +87,9 @@ export default function KubescapeControlResults() {
               value: (
                 <Link
                   target="_blank"
-                  href={'https://hub.armosec.io/docs/' + controlID.toLowerCase()}
+                  href={'https://kubescape.io/docs/controls/' + controlID.toLowerCase()}
                 >
-                  https://hub.armosec.io/docs/{controlID.toLowerCase()}
+                  https://kubescape.io/docs/controls/{controlID.toLowerCase()}
                 </Link>
               ),
             },

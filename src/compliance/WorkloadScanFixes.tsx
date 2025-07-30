@@ -57,7 +57,7 @@ export default function KubescapeWorkloadConfigurationScanFixes() {
               value: (
                 <Link
                   target="_blank"
-                  href={'https://hub.armosec.io/docs/' + control?.controlID.toLowerCase()}
+                  href={'https://kubescape.io/docs/controls/' + control?.controlID.toLowerCase()}
                 >
                   {control?.controlID} {control?.name}
                 </Link>

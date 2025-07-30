@@ -36,7 +36,7 @@ export function FrameworkControls() {
             Cell: ({ cell }: any) => (
               <Link
                 target="_blank"
-                href={'https://hub.armosec.io/docs/' + cell.getValue().toLowerCase()}
+                href={'https://kubescape.io/docs/controls/' + cell.getValue().toLowerCase()}
               >
                 <div>{cell.getValue()}</div>
               </Link>
