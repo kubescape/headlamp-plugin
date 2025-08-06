@@ -45,7 +45,14 @@ import { ExceptionPolicy, ExceptionPolicyGroup } from '../exceptions/ExceptionPo
 import { RoutingName, useHLSelectedClusters } from '../index';
 import { customObjectLabel, workloadConfigurationScanSummaryClass } from '../model';
 import { handleListPaginationTasks as handleQueryTasks, QueryTask } from '../query';
-import { Control, controls, fitControlsToFrameworks, FrameWork, frameworks } from '../rego';
+import {
+  Control,
+  controls,
+  fitControlsToFrameworks,
+  FrameWork,
+  frameworks,
+  fullRegolibraryFramework,
+} from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import ClusterView from './ClusterView';
 import { FrameworkButtons } from './FrameworkButtons';
@@ -104,7 +111,7 @@ export default function ComplianceView(): JSX.Element {
   const framework =
     frameworks.find(fw => fw.name === kubescapeConfig?.framework) ??
     customFrameworks?.find(fw => fw.name === kubescapeConfig?.framework) ??
-    frameworks[0];
+    fullRegolibraryFramework;
 
   // kubescape namespace
   useEffect(() => {

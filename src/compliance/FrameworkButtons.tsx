@@ -84,6 +84,7 @@ export function FrameworkButtons(
           name="row-radio-buttons-group"
           onChange={frameworkChange}
         >
+          <FormControlLabel value="" control={<Radio />} label="Show all" />
           {labels}
         </RadioGroup>
       </FormControl>
