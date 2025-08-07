@@ -30,8 +30,9 @@ export function FrameworkButtons(
     kubescapeConfigStore.update({ framework: value });
   }
 
+  const activeFrameworks = kubescapeConfigStore.get().activeFrameworks as string[];
   const selectedFrameworkNames =
-    (kubescapeConfigStore.get().activeFrameworks as string[]) ?? defaultFrameworkNames;
+    activeFrameworks && activeFrameworks.length > 0 ? activeFrameworks : defaultFrameworkNames;
 
   const labels: JSX.Element[] = [];
 
