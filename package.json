@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.5",
-    "@xyflow/react": "^12.8.2"
+    "@xyflow/react": "^12.8.3"
   },
   "overrides": {
     "typescript": "5.8.2"
