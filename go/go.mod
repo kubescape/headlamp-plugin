@@ -3,7 +3,7 @@ module admission-policy-wasm
 go 1.24.1
 
 require (
-	github.com/google/cel-go v0.26.0
+	github.com/google/cel-go v0.26.1
 	google.golang.org/protobuf v1.36.8
 	sigs.k8s.io/yaml v1.6.0
 )
