@@ -2,7 +2,11 @@ name: Kubescape-headlamp-plugin linting, type checking, testing, and pre-release
 
 on:
   push:
-    branches: ['*']
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
 
 permissions:
   contents: write
