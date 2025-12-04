@@ -27,7 +27,7 @@ readme: |
   The Kubescape Headlamp plugin provides an open source plugin for Headlamp.
 
   [Kubescape](https://kubescape.io/docs/operator/) is a security platform protecting against configuration issues and image vulnerabilities.
-  [Headlamp](https://kubescape.io/) is a dashboard for Kubernetes, and is extensible with plugins. 
+  [Headlamp](https://headlamp.dev/) is a dashboard for Kubernetes, and is extensible with plugins. 
 
   The Kubescape Headlamp plugin provides views in Headlamp for configuration and vulnerabilities scanning, based on information delivered by the Kubescape operator.
 
