@@ -17,6 +17,8 @@ export const vulnerabilityManifestClass = makeCustomResourceClass({
   isNamespaced: true,
   singularName: 'vulnerabilitymanifest',
   pluralName: 'vulnerabilitymanifests',
+  kind: 'VulnerabilityManifest',
+  customResourceDefinition: undefined as any,
 });
 
 export const vulnerabilityManifestSummaryClass = makeCustomResourceClass({
@@ -24,6 +26,8 @@ export const vulnerabilityManifestSummaryClass = makeCustomResourceClass({
   isNamespaced: true,
   singularName: 'vulnerabilitymanifestsummary',
   pluralName: 'vulnerabilitymanifestsummaries',
+  kind: 'VulnerabilityManifestSummary',
+  customResourceDefinition: undefined as any,
 });
 
 export const vulnerabilitySummaryClass = makeCustomResourceClass({
@@ -31,6 +35,8 @@ export const vulnerabilitySummaryClass = makeCustomResourceClass({
   isNamespaced: false,
   singularName: 'vulnerabilitysummary',
   pluralName: 'vulnerabilitysummaries',
+  kind: 'VulnerabilitySummary',
+  customResourceDefinition: undefined as any,
 });
 
 export const openVulnerabilityExchangeContainerClass = makeCustomResourceClass({
@@ -38,6 +44,8 @@ export const openVulnerabilityExchangeContainerClass = makeCustomResourceClass({
   isNamespaced: true, // kubescape
   singularName: 'openvulnerabilityexchangecontainer',
   pluralName: 'openvulnerabilityexchangecontainers',
+  kind: 'OpenVulnerabilityExchangeContainer',
+  customResourceDefinition: undefined as any,
 });
 
 export const workloadConfigurationScanSummaryClass = makeCustomResourceClass({
@@ -45,6 +53,8 @@ export const workloadConfigurationScanSummaryClass = makeCustomResourceClass({
   isNamespaced: true,
   singularName: 'workloadconfigurationscansummary',
   pluralName: 'workloadconfigurationscansummaries',
+  kind: 'WorkloadConfigurationScanSummary',
+  customResourceDefinition: undefined as any,
 });
 
 export const workloadConfigurationScanClass = makeCustomResourceClass({
@@ -52,6 +62,8 @@ export const workloadConfigurationScanClass = makeCustomResourceClass({
   isNamespaced: true,
   singularName: 'workloadconfigurationscan',
   pluralName: 'workloadconfigurationscans',
+  kind: 'WorkloadConfigurationScan',
+  customResourceDefinition: undefined as any,
 });
 
 export const configurationScanSummariesClass = makeCustomResourceClass({
@@ -59,6 +71,8 @@ export const configurationScanSummariesClass = makeCustomResourceClass({
   isNamespaced: false,
   singularName: 'configurationscansummary',
   pluralName: 'configurationscansummaries',
+  kind: 'ConfigurationScanSummary',
+  customResourceDefinition: undefined as any,
 });
 
 export const generatedNetworkPolicyClass = makeCustomResourceClass({
@@ -66,6 +80,8 @@ export const generatedNetworkPolicyClass = makeCustomResourceClass({
   isNamespaced: true,
   singularName: 'generatednetworkpolicy',
   pluralName: 'generatednetworkpolicies',
+  kind: 'GeneratedNetworkPolicy',
+  customResourceDefinition: undefined as any,
 });
 
 export const networkNeighborhoodsClass = makeCustomResourceClass({
@@ -73,6 +89,8 @@ export const networkNeighborhoodsClass = makeCustomResourceClass({
   isNamespaced: true,
   singularName: 'networkneighborhood',
   pluralName: 'networkneighborhoods',
+  kind: 'NetworkNeighborhood',
+  customResourceDefinition: undefined as any,
 });
 
 export const sbomSyftClass = makeCustomResourceClass({
@@ -80,6 +98,8 @@ export const sbomSyftClass = makeCustomResourceClass({
   isNamespaced: true,
   singularName: 'sbomsyft',
   pluralName: 'sbomsyfts',
+  kind: 'SBOMSyft',
+  customResourceDefinition: undefined as any,
 });
 
 export const sbomSyftFilteredClass = makeCustomResourceClass({
@@ -87,6 +107,8 @@ export const sbomSyftFilteredClass = makeCustomResourceClass({
   isNamespaced: true,
   singularName: 'sbomsyftfiltered',
   pluralName: 'sbomsyftfiltereds',
+  kind: 'SBOMSyftFiltered',
+  customResourceDefinition: undefined as any,
 });
 
 export const applicationProfileClass = makeCustomResourceClass({
@@ -94,6 +116,8 @@ export const applicationProfileClass = makeCustomResourceClass({
   isNamespaced: true,
   singularName: 'applicationprofile',
   pluralName: 'applicationprofiles',
+  kind: 'ApplicationProfile',
+  customResourceDefinition: undefined as any,
 });
 
 export const knownServersClass = makeCustomResourceClass({
@@ -101,6 +125,8 @@ export const knownServersClass = makeCustomResourceClass({
   isNamespaced: true,
   singularName: 'knownserver',
   pluralName: 'knownservers',
+  kind: 'KnownServer',
+  customResourceDefinition: undefined as any,
 });
 
 export async function listQuery(objectClass: KubeObjectClass): Promise<any> {

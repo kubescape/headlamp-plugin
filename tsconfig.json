@@ -1,25 +1,11 @@
 {
   "extends": "./node_modules/@kinvolk/headlamp-plugin/config/plugins-tsconfig.json",
-  "exclude": ["./src/wasm/*"],
   "include": ["./src/**/*"],
   "compilerOptions": {
-    "allowJs": true,
-    "baseUrl": "./",
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "lib": ["dom", "dom.iterable", "esnext", "es2020"],
-    "noEmit": true,
     "noFallthroughCasesInSwitch": true,
-    "paths": {
-      "*": [""],
-      "@kinvolk/headlamp-plugin/lib/k8s/*": [
-        "node_modules/@kinvolk/headlamp-plugin/lib/lib/k8s/*/index.d.ts",
-        "node_modules/@kinvolk/headlamp-plugin/lib/lib/k8s/*.d.ts"
-      ]
-    },
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
     "strict": true,
-    "target": "ES2020"
   }
 }
