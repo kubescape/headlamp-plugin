@@ -35,6 +35,6 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
-    "@xyflow/react": "^12.10.0"
+    "@xyflow/react": "^12.10.1"
   }
 }
