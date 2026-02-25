@@ -34,7 +34,8 @@
     "@kinvolk/headlamp-plugin": "^0.13.0"
   },
   "dependencies": {
-    "@dagrejs/dagre": "^1.1.8",
+    "@dagrejs/dagre": "^2.0.4",
+    "@dagrejs/graphlib": "^2.2.4",
     "@xyflow/react": "^12.10.1"
   }
 }
