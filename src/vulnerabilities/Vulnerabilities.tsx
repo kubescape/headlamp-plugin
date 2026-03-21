@@ -392,6 +392,10 @@ async function initQueryTasks(
         imageScan: undefined,
         relevant: undefined,
       };
+
+      if (!w.name || !w.namespace) {
+        continue; // invalid summary from kubescape
+      }
       vulnerabilityContext.workloadScans.push(w);
 
       if (detailedSummary.spec.vulnerabilitiesRef?.all?.name) {
