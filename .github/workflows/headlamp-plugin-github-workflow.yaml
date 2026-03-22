@@ -1,9 +1,12 @@
-name: Kubescape-headlamp-plugin linting, type checking, testing, and pre-release
+# CI workflow for linting, type checking, testing, and building the plugin.
+# On pull requests: runs a debug build.
+# On push to main: runs a production build.
+name: Kubescape-headlamp-plugin linting, type checking, testing, and build
 
 on:
   push:
     branches:
-      - '**'
+      - main
   pull_request:
     branches:
       - '**'
@@ -22,20 +25,20 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [22.x]
-        go-version: [1.24.x]
+        node-version: [25.x]
+        go-version: [1.26.x]
         jq-version: ['1.7']
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
 
       - name: Setup Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go-version }}
 
@@ -44,11 +47,17 @@ jobs:
         with:
           version: ${{ matrix.jq-version }}
 
+      - run: npm ci
       - run: npx @kinvolk/headlamp-plugin lint .
       - run: npx @kinvolk/headlamp-plugin format --check .
       - run: npx @kinvolk/headlamp-plugin tsc .
       - run: npx @kinvolk/headlamp-plugin test .
-      - run: npx @kinvolk/headlamp-plugin build .
+      - name: Build
+        if: github.event_name == 'push'
+        run: npx @kinvolk/headlamp-plugin build .
+      - name: Build debug
+        if: github.event_name == 'pull_request'
+        run: npm run build:debug
 
       - name: Download WASM and Kubescape files
         run: |
@@ -65,13 +74,13 @@ jobs:
           tar -czf ${{ github.event.repository.name }}-latest.tar.gz kubescape-plugin
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Quay Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: quay.io/kubescape
           username: ${{ secrets.QUAYIO_REGISTRY_USERNAME }}
@@ -79,7 +88,7 @@ jobs:
 
       - name: Build and Push image with plugin files.
         id: push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           platforms: linux/amd64,linux/arm64
           context: .
