@@ -41,6 +41,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go-version }}
+          cache-dependency-path: go/go.sum
 
       - name: Setup jq
         uses: dcarbone/install-jq-action@v3
