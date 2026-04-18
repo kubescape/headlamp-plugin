@@ -54,12 +54,12 @@ jobs:
 
       - run: npm ci
 
-      - run: npx @kinvolk/headlamp-plugin build .
-
       - name: Download WASM and Kubescape files
         run: |
           mkdir -p dist 
           make download
+
+      - run: npx @kinvolk/headlamp-plugin build .
 
       - name: Build Golang WASM
         run: make build

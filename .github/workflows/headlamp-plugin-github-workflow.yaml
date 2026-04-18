@@ -47,6 +47,11 @@ jobs:
         with:
           version: ${{ matrix.jq-version }}
 
+      - name: Download WASM and Kubescape files
+        run: |
+          mkdir -p dist 
+          make download
+
       - run: npm ci
       - run: npx @kinvolk/headlamp-plugin lint .
       - run: npx @kinvolk/headlamp-plugin format --check .
@@ -58,11 +63,6 @@ jobs:
       - name: Build debug
         if: github.event_name == 'pull_request'
         run: npm run build:debug
-
-      - name: Download WASM and Kubescape files
-        run: |
-          mkdir -p dist 
-          make download
 
       - name: Build Golang WASM
         run: make build
