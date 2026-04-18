@@ -1,3 +1,5 @@
 # Ignore artifacts:
 src/wasm/*
 src/compliance/frameworks.ts
+src/rego/controls.ts
+src/rego/frameworks.ts
