@@ -73,6 +73,26 @@ jobs:
           cp package.json dist/* kubescape-plugin
           tar -czf ${{ github.event.repository.name }}-latest.tar.gz kubescape-plugin
 
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubescape-plugin
+          path: kubescape-plugin/
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.actor != 'dependabot[bot]'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download plugin artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: kubescape-plugin
+          path: kubescape-plugin/
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
 
