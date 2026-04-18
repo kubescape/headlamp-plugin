@@ -15,8 +15,10 @@ controls-download:
 	sed -i '1s/^/export const frameworks: FrameWork[] = \n/' src/rego/frameworks.ts; 
 	sed -i '1s/^/import { FrameWork } from ".\/FrameWork" \n/' src/rego/frameworks.ts; 
 	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/controls -o src/rego/controls.ts; 
-	sed -i '1s/^/export const controls: Control[] = \n/' src/rego/controls.ts; 
-	sed -i '1s/^/import { Control } from ".\/Control" \n/' src/rego/controls.ts; 
+	sed -i '1s/^/export const controls: Control[] = \n/' src/rego/controls.ts;
+	sed -i '1s/^/import { Control } from ".\/Control" \n/' src/rego/controls.ts;
+	sed -i '1s/^/\/\/ @ts-nocheck\n/' src/rego/controls.ts; \
+	sed -i '1s/^/\/\/ @ts-nocheck\n/' src/rego/frameworks.ts;
 
 wasm-download: 
 	# Download WASM exec.js 
