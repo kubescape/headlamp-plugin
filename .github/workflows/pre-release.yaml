@@ -106,7 +106,7 @@ jobs:
           commitChange: false
 
       - name: Commit artifacthub-pkg.yml
-        uses: EndBug/add-and-commit@v9
+        uses: EndBug/add-and-commit@v10
         with:
           message: Release ${{ github.event.inputs.releaseName }}
           add: |
