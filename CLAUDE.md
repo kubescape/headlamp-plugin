@@ -21,12 +21,12 @@ npm run test           # Run tests
 
 ### WASM and External Dependencies
 ```bash
-make download          # Download all external dependencies (WASM runtime, controls, test files)
-make build             # Build Go code to WASM (requires Go)
-make local             # Build and copy to local Headlamp plugins directory
-make controls-download # Download Kubescape control definitions
-make wasm-download     # Download WASM execution runtime
-make kubescape-download # Download policy and test files
+make download                              # Download all external dependencies
+make build                                 # Build Go code to WASM (requires Go)
+make local                                 # Build and copy to local Headlamp plugins directory
+make wasm-download                         # Download WASM execution runtime
+make kubescape-rego-download               # Download controls, frameworks, and rego rules
+make kubescape-cel-admission-library-download # Download CEL admission policy and test files
 ```
 
 ## Architecture Overview

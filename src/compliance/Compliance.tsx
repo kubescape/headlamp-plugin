@@ -45,14 +45,7 @@ import { ExceptionPolicy, ExceptionPolicyGroup } from '../exceptions/ExceptionPo
 import { RoutingName, useHLSelectedClusters } from '../index';
 import { customObjectLabel, workloadConfigurationScanSummaryClass } from '../model';
 import { handleListPaginationTasks as handleQueryTasks, QueryTask } from '../query';
-import {
-  Control,
-  controls,
-  fitControlsToFrameworks,
-  FrameWork,
-  frameworks,
-  fullRegolibraryFramework,
-} from '../rego';
+import { Control, FrameWork, useRegoData } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import ClusterView from './ClusterView';
 import { FrameworkButtons } from './FrameworkButtons';
@@ -77,8 +70,6 @@ export const configurationScanContext: ConfigurationScanContext = {
   queryTasks: [],
 };
 
-fitControlsToFrameworks();
-
 /**
  * Overview page for configuration controls and resources.
  *
@@ -93,6 +84,7 @@ fitControlsToFrameworks();
 export default function ComplianceView(): JSX.Element {
   const pluginConfig = kubescapeConfigStore.useConfig();
   const kubescapeConfig = pluginConfig() as KubescapeConfig;
+  const { controls, frameworks, fullRegolibraryFramework, loading: regoLoading } = useRegoData();
 
   const [workloadScanData, setWorkloadScanData] = useState<
     WorkloadConfigurationScanSummary[] | null
@@ -123,12 +115,18 @@ export default function ComplianceView(): JSX.Element {
 
   // fetch workload scans
   useEffect(() => {
+    if (regoLoading) return;
+
     async function fetchData() {
       initQueryTasks(clusters, setProgressMessage, kubescapeConfig);
 
       await handleQueryTasks(configurationScanContext.queryTasks, continueReading, setLoading);
 
-      const exceptionGroup = await fetchCustomObjects(setExceptionGroups, setCustomFrameworks);
+      const exceptionGroup = await fetchCustomObjects(
+        controls,
+        setExceptionGroups,
+        setCustomFrameworks
+      );
 
       applyExceptionsToWorkloadScanData(
         configurationScanContext.workloadScans,
@@ -142,7 +140,7 @@ export default function ComplianceView(): JSX.Element {
     return () => {
       continueReading.current = false;
     };
-  }, [kubescapeConfig]);
+  }, [kubescapeConfig, regoLoading, controls]);
 
   return (
     <>
@@ -447,6 +445,7 @@ function ExceptionsDropdown(
 }
 
 async function fetchCustomObjects(
+  controls: Control[],
   setExceptionGroups: (exceptionGroups: ExceptionPolicyGroup[]) => void,
   setCustomFrameworks: (customFrameworks: FrameWork[]) => void
 ) {

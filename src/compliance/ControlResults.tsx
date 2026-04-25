@@ -16,7 +16,7 @@ import { KubescapeSettings, useSessionStorage } from '../common/sessionStorage';
 import { getLastURLSegment } from '../common/url';
 import { mutateControlException } from '../exceptions/mutate-exception';
 import { RoutingName, useHLSelectedClusters } from '../index';
-import { Control, controls } from '../rego';
+import { Control, useRegoData } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';
 
@@ -24,6 +24,7 @@ export default function KubescapeControlResults() {
   const { enqueueSnackbar } = useSnackbar();
   const controlID = getLastURLSegment();
   const clusters = useHLSelectedClusters();
+  const { controls, loading } = useRegoData();
 
   const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] =
     useSessionStorage<boolean>(KubescapeSettings.FailedControls, true);
@@ -32,6 +33,9 @@ export default function KubescapeControlResults() {
   );
   const control = controls.find(element => element.controlID === controlID);
 
+  if (loading) {
+    return <></>;
+  }
   if (!control) {
     return <p>The control {controlID} was not found.</p>;
   }

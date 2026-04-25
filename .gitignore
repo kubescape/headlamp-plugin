@@ -1,4 +1,5 @@
 node_modules
+public
 .vscode
 dist
 v1beta1/examples 

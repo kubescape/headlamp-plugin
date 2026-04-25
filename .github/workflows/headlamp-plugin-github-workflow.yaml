@@ -25,9 +25,9 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [22.x]
+        node-version: [24.x]
         go-version: [1.26.x]
-        jq-version: ['1.7']
+        jq-version: ['1.8.1']
 
     steps:
       - uses: actions/checkout@v6
@@ -50,10 +50,9 @@ jobs:
 
       - run: npm ci
 
-      - name: Download src dependencies
-        run: |
-          mkdir -p dist
-          make wasm-download controls-download
+      - name: Download dependencies
+        run: make download
+
       - run: npx @kinvolk/headlamp-plugin lint .
       - run: npx @kinvolk/headlamp-plugin format --check .
       - run: npx @kinvolk/headlamp-plugin tsc .
@@ -65,10 +64,8 @@ jobs:
         if: github.event_name == 'pull_request'
         run: npm run build:debug
 
-      - name: Download dist files and build Golang WASM
-        run: |
-          make kubescape-download
-          make build
+      - name: Build Golang WASM
+        run: make build
 
       - name: Create Plugin Archive
         run: |

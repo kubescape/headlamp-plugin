@@ -4,10 +4,11 @@ import { useState } from 'react';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { getURLSegments } from '../common/url';
 import { complianceSeverity } from '../compliance/Compliance';
-import { Control, frameworks } from '../rego';
+import { Control, useRegoData } from '../rego';
 
 export function FrameworkControls() {
   const [frameworkName] = getURLSegments(-2);
+  const { frameworks } = useRegoData();
   const framework = frameworks.find(framework => framework.name === frameworkName);
   const controls = framework?.controls ?? [];
 

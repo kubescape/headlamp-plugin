@@ -11,11 +11,12 @@ import { cloneDeep } from 'lodash';
 import { useEffect, useState } from 'react';
 import { getURLSegments } from '../common/url';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
-import { controls } from '../rego';
+import { useRegoData } from '../rego';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
 
 export default function KubescapeWorkloadConfigurationScanFixes() {
   const [controlID, name, namespace, cluster] = getURLSegments(-1, -2, -3, -5);
+  const { controls } = useRegoData();
 
   console.log(controlID, name, namespace, cluster);
   const [workloadConfigurationScan, setWorkloadConfigurationScan] =
