@@ -54,15 +54,17 @@ jobs:
 
       - run: npm ci
 
-      - name: Download WASM and Kubescape files
+      - name: Download src dependencies
         run: |
-          mkdir -p dist 
-          make download
+          mkdir -p dist
+          make wasm-download controls-download
 
       - run: npx @kinvolk/headlamp-plugin build .
 
-      - name: Build Golang WASM
-        run: make build
+      - name: Download dist files and build Golang WASM
+        run: |
+          make kubescape-download
+          make build
 
       - name: release date
         run: echo "RELEASE_DATE=$(date +'%Y-%m-%dT%H:%M:%SZ')" >> ${GITHUB_ENV}
