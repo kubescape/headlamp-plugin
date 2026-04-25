@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import React from 'react';
 import { kubescapeConfigStore } from '../common/config-store';
-import { defaultFrameworkNames, FrameWork, frameworks } from '../rego';
+import { defaultFrameworkNames, FrameWork, useRegoData } from '../rego';
 import { configurationScanContext } from './Compliance';
 import { frameworkComplianceScore } from './workload-scanning';
 
@@ -26,6 +26,8 @@ export function FrameworkButtons(
   }>
 ) {
   const { frameworkName, customFrameworks } = props;
+  const { frameworks } = useRegoData();
+
   function frameworkChange(event: React.ChangeEvent<HTMLInputElement>, value: string) {
     kubescapeConfigStore.update({ framework: value });
   }

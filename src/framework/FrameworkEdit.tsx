@@ -41,7 +41,7 @@ import { getURLSegments } from '../common/url';
 import { complianceSeverity } from '../compliance/Compliance';
 import { checkUniqueness } from '../custom-objects/api-queries';
 import { customObjectLabel } from '../model';
-import { Control, controls, defaultFrameworkNames, FrameWork, frameworks, Rule } from '../rego';
+import { Control, defaultFrameworkNames, FrameWork, Rule, useRegoData } from '../rego';
 
 declare global {
   interface Window {
@@ -74,8 +74,9 @@ export function FrameworkEdit() {
     return <ErrorMessage error={new ApiError('Kubescape namespace not found')} />;
 
   const [configMap] = K8s.ResourceClasses.ConfigMap.useGet(configMapName, kubeScapeNamespace);
+  const { controls, loading: regoLoading } = useRegoData();
 
-  if (configMap) {
+  if (configMap && !regoLoading) {
     const controlsIDs: string[] = JSON.parse(configMap.jsonData.data.controlsIDs);
 
     const framework = {
@@ -259,6 +260,7 @@ function Controls(
   props: Readonly<{ frameworkControls: Control[]; setFrameworkControls: Function }>
 ) {
   const { frameworkControls, setFrameworkControls } = props;
+  const { controls, frameworks } = useRegoData();
   const [showSelectedControls, setShowSelectedControls] = useState(false);
   const [selectedFrameworkNames, setSelectedFrameworkNames] = useState(defaultFrameworkNames);
   const [sorting, setSorting] = useState({ column: 'controlID', direction: 'asc' });
@@ -266,6 +268,8 @@ function Controls(
   const theme = useTheme();
 
   const filteredControls = filterControls(
+    controls,
+    frameworks,
     frameworkControls,
     showSelectedControls,
     selectedFrameworkNames,
@@ -461,13 +465,15 @@ function HeaderCell(
 }
 
 function filterControls(
+  controls: Control[],
+  frameworks: FrameWork[],
   frameworkControls: Control[],
   showSelectedControls: boolean,
   selectedFrameworkNames: string[],
   sorting: { column: string; direction: string }
 ) {
-  controls.sort((a, b) => a.controlID.localeCompare(b.controlID));
-  let filteredControls = showSelectedControls ? frameworkControls : controls;
+  const sortedControls = [...controls].sort((a, b) => a.controlID.localeCompare(b.controlID));
+  let filteredControls = showSelectedControls ? frameworkControls : sortedControls;
 
   filteredControls = filteredControls.filter(control =>
     frameworks.some(

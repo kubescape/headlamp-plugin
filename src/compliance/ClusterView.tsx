@@ -4,7 +4,7 @@
 import { SectionBox, Table, TableColumn } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { useMemo } from 'react';
 import { kubescapeConfigStore } from '../common/config-store';
-import { defaultFrameworkNames, FrameWork, frameworks } from '../rego';
+import { defaultFrameworkNames, FrameWork, useRegoData } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { frameworkComplianceScore } from './workload-scanning';
 
@@ -24,6 +24,7 @@ export default function ClusterView(
   }>
 ) {
   const { workloadScanData, customFrameworks } = props;
+  const { frameworks } = useRegoData();
   const clusterResults = useMemo(() => getClusterResults(workloadScanData), [workloadScanData]);
 
   if (!workloadScanData) {

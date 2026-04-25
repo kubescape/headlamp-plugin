@@ -13,7 +13,7 @@ import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { getURLSegments } from '../common/url';
 import { RoutingName } from '../index';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
-import { controls } from '../rego';
+import { useRegoData } from '../rego';
 import { WorkloadConfigurationScan } from '../softwarecomposition/WorkloadConfigurationScan';
 import { configurationScanContext } from './Compliance';
 
@@ -91,6 +91,7 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
 
 function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigurationScan }>) {
   const { workloadConfigurationScan } = props;
+  const { controls } = useRegoData();
 
   return (
     <SectionBox title="Controls">

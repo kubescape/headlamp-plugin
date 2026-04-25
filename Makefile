@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 vap_test_files:=\
 	deployment.yaml \
 	deployment-for-list-items.yaml \
@@ -9,41 +11,35 @@ vap_test_files:=\
 	deployment-with-common-label-2.yaml  \
 	pod.yaml
 
-controls-download:  
-	# note: controls are removed from frameworks as they are also available in controls.ts 
-	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/frameworks | jq '.[].controls = []' > src/rego/frameworks.ts; 
-	sed -i '1s/^/export const frameworks: FrameWork[] = \n/' src/rego/frameworks.ts; 
-	sed -i '1s/^/import { FrameWork } from ".\/FrameWork" \n/' src/rego/frameworks.ts; 
-	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/controls -o src/rego/controls.ts; 
-	sed -i '1s/^/export const controls: Control[] = \n/' src/rego/controls.ts;
-	sed -i '1s/^/import { Control } from ".\/Control" \n/' src/rego/controls.ts;
-	sed -i '1s/^/\/\/ @ts-nocheck\n/' src/rego/controls.ts; \
-	sed -i '1s/^/\/\/ @ts-nocheck\n/' src/rego/frameworks.ts;
+.PHONY: wasm-download kubescape-cel-admission-library-download kubescape-rego-download download build local
 
-wasm-download: 
-	# Download WASM exec.js 
-	curl https://raw.githubusercontent.com/golang/go/refs/heads/master/lib/wasm/wasm_exec.js -o src/wasm/wasm_exec.js;
+wasm-download:
+	curl -fL https://raw.githubusercontent.com/golang/go/refs/heads/master/lib/wasm/wasm_exec.js -o src/wasm/wasm_exec.js
 
-kubescape-download: 
-	# Download policy files from Kubescape to dist 
-	curl -L https://github.com/kubescape/cel-admission-library/releases/latest/download/basic-control-configuration.yaml -o dist/basic-control-configuration.yaml; 
-	curl -L https://github.com/kubescape/cel-admission-library/releases/latest/download/kubescape-validating-admission-policies.yaml -o dist/validating-admission-policies.yaml; 
+kubescape-cel-admission-library-download:
+	mkdir -p public
+	curl -fL https://github.com/kubescape/cel-admission-library/releases/latest/download/basic-control-configuration.yaml -o public/basic-control-configuration.yaml
+	curl -fL https://github.com/kubescape/cel-admission-library/releases/latest/download/kubescape-validating-admission-policies.yaml -o public/validating-admission-policies.yaml
+	rm -f public/vap-test-files*
+	set -o pipefail; for word in ${vap_test_files}; do \
+		printf '\n---\n' >> public/vap-test-files.yaml; \
+		curl -fL https://raw.githubusercontent.com/kubescape/cel-admission-library/refs/heads/main/test-resources/$$word >> public/vap-test-files.yaml || exit 1; \
+		echo $$word >> public/vap-test-files-index.yaml; \
+	done
 
-	# Download rego rules files to dist
-	curl -L https://github.com/kubescape/regolibrary/releases/download/v2/rules -o dist/rego-rules.json; 
+kubescape-rego-download:
+	mkdir -p public
+	curl -fL https://github.com/kubescape/regolibrary/releases/download/v2/frameworks \
+	    | jq '.[].controls = []' > public/frameworks.json
+	curl -fL https://github.com/kubescape/regolibrary/releases/download/v2/controls \
+	    -o public/controls.json
+	curl -fL https://github.com/kubescape/regolibrary/releases/download/v2/rules \
+	    -o public/rego-rules.json
 
-	# Download test files from KubeScape to dist 
-	rm -f dist/vap-test-files*;
-	for word in ${vap_test_files}; do \
-		printf '\n---\n' >> dist/vap-test-files.yaml; \
-		curl https://raw.githubusercontent.com/kubescape/cel-admission-library/refs/heads/main/test-resources/$$word >> dist/vap-test-files.yaml; \
-		echo $$word >> dist/vap-test-files-index.yaml; \
-	done; 
+download: wasm-download kubescape-cel-admission-library-download kubescape-rego-download
 
-download: wasm-download kubescape-download controls-download
-
-build: 
-	GOOS=js GOARCH=wasm go -C go build -ldflags="-s -w" -o ../dist/main.wasm cmd/main.go 
+build:
+	GOOS=js GOARCH=wasm go -C go build -ldflags="-s -w" -o ../dist/main.wasm cmd/main.go
 
 local: build
-	cp dist/main.wasm dist/*.yaml dist/*.json ~/.config/Headlamp/plugins/kubescape-plugin/
+	cp dist/main.wasm public/*.yaml public/*.json ~/.config/Headlamp/plugins/kubescape-plugin/

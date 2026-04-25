@@ -133,11 +133,22 @@ registerSidebarEntry({
 });
 
 import ComplianceView from './compliance/Compliance';
+import { RegoDataProvider } from './rego';
+
+function withRegoData(Component: React.ComponentType) {
+  return function WrappedWithRegoData() {
+    return (
+      <RegoDataProvider>
+        <Component />
+      </RegoDataProvider>
+    );
+  };
+}
 
 registerRoute({
   path: RoutingPath.ComplianceView,
   sidebar: compliance,
-  component: () => <ComplianceView />,
+  component: withRegoData(ComplianceView),
   exact: true,
   name: RoutingName.ComplianceView,
 });
@@ -157,7 +168,7 @@ import KubescapeWorkloadConfigurationScanDetails from './compliance/WorkloadScan
 registerRoute({
   path: RoutingPath.KubescapeWorkloadConfigurationScanDetails,
   sidebar: compliance,
-  component: () => <KubescapeWorkloadConfigurationScanDetails />,
+  component: withRegoData(KubescapeWorkloadConfigurationScanDetails),
   exact: true,
   name: RoutingName.KubescapeWorkloadConfigurationScanDetails,
 });
@@ -167,7 +178,7 @@ import KubescapeControlResults from './compliance/ControlResults';
 registerRoute({
   path: RoutingPath.KubescapeControlResults,
   sidebar: compliance,
-  component: () => <KubescapeControlResults />,
+  component: withRegoData(KubescapeControlResults),
   exact: true,
   name: RoutingName.KubescapeControlResults,
 });
@@ -205,7 +216,7 @@ import KubescapeWorkloadConfigurationScanFixes from './compliance/WorkloadScanFi
 registerRoute({
   path: RoutingPath.KubescapeWorkloadConfigurationScanFixes,
   sidebar: compliance,
-  component: () => <KubescapeWorkloadConfigurationScanFixes />,
+  component: withRegoData(KubescapeWorkloadConfigurationScanFixes),
   exact: true,
   name: RoutingName.KubescapeWorkloadConfigurationScanFixes,
 });
@@ -325,7 +336,7 @@ import { FrameworksPage } from './framework/FrameworkList';
 registerRoute({
   path: RoutingPath.KubescapeFrameworks,
   sidebar: 'frameworks',
-  component: () => <FrameworksPage />,
+  component: withRegoData(FrameworksPage),
   exact: true,
   name: RoutingName.KubescapeFrameworks,
 });
@@ -335,7 +346,7 @@ import { FrameworkControls } from './framework/FrameworkControls';
 registerRoute({
   path: RoutingPath.FrameworkControls,
   sidebar: 'frameworks',
-  component: () => <FrameworkControls />,
+  component: withRegoData(FrameworkControls),
   exact: true,
   name: RoutingName.FrameworkControls,
 });
@@ -345,7 +356,7 @@ import { FrameworkEdit, FrameworkNew } from './framework/FrameworkEdit';
 registerRoute({
   path: RoutingPath.FrameworkNew,
   sidebar: 'frameworks',
-  component: () => <FrameworkNew />,
+  component: withRegoData(FrameworkNew),
   exact: true,
   name: RoutingName.FrameworkNew,
 });
@@ -353,7 +364,7 @@ registerRoute({
 registerRoute({
   path: RoutingPath.FrameworkEdit,
   sidebar: 'frameworks',
-  component: () => <FrameworkEdit />,
+  component: withRegoData(FrameworkEdit),
   exact: true,
   name: RoutingName.FrameworkEdit,
 });

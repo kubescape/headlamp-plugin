@@ -12,7 +12,7 @@ import { useHistory } from 'react-router-dom';
 import { getKubescapeNamespace } from '../custom-objects/api-queries';
 import { RoutingName } from '../index';
 import { customObjectLabel } from '../model';
-import { controls, FrameWork, frameworks } from '../rego';
+import { FrameWork, useRegoData } from '../rego';
 
 const { createRouteURL } = Router;
 
@@ -21,6 +21,7 @@ export function FrameworksPage() {
     labelSelector: `${customObjectLabel}=framework`,
   });
   const history = useHistory();
+  const { controls, frameworks } = useRegoData();
 
   const customFrameworks =
     customFrameworkConfigmaps?.map((configMap: any) => {

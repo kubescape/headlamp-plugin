@@ -30,9 +30,9 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [22.x]
+        node-version: [24.x]
         go-version: [1.26.x]
-        jq-version: ['1.7']
+        jq-version: ['1.8.1']
 
     steps:
       - uses: actions/checkout@v6
@@ -54,17 +54,13 @@ jobs:
 
       - run: npm ci
 
-      - name: Download src dependencies
-        run: |
-          mkdir -p dist
-          make wasm-download controls-download
+      - name: Download dependencies
+        run: make download
 
       - run: npx @kinvolk/headlamp-plugin build .
 
-      - name: Download dist files and build Golang WASM
-        run: |
-          make kubescape-download
-          make build
+      - name: Build Golang WASM
+        run: make build
 
       - name: release date
         run: echo "RELEASE_DATE=$(date +'%Y-%m-%dT%H:%M:%SZ')" >> ${GITHUB_ENV}
