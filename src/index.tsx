@@ -36,7 +36,7 @@ namespace RoutingPath {
   export const FrameworkNew = '/kubescape/framework';
   export const FrameworkEdit = '/kubescape/framework/:name';
   export const SecurityExceptions = '/kubescape/exceptions';
-  export const SecurityExceptionDetail = '/kubescape/exceptions/:namespace/:name';
+  export const SecurityExceptionDetail = '/kubescape/exceptions/ns/:namespace/:name';
   export const SecurityExceptionClusterDetail = '/kubescape/exceptions/cluster/:name';
   export const KubescapeVulnerabilities = '/kubescape/vulnerabilities';
   export const KubescapeNetworkPolicies = '/kubescape/networkpolicies';

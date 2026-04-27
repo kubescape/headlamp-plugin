@@ -94,14 +94,16 @@ export default function KubescapeVulnerabilityDetails() {
   );
 }
 
-function Matches(props: {
-  manifest: VulnerabilityManifest;
-  relevant: VulnerabilityManifest | null;
-  workloadName: string;
-  workloadNamespace: string;
-  workloadKind: string;
-  imageRef?: string;
-}) {
+function Matches(
+  props: Readonly<{
+    manifest: VulnerabilityManifest;
+    relevant: VulnerabilityManifest | null;
+    workloadName: string;
+    workloadNamespace: string;
+    workloadKind: string;
+    imageRef?: string;
+  }>
+) {
   const { manifest, relevant, workloadName, workloadNamespace, workloadKind, imageRef } = props;
   const results: VulnerabilityManifest.Match[] = manifest?.spec.payload.matches;
   const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useState(true);

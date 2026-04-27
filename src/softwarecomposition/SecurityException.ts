@@ -1,5 +1,11 @@
 // https://github.com/kubescape/operator (kubescape.io/v1beta1 CRDs)
 
+export interface LabelSelectorRequirement {
+  key: string;
+  operator: 'In' | 'NotIn' | 'Exists' | 'DoesNotExist';
+  values?: string[];
+}
+
 export interface ResourceMatch {
   apiGroup?: string;
   kind: string;
@@ -7,8 +13,14 @@ export interface ResourceMatch {
 }
 
 export interface SecurityExceptionMatchSpec {
-  namespaceSelector?: { matchLabels?: Record<string, string>; matchExpressions?: any[] }; // ClusterSecurityException only
-  objectSelector?: { matchLabels?: Record<string, string>; matchExpressions?: any[] }; // deferred
+  namespaceSelector?: {
+    matchLabels?: Record<string, string>;
+    matchExpressions?: LabelSelectorRequirement[];
+  }; // ClusterSecurityException only
+  objectSelector?: {
+    matchLabels?: Record<string, string>;
+    matchExpressions?: LabelSelectorRequirement[];
+  }; // deferred
   resources?: ResourceMatch[];
   images?: string[]; // glob patterns — for vulnerability exceptions only
 }

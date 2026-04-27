@@ -60,7 +60,7 @@ function SecurityExceptionView({
       name: 'Resources',
       value:
         spec.match?.resources && spec.match.resources.length > 0
-          ? spec.match.resources.map((r: any) => `${r.kind}/${r.name}`).join(', ')
+          ? spec.match.resources.map((r: any) => `${r.kind}/${r.name ?? '*'}`).join(', ')
           : '—',
     },
     {

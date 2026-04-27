@@ -10,7 +10,6 @@ import { WorkloadConfigurationScanSummary } from '../softwarecomposition/Workloa
 export default function KubescapeWorkloadConfigurationScanList(
   props: Readonly<{
     workloadScanData: WorkloadConfigurationScanSummary[] | null;
-    setWorkloadScanData?: (workloadScanData: WorkloadConfigurationScanSummary[]) => void;
     framework: FrameWork;
     isFailedControlSwitchChecked: boolean;
   }>
@@ -49,7 +48,7 @@ export default function KubescapeWorkloadConfigurationScanList(
           {
             header: 'Excluded',
             accessorKey: 'exceptedByPolicy',
-            Cell: ({ cell }: any) => (cell.getValue() ? 'Yes' : ''),
+            Cell: ({ cell }: any) => (cell.getValue() ? 'Yes' : 'No'),
             gridTemplate: 'auto',
           },
           {

@@ -254,10 +254,11 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
           metadata: { ...existing?.metadata, name },
           spec,
         };
-        const url = `/apis/kubescape.io/v1beta1/clustersecurityexceptions/${name}`;
-        isEdit
-          ? await put(url, obj as any)
-          : await post('/apis/kubescape.io/v1beta1/clustersecurityexceptions', obj);
+        if (isEdit) {
+          await put(`/apis/kubescape.io/v1beta1/clustersecurityexceptions/${name}`, obj as any);
+        } else {
+          await post('/apis/kubescape.io/v1beta1/clustersecurityexceptions', obj);
+        }
       } else {
         const obj: SecurityException = {
           ...(existing as SecurityException),
@@ -266,13 +267,14 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
           metadata: { ...existing?.metadata, name, namespace },
           spec,
         };
-        const url = `/apis/kubescape.io/v1beta1/namespaces/${namespace}/securityexceptions/${name}`;
-        isEdit
-          ? await put(url, obj as any)
-          : await post(
-              `/apis/kubescape.io/v1beta1/namespaces/${namespace}/securityexceptions`,
-              obj
-            );
+        if (isEdit) {
+          await put(
+            `/apis/kubescape.io/v1beta1/namespaces/${namespace}/securityexceptions/${name}`,
+            obj as any
+          );
+        } else {
+          await post(`/apis/kubescape.io/v1beta1/namespaces/${namespace}/securityexceptions`, obj);
+        }
       }
       enqueueSnackbar(`Security exception ${isEdit ? 'updated' : 'created'}`, {
         variant: 'success',

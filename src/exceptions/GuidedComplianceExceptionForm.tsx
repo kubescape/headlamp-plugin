@@ -41,6 +41,8 @@ export function GuidedComplianceExceptionForm(props: Readonly<GuidedComplianceFo
   const [reason, setReason] = useState('');
   const [expiresDate, setExpiresDate] = useState('');
 
+  const isCluster = scope === 'kind-cluster' || scope === 'cluster';
+
   const scopeOptions: { value: ComplianceScope; label: string; description: string }[] = [
     {
       value: 'workload',
@@ -110,8 +112,6 @@ export function GuidedComplianceExceptionForm(props: Readonly<GuidedComplianceFo
       enqueueSnackbar(`Failed to create: ${err?.message ?? err}`, { variant: 'error' });
     }
   };
-
-  const isCluster = scope === 'kind-cluster' || scope === 'cluster';
 
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>

@@ -172,13 +172,26 @@ export default function KubescapeControlResults() {
             },
             {
               header: '',
-              accessorFn: (workloadScan: WorkloadConfigurationScanSummary) => (
-                <Tooltip title="Create Security Exception">
-                  <IconButton size="small" onClick={() => setExceptionFormWorkload(workloadScan)}>
-                    <Icon icon="mdi:shield-plus-outline" />
-                  </IconButton>
-                </Tooltip>
-              ),
+              accessorFn: (workloadScan: WorkloadConfigurationScanSummary) => {
+                const scanControl = Object.values(workloadScan.spec.controls).find(
+                  c => c.controlID === controlID
+                );
+                if (
+                  !scanControl ||
+                  workloadScan.exceptedByPolicy ||
+                  scanControl.exceptedByPolicy ||
+                  scanControl.status.status !== WorkloadConfigurationScanSummary.Status.Failed
+                ) {
+                  return null;
+                }
+                return (
+                  <Tooltip title="Create Security Exception">
+                    <IconButton size="small" onClick={() => setExceptionFormWorkload(workloadScan)}>
+                      <Icon icon="mdi:shield-plus-outline" />
+                    </IconButton>
+                  </Tooltip>
+                );
+              },
               gridTemplate: 'auto',
             },
           ]}

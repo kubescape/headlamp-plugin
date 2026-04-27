@@ -55,6 +55,7 @@ export function SecurityExceptions() {
   clusterSecurityExceptionClass.useApiList(setClusterList);
 
   async function handleDelete(row: Row) {
+    if (!window.confirm(`Delete security exception "${row.name}"?`)) return;
     try {
       if (row.isCluster) {
         await remove(`/apis/kubescape.io/v1beta1/clustersecurityexceptions/${row.name}`);

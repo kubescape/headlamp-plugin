@@ -233,13 +233,17 @@ export function sanitizeName(raw: string): string {
     .replaceAll(/[^a-z0-9-]/g, '-')
     .replaceAll(/-+/g, '-')
     .replaceAll(/^-|-$/g, '')
-    .substring(0, 63);
+    .substring(0, 63)
+    .replaceAll(/^-|-$/g, '');
 }
 
 export function toImageGlob(imageRef: string): string {
-  const lastColon = imageRef.lastIndexOf(':');
-  if (lastColon > 0 && !imageRef.substring(lastColon + 1).includes('/')) {
-    return imageRef.substring(0, lastColon) + ':*';
+  // Strip digest reference before computing the tag glob
+  const atIdx = imageRef.indexOf('@');
+  const ref = atIdx > 0 ? imageRef.substring(0, atIdx) : imageRef;
+  const lastColon = ref.lastIndexOf(':');
+  if (lastColon > 0 && !ref.substring(lastColon + 1).includes('/')) {
+    return ref.substring(0, lastColon) + ':*';
   }
-  return imageRef + ':*';
+  return ref + ':*';
 }

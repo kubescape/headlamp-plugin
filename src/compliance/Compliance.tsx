@@ -132,7 +132,10 @@ export default function ComplianceView(): JSX.Element {
       setWorkloadScanData([...configurationScanContext.workloadScans]);
     }
 
-    fetchData();
+    fetchData().catch(error => {
+      console.error('Failed to load compliance data', error);
+      setLoading(false);
+    });
     return () => {
       continueReading.current = false;
     };
@@ -216,7 +219,6 @@ export default function ComplianceView(): JSX.Element {
                 component: (
                   <KubescapeWorkloadConfigurationScanList
                     workloadScanData={workloadScanData}
-                    setWorkloadScanData={setWorkloadScanData}
                     framework={framework}
                     isFailedControlSwitchChecked={isFailedControlSwitchChecked}
                   />
@@ -224,12 +226,7 @@ export default function ComplianceView(): JSX.Element {
               },
               {
                 label: 'Namespaces',
-                component: (
-                  <NamespaceView
-                    workloadScanData={workloadScanData}
-                    setWorkloadScanData={setWorkloadScanData}
-                  />
-                ),
+                component: <NamespaceView workloadScanData={workloadScanData} />,
               },
               {
                 label: 'Clusters',

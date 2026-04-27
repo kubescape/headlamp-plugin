@@ -33,7 +33,6 @@ class NamespaceResult {
 export default function NamespaceView(
   props: Readonly<{
     workloadScanData: WorkloadConfigurationScanSummary[] | null;
-    setWorkloadScanData?: (workloadScanData: WorkloadConfigurationScanSummary[]) => void;
   }>
 ) {
   const clusters = useHLSelectedClusters();
