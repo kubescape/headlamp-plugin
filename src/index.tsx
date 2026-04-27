@@ -35,9 +35,9 @@ namespace RoutingPath {
   export const FrameworkControls = '/kubescape/frameworks/:name/controls';
   export const FrameworkNew = '/kubescape/framework';
   export const FrameworkEdit = '/kubescape/framework/:name';
-  export const ExceptionGroupNew = '/kubescape/exception-group';
-  export const ExceptionGroupEdit = '/kubescape/exception-group/:name';
-  export const ExceptionGroups = '/kubescape/exception-groups';
+  export const SecurityExceptions = '/kubescape/exceptions';
+  export const SecurityExceptionDetail = '/kubescape/exceptions/ns/:namespace/:name';
+  export const SecurityExceptionClusterDetail = '/kubescape/exceptions/cluster/:name';
   export const KubescapeVulnerabilities = '/kubescape/vulnerabilities';
   export const KubescapeNetworkPolicies = '/kubescape/networkpolicies';
   export const KubescapeNetworkPolicyDiagram = '/kubescape/networkpolicies/:namespace/:name';
@@ -60,10 +60,9 @@ export namespace RoutingName {
   export const FrameworkEdit = 'Edit Framework';
   export const KubescapeNetworkPolicies = 'Network Policies';
   export const KubescapeNetworkPolicyDiagram = 'Network Policy Diagram';
-  export const ExceptionGroupNew = 'New Kubescape Exceptions';
-  export const ExceptionGroupEdit = 'Edit Kubescape Exceptions';
-  export const ExceptionGroup = 'Kubescape Exceptions';
-  export const ExceptionGroups = 'Kubescape Exception Groups';
+  export const SecurityExceptions = 'Security Exceptions';
+  export const SecurityExceptionDetail = 'Security Exception Detail';
+  export const SecurityExceptionClusterDetail = 'Cluster Security Exception Detail';
   export const KubescapeSBOMDetails = 'Software Bill of Materials';
   export const KubescapeVulnerabilityDetails = 'Vulnerability';
   export const KubescapeVulnerabilities = 'Vulnerabilities';
@@ -122,7 +121,7 @@ registerSidebarEntry({
   parent: kubescape,
   name: 'exceptions',
   label: 'Exceptions',
-  url: RoutingPath.ExceptionGroups,
+  url: RoutingPath.SecurityExceptions,
 });
 
 registerSidebarEntry({
@@ -183,32 +182,35 @@ registerRoute({
   name: RoutingName.KubescapeControlResults,
 });
 
-import { ExceptionGroupEdit, ExceptionGroupNew } from './exceptions/ExceptionGroup';
+import { SecurityExceptions } from './exceptions/SecurityExceptions';
 
 registerRoute({
-  path: RoutingPath.ExceptionGroupEdit,
-  sidebar: compliance,
-  component: () => <ExceptionGroupEdit />,
+  path: RoutingPath.SecurityExceptions,
+  sidebar: 'exceptions',
+  component: () => <SecurityExceptions />,
   exact: true,
-  name: RoutingName.ExceptionGroupEdit,
+  name: RoutingName.SecurityExceptions,
+});
+
+import {
+  ClusterSecurityExceptionDetail,
+  SecurityExceptionDetail,
+} from './exceptions/SecurityExceptionDetail';
+
+registerRoute({
+  path: RoutingPath.SecurityExceptionClusterDetail,
+  sidebar: 'exceptions',
+  component: () => <ClusterSecurityExceptionDetail />,
+  exact: true,
+  name: RoutingName.SecurityExceptionClusterDetail,
 });
 
 registerRoute({
-  path: RoutingPath.ExceptionGroupNew,
-  sidebar: compliance,
-  component: () => <ExceptionGroupNew />,
+  path: RoutingPath.SecurityExceptionDetail,
+  sidebar: 'exceptions',
+  component: () => <SecurityExceptionDetail />,
   exact: true,
-  name: RoutingName.ExceptionGroupNew,
-});
-
-import { ExceptionGroupList } from './exceptions/ExceptionGroups';
-
-registerRoute({
-  path: RoutingPath.ExceptionGroups,
-  sidebar: compliance,
-  component: () => <ExceptionGroupList />,
-  exact: true,
-  name: RoutingName.ExceptionGroups,
+  name: RoutingName.SecurityExceptionDetail,
 });
 
 import KubescapeWorkloadConfigurationScanFixes from './compliance/WorkloadScanFixes';

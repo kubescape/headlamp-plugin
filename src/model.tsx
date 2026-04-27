@@ -129,6 +129,28 @@ export const knownServersClass = makeCustomResourceClass({
   customResourceDefinition: undefined as any,
 });
 
+const kubescapeGroup = 'kubescape.io';
+const kubescapeVersion = 'v1beta1';
+const kubescapeGroupVersions = [{ group: kubescapeGroup, version: kubescapeVersion }];
+
+export const securityExceptionClass = makeCustomResourceClass({
+  apiInfo: kubescapeGroupVersions,
+  isNamespaced: true,
+  singularName: 'securityexception',
+  pluralName: 'securityexceptions',
+  kind: 'SecurityException',
+  customResourceDefinition: undefined as any,
+});
+
+export const clusterSecurityExceptionClass = makeCustomResourceClass({
+  apiInfo: kubescapeGroupVersions,
+  isNamespaced: false,
+  singularName: 'clustersecurityexception',
+  pluralName: 'clustersecurityexceptions',
+  kind: 'ClusterSecurityException',
+  customResourceDefinition: undefined as any,
+});
+
 export async function listQuery(objectClass: KubeObjectClass): Promise<any> {
   const namespaces: string[] = getAllowedNamespaces();
   const group = objectClass.apiEndpoint.apiInfo[0].group;
