@@ -1,6 +1,7 @@
 /* 
   Overview page for vulnerability issues, workloads and images. 
 */
+import { Icon } from '@iconify/react';
 import { ApiError } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   Link as HeadlampLink,
@@ -10,7 +11,16 @@ import {
   Tabs as HeadlampTabs,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
-import { Box, Button, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  FormControlLabel,
+  IconButton,
+  Stack,
+  Switch,
+  Tooltip,
+  Typography,
+} from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { isAllowedNamespaceUpdated } from '../common/clusterContext';
 import { KubescapeConfig, kubescapeConfigStore } from '../common/config-store';
@@ -23,6 +33,7 @@ import {
   useSessionStorage,
 } from '../common/sessionStorage';
 import makeSeverityLabel from '../common/SeverityLabel';
+import { GuidedClusterVulnerabilityExceptionForm } from '../exceptions/GuidedClusterVulnerabilityExceptionForm';
 import { RoutingName, useHLSelectedClusters } from '../index';
 import { vulnerabilityManifestClass, vulnerabilityManifestSummaryClass } from '../model';
 import { handleListPaginationTasks, QueryTask } from '../query';
@@ -177,6 +188,7 @@ function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
     KubescapeSettings.FixedCVEs,
     false
   );
+  const [selectedCve, setSelectedCve] = useState<string | null>(null);
 
   const cveList = getCVEList(workloadScans);
 
@@ -283,6 +295,17 @@ function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
               Cell: ({ cell }: any) => <ShowHideLabel>{cell.getValue()}</ShowHideLabel>,
               gridTemplate: 'auto',
             },
+            {
+              header: '',
+              accessorFn: (item: CVEScan) => (
+                <Tooltip title="Exclude CVE cluster-wide">
+                  <IconButton size="small" onClick={() => setSelectedCve(item.CVE)}>
+                    <Icon icon="mdi:shield-plus-outline" />
+                  </IconButton>
+                </Tooltip>
+              ),
+              gridTemplate: 'min-content',
+            },
           ]}
           initialState={{
             sorting: [
@@ -295,6 +318,13 @@ function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
           reflectInURL="cve"
         />
       </SectionBox>
+
+      {selectedCve && (
+        <GuidedClusterVulnerabilityExceptionForm
+          cveId={selectedCve}
+          onClose={() => setSelectedCve(null)}
+        />
+      )}
     </>
   );
 }
