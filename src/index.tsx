@@ -43,6 +43,7 @@ namespace RoutingPath {
   export const KubescapeNetworkPolicyDiagram = '/kubescape/networkpolicies/:namespace/:name';
   export const KubescapeSBOMDetails = '/kubescape/sbom/:namespace/:name';
   export const VAP = '/kubescape/vap';
+  export const RuleEditor = '/kubescape/rules-editor';
   export const ApplicationProfiles = '/kubescape/applicationprofiles';
   export const RuntimeDetection = '/kubescape/runtimedetection/:namespace/:name';
 }
@@ -71,6 +72,7 @@ export namespace RoutingName {
   export const KubescapeWorkloadConfigurationScanFixes = 'Workload Configuration Fixes';
   export const RuntimeDetection = 'Runtime Detection';
   export const VAP = 'Validation Admission Policies';
+  export const RuleEditor = 'Rule Editor';
   export const VulnerabilitiesNamespaceSummary = 'Namespace Vulnerabilities';
 }
 
@@ -109,6 +111,13 @@ registerSidebarEntry({
   name: 'vap-policies',
   label: 'Policy Playground',
   url: RoutingPath.VAP,
+});
+
+registerSidebarEntry({
+  parent: kubescape,
+  name: 'rule-editor',
+  label: 'Rule Editor',
+  url: RoutingPath.RuleEditor,
 });
 
 registerSidebarEntry({
@@ -309,6 +318,16 @@ registerRoute({
   component: () => <ValidatingAdmissionPolicyEditor />,
   exact: true,
   name: RoutingName.VAP,
+});
+
+import { RuleEditor } from './rule-editor/RuleEditor';
+
+registerRoute({
+  path: RoutingPath.RuleEditor,
+  sidebar: 'rule-editor',
+  component: () => <RuleEditor />,
+  exact: true,
+  name: RoutingName.RuleEditor,
 });
 
 import { ApplicationProfiles } from './runtimedetection/ApplicationProfiles';
