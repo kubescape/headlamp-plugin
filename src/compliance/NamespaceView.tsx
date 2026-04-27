@@ -7,9 +7,6 @@ import {
   Table,
   TableColumn,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { FormControlLabel, Switch } from '@mui/material';
-import { useSnackbar } from 'notistack';
-import { mutateNamespaceException } from '../exceptions/mutate-exception';
 import { RoutingName, useHLSelectedClusters } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 
@@ -36,29 +33,14 @@ class NamespaceResult {
 export default function NamespaceView(
   props: Readonly<{
     workloadScanData: WorkloadConfigurationScanSummary[] | null;
-    setWorkloadScanData: (workloadScanData: WorkloadConfigurationScanSummary[]) => void;
+    setWorkloadScanData?: (workloadScanData: WorkloadConfigurationScanSummary[]) => void;
   }>
 ) {
   const clusters = useHLSelectedClusters();
-  const { enqueueSnackbar } = useSnackbar();
-  const { workloadScanData, setWorkloadScanData } = props;
+  const { workloadScanData } = props;
   if (!workloadScanData) {
     return <></>;
   }
-
-  const handleExcludeNamespace = async (namespace: NamespaceResult, checked: boolean) => {
-    const errorMessage = await mutateNamespaceException(namespace.namespace, checked);
-    if (errorMessage) {
-      enqueueSnackbar(errorMessage, { variant: 'error' });
-    } else {
-      workloadScanData.forEach(w => {
-        if (w.metadata.namespace === namespace.namespace) {
-          w.exceptedByPolicy = checked;
-        }
-      });
-      setWorkloadScanData([...workloadScanData]);
-    }
-  };
 
   return (
     <SectionBox>
@@ -97,16 +79,7 @@ export default function NamespaceView(
           {
             header: 'Excluded Namespace',
             accessorKey: 'exceptedNamespace',
-            Cell: ({ cell }: any) => (
-              <FormControlLabel
-                label=""
-                checked={cell.getValue() === true}
-                control={<Switch color="primary" />}
-                onChange={(event: any, checked: boolean) => {
-                  handleExcludeNamespace(cell.row.original, checked);
-                }}
-              />
-            ),
+            Cell: ({ cell }: any) => (cell.getValue() ? 'Yes' : 'No'),
             gridTemplate: 'auto',
           },
           {

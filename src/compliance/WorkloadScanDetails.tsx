@@ -1,16 +1,18 @@
 /* 
   Show configuration scan results for a workload. 
 */
+import { Icon } from '@iconify/react';
 import {
   Link as HeadlampLink,
   NameValueTable,
   SectionBox,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { Link } from '@mui/material';
+import { IconButton, Link, Tooltip } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { getURLSegments } from '../common/url';
+import { GuidedComplianceExceptionForm } from '../exceptions/GuidedComplianceExceptionForm';
 import { RoutingName } from '../index';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
 import { useRegoData } from '../rego';
@@ -92,6 +94,15 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
 function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigurationScan }>) {
   const { workloadConfigurationScan } = props;
   const { controls } = useRegoData();
+  const [exceptionControl, setExceptionControl] =
+    useState<WorkloadConfigurationScan.Control | null>(null);
+
+  const workloadName =
+    workloadConfigurationScan.metadata.labels['kubescape.io/workload-name'] ?? '';
+  const workloadNamespace =
+    workloadConfigurationScan.metadata.labels['kubescape.io/workload-namespace'] ?? '';
+  const workloadKind =
+    workloadConfigurationScan.metadata.labels['kubescape.io/workload-kind'] ?? '';
 
   return (
     <SectionBox title="Controls">
@@ -153,9 +164,9 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
           },
           {
             header: '',
-            accessorFn: (control: WorkloadConfigurationScan.Control) => {
-              if (control.rules.some(rule => rule.paths)) {
-                return (
+            accessorFn: (control: WorkloadConfigurationScan.Control) => (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                {control.rules.some(rule => rule.paths) && (
                   <HeadlampLink
                     routeName={RoutingName.KubescapeWorkloadConfigurationScanFixes}
                     params={{
@@ -166,9 +177,14 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
                   >
                     Fix
                   </HeadlampLink>
-                );
-              }
-            },
+                )}
+                <Tooltip title="Create Security Exception">
+                  <IconButton size="small" onClick={() => setExceptionControl(control)}>
+                    <Icon icon="mdi:shield-plus-outline" />
+                  </IconButton>
+                </Tooltip>
+              </span>
+            ),
             gridTemplate: 'min-content',
           },
         ]}
@@ -181,6 +197,15 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
           ],
         }}
       />
+      {exceptionControl && (
+        <GuidedComplianceExceptionForm
+          controlID={exceptionControl.controlID}
+          workloadName={workloadName}
+          workloadNamespace={workloadNamespace}
+          workloadKind={workloadKind}
+          onClose={() => setExceptionControl(null)}
+        />
+      )}
     </SectionBox>
   );
 }

@@ -1,6 +1,7 @@
-/* 
-  Information about a control and failed workloads. 
+/*
+  Information about a control and failed workloads.
 */
+import { Icon } from '@iconify/react';
 import {
   Link as HeadlampLink,
   NameValueTable,
@@ -8,20 +9,18 @@ import {
   Table,
   TableColumn,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { FormControlLabel, Link, Switch } from '@mui/material';
-import { useSnackbar } from 'notistack';
+import { FormControlLabel, IconButton, Link, Switch, Tooltip } from '@mui/material';
 import { useState } from 'react';
 import { makeNamespaceLink } from '../common/Namespace';
 import { KubescapeSettings, useSessionStorage } from '../common/sessionStorage';
 import { getLastURLSegment } from '../common/url';
-import { mutateControlException } from '../exceptions/mutate-exception';
+import { GuidedComplianceExceptionForm } from '../exceptions/GuidedComplianceExceptionForm';
 import { RoutingName, useHLSelectedClusters } from '../index';
-import { Control, useRegoData } from '../rego';
+import { useRegoData } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { configurationScanContext } from './Compliance';
 
 export default function KubescapeControlResults() {
-  const { enqueueSnackbar } = useSnackbar();
   const controlID = getLastURLSegment();
   const clusters = useHLSelectedClusters();
   const { controls, loading } = useRegoData();
@@ -31,6 +30,8 @@ export default function KubescapeControlResults() {
   const [resourceList, setResourceList] = useState<WorkloadConfigurationScanSummary[]>(
     getFailedResources(controlID, isFailedControlSwitchChecked)
   );
+  const [exceptionFormWorkload, setExceptionFormWorkload] =
+    useState<WorkloadConfigurationScanSummary | null>(null);
   const control = controls.find(element => element.controlID === controlID);
 
   if (loading) {
@@ -43,30 +44,6 @@ export default function KubescapeControlResults() {
   const setIsFailedControlSwitchChecked2 = (checked: boolean) => {
     setIsFailedControlSwitchChecked(checked);
     setResourceList(getFailedResources(controlID, checked));
-  };
-
-  const handleExcludeControl = async (
-    workloadScan: WorkloadConfigurationScanSummary,
-    control: Control,
-    checked: boolean
-  ) => {
-    const errorMessage = await mutateControlException(
-      workloadScan.metadata.labels['kubescape.io/workload-name'],
-      workloadScan.metadata.namespace,
-      workloadScan.metadata.labels['kubescape.io/workload-kind'],
-      control,
-      checked
-    );
-    if (errorMessage) {
-      enqueueSnackbar(errorMessage, { variant: 'error' });
-    } else {
-      Object.entries(workloadScan.spec.controls).forEach(([key, value]) => {
-        if (value.controlID === control.controlID) {
-          workloadScan.spec.controls[key].exceptedByPolicy = checked;
-        }
-      });
-      setResourceList([...resourceList]);
-    }
   };
 
   return (
@@ -122,13 +99,13 @@ export default function KubescapeControlResults() {
             {
               header: 'Status',
               accessorFn: (workloadScan: WorkloadConfigurationScanSummary) => {
-                const control = Object.values(workloadScan.spec.controls).find(
-                  control => control.controlID === controlID
+                const ctl = Object.values(workloadScan.spec.controls).find(
+                  c => c.controlID === controlID
                 );
-                if (workloadScan.exceptedByPolicy || control?.exceptedByPolicy) {
+                if (workloadScan.exceptedByPolicy || ctl?.exceptedByPolicy) {
                   return 'excluded';
                 }
-                return control?.status.status;
+                return ctl?.status.status;
               },
             },
             {
@@ -166,24 +143,6 @@ export default function KubescapeControlResults() {
                 }
               : ({} as TableColumn<WorkloadConfigurationScanSummary>),
             {
-              header: 'Excluded',
-              accessorFn: (workloadScan: WorkloadConfigurationScanSummary) =>
-                Object.values(workloadScan.spec.controls).some(
-                  control => control.controlID === controlID && control.exceptedByPolicy
-                ),
-              Cell: ({ cell }: any) => (
-                <FormControlLabel
-                  label=""
-                  checked={cell.getValue()}
-                  control={<Switch color="primary" />}
-                  onChange={(event: any, checked: boolean) => {
-                    handleExcludeControl(cell.row.original, control, checked);
-                  }}
-                />
-              ),
-              gridTemplate: 'auto',
-            },
-            {
               header: 'Scan name',
               accessorFn: (workloadScan: WorkloadConfigurationScanSummary) =>
                 workloadScan.metadata.name,
@@ -192,9 +151,8 @@ export default function KubescapeControlResults() {
               header: '',
               accessorFn: (workloadScan: WorkloadConfigurationScanSummary) => {
                 if (
-                  Object.values(workloadScan.spec.controls).find(
-                    control => control.controlID === controlID
-                  )?.status.status === WorkloadConfigurationScanSummary.Status.Passed
+                  Object.values(workloadScan.spec.controls).find(c => c.controlID === controlID)
+                    ?.status.status === WorkloadConfigurationScanSummary.Status.Passed
                 )
                   return;
                 return (
@@ -210,12 +168,33 @@ export default function KubescapeControlResults() {
                     Fix
                   </HeadlampLink>
                 );
-                //  }
               },
+            },
+            {
+              header: '',
+              accessorFn: (workloadScan: WorkloadConfigurationScanSummary) => (
+                <Tooltip title="Create Security Exception">
+                  <IconButton size="small" onClick={() => setExceptionFormWorkload(workloadScan)}>
+                    <Icon icon="mdi:shield-plus-outline" />
+                  </IconButton>
+                </Tooltip>
+              ),
+              gridTemplate: 'auto',
             },
           ]}
         />
       </SectionBox>
+      {exceptionFormWorkload && (
+        <GuidedComplianceExceptionForm
+          controlID={controlID}
+          workloadName={exceptionFormWorkload.metadata.labels['kubescape.io/workload-name']}
+          workloadNamespace={
+            exceptionFormWorkload.metadata.labels['kubescape.io/workload-namespace']
+          }
+          workloadKind={exceptionFormWorkload.metadata.labels['kubescape.io/workload-kind']}
+          onClose={() => setExceptionFormWorkload(null)}
+        />
+      )}
     </>
   );
 }
