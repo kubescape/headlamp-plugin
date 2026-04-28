@@ -1,7 +1,7 @@
 export function getKubescapePluginUrl() {
   if (isElectron()) {
-    const port = 4466;
-    return `http://localhost:${port}/user-plugins/headlamp_kubescape`; // plugin folder is same as artifacthub id
+    const port = (window as any)?.headlampBackendPort ?? 4466;
+    return `http://localhost:${port}/user-plugins/headlamp_kubescape`;
   }
   return '/plugins/kubescape-plugin';
 }
