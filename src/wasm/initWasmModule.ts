@@ -7,7 +7,7 @@ export async function loadWasm(): Promise<void> {
     console.log('Loading Kubescape WASM module');
     const goWasm = new window.Go();
     const result = await WebAssembly.instantiateStreaming(
-      fetch(getKubescapePluginUrl() + '/main.wasm'),
+      fetch((await getKubescapePluginUrl()) + '/main.wasm'),
       goWasm.importObject
     );
     goWasm.run(result.instance);

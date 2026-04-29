@@ -1,9 +1,35 @@
-export function getKubescapePluginUrl() {
+let cachedUrl: Promise<string> | null = null;
+
+export function getKubescapePluginUrl(): Promise<string> {
+  cachedUrl ??= fetchPluginUrl();
+  return cachedUrl;
+}
+
+async function fetchPluginUrl(): Promise<string> {
+  let port: number | null = null;
   if (isElectron()) {
-    const port = (window as any)?.headlampBackendPort ?? 4466;
-    return `http://localhost:${port}/user-plugins/headlamp_kubescape`;
+    port = (window as any)?.headlampBackendPort ?? 4466;
+  } else if (isDockerDesktop()) {
+    port = 64446;
   }
-  return '/plugins/kubescape-plugin';
+  const origin = port ? `http://localhost:${port}` : '';
+
+  try {
+    const response = await fetch(`${origin}/plugins`);
+    if (response.ok) {
+      const plugins: Array<{ path: string; name: string }> = await response.json();
+      const entry = plugins.find(p => p.name.includes('kubescape'));
+      if (entry) {
+        return `${origin}/${entry.path.replaceAll('\\', '/')}`;
+      }
+    }
+  } catch {
+    // fall through to defaults
+  }
+
+  return port
+    ? `http://localhost:${port}/user-plugins/headlamp_kubescape`
+    : '/plugins/kubescape-plugin';
 }
 
 /**
@@ -40,4 +66,8 @@ function isElectron(): boolean {
   }
 
   return false;
+}
+
+function isDockerDesktop(): boolean {
+  return (window as any)?.ddClient !== undefined;
 }
