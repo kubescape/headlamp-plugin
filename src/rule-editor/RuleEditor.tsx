@@ -230,6 +230,7 @@ function RuleFormPage({
   const [tabValue, setTabValue] = useState(1);
   const [errorMessage, setErrorMessage] = useState('');
   const [saved, setSaved] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [playgroundOpen, setPlaygroundOpen] = useState(false);
 
   const ruleYAML = useMemo(
@@ -259,6 +260,7 @@ function RuleFormPage({
   };
 
   const handleSave = async () => {
+    setSubmitted(true);
     if (!ruleMeta.name) return setErrorMessage('Name is required');
     for (const r of rules) {
       if (!r.name) return setErrorMessage('Every rule must have a name');
@@ -358,6 +360,8 @@ function RuleFormPage({
                 onChange={e => setRuleMeta(m => ({ ...m, name: e.target.value }))}
                 size="small"
                 fullWidth
+                required
+                error={submitted && !ruleMeta.name}
               />
               <TextField
                 label="Namespace"
@@ -402,7 +406,11 @@ function RuleFormPage({
                   </Stack>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <RuleForm rule={r} onRuleChange={(key, value) => updateRule(idx, key, value)} />
+                  <RuleForm
+                    rule={r}
+                    onRuleChange={(key, value) => updateRule(idx, key, value)}
+                    submitted={submitted}
+                  />
                 </AccordionDetails>
               </Accordion>
             ))}
@@ -433,9 +441,11 @@ function RuleFormPage({
 function RuleForm({
   rule,
   onRuleChange,
+  submitted,
 }: Readonly<{
   rule: Rule;
   onRuleChange: <K extends keyof Rule>(key: K, value: Rule[K]) => void;
+  submitted: boolean;
 }>) {
   const setExpr = (patch: Partial<Rule['expressions']>) =>
     onRuleChange('expressions', { ...rule.expressions, ...patch });
@@ -486,10 +496,10 @@ function RuleForm({
           )
         );
         setSyntaxErrors({
-          message: result.message?.error || undefined,
-          uniqueId: result.uniqueId?.error || undefined,
-          expressions: rule.expressions.ruleExpression.map(
-            (_, i) => result.ruleExpression?.[i]?.error || undefined
+          message: rule.expressions.message ? result.message?.error || undefined : undefined,
+          uniqueId: rule.expressions.uniqueId ? result.uniqueId?.error || undefined : undefined,
+          expressions: rule.expressions.ruleExpression.map((expr, i) =>
+            expr.expression ? result.ruleExpression?.[i]?.error || undefined : undefined
           ),
         });
       } catch {
@@ -511,6 +521,8 @@ function RuleForm({
           onChange={e => onRuleChange('name', e.target.value)}
           size="small"
           fullWidth
+          required
+          error={submitted && !rule.name}
         />
         <TextField
           label="ID"
@@ -518,6 +530,8 @@ function RuleForm({
           onChange={e => onRuleChange('id', e.target.value)}
           size="small"
           sx={{ minWidth: 110 }}
+          required
+          error={submitted && !rule.id}
         />
       </Stack>
       <TextField
@@ -602,13 +616,13 @@ function RuleForm({
           freeSolo
           options={MITRE_TACTICS}
           getOptionLabel={o => (typeof o === 'string' ? o : `${o.id} — ${o.name}`)}
-          value={MITRE_TACTICS.find(t => t.id === rule.mitreTactic) ?? rule.mitreTactic}
+          inputValue={rule.mitreTactic}
+          onInputChange={(_, v, reason) => {
+            if (reason !== 'reset') onRuleChange('mitreTactic', v);
+          }}
           onChange={(_, v) =>
             onRuleChange('mitreTactic', typeof v === 'string' ? v : v ? v.id : '')
           }
-          onInputChange={(_, v, reason) => {
-            if (reason === 'input') onRuleChange('mitreTactic', v);
-          }}
           size="small"
           fullWidth
           renderInput={params => (
@@ -616,8 +630,8 @@ function RuleForm({
               {...params}
               label="Tactic"
               required
-              error={!rule.mitreTactic}
-              helperText={!rule.mitreTactic ? 'Required' : ''}
+              error={submitted && !rule.mitreTactic}
+              helperText={submitted && !rule.mitreTactic ? 'Required' : ''}
               placeholder="e.g. TA0002"
             />
           )}
@@ -626,13 +640,13 @@ function RuleForm({
           freeSolo
           options={MITRE_TECHNIQUES}
           getOptionLabel={o => (typeof o === 'string' ? o : `${o.id} — ${o.name}`)}
-          value={MITRE_TECHNIQUES.find(t => t.id === rule.mitreTechnique) ?? rule.mitreTechnique}
+          inputValue={rule.mitreTechnique}
+          onInputChange={(_, v, reason) => {
+            if (reason !== 'reset') onRuleChange('mitreTechnique', v);
+          }}
           onChange={(_, v) =>
             onRuleChange('mitreTechnique', typeof v === 'string' ? v : v ? v.id : '')
           }
-          onInputChange={(_, v, reason) => {
-            if (reason === 'input') onRuleChange('mitreTechnique', v);
-          }}
           size="small"
           fullWidth
           renderInput={params => (
@@ -640,8 +654,8 @@ function RuleForm({
               {...params}
               label="Technique"
               required
-              error={!rule.mitreTechnique}
-              helperText={!rule.mitreTechnique ? 'Required' : ''}
+              error={submitted && !rule.mitreTechnique}
+              helperText={submitted && !rule.mitreTechnique ? 'Required' : ''}
               placeholder="e.g. T1059"
             />
           )}
