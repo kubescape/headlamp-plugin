@@ -37,9 +37,8 @@ export function ValidatingAdmissionPolicyEditor() {
   // Get params, if defined in validatingAdmissionPolicy
   useEffect(() => {
     if (validatingAdmissionPolicy?.spec.paramKind?.apiVersion) {
-      const kubescapeValidatingAdmissionPoliciesURL =
-        getKubescapePluginUrl() + '/basic-control-configuration.yaml';
-      fetch(kubescapeValidatingAdmissionPoliciesURL)
+      getKubescapePluginUrl()
+        .then(baseUrl => fetch(baseUrl + '/basic-control-configuration.yaml'))
         .then(response => response.text())
         .then(data => setParamsObject(yaml.load(data)));
     } else {

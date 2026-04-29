@@ -10,14 +10,14 @@ export function ChooseTestResource() {
   const [testFileNames, setTestFileNames] = useState<string[]>([]);
 
   useEffect(() => {
-    const testFilesURL = getKubescapePluginUrl() + '/vap-test-files.yaml';
-    fetch(testFilesURL)
-      .then(response => response.text())
-      .then(data => setTestFiles(yaml.loadAll(data)));
-    const testFilesIndexURL = getKubescapePluginUrl() + '/vap-test-files-index.yaml';
-    fetch(testFilesIndexURL)
-      .then(response => response.text())
-      .then(data => setTestFileNames(data.split(/\r?\n/)));
+    getKubescapePluginUrl().then(baseUrl => {
+      fetch(baseUrl + '/vap-test-files.yaml')
+        .then(response => response.text())
+        .then(data => setTestFiles(yaml.loadAll(data)));
+      fetch(baseUrl + '/vap-test-files-index.yaml')
+        .then(response => response.text())
+        .then(data => setTestFileNames(data.split(/\r?\n/)));
+    });
   }, []);
 
   const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {

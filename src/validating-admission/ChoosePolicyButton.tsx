@@ -12,13 +12,13 @@ export function ChoosePolicyButton() {
   );
 
   useEffect(() => {
-    const kubescapeValidatingAdmissionPoliciesURL =
-      getKubescapePluginUrl() + '/validating-admission-policies.yaml';
-    fetch(kubescapeValidatingAdmissionPoliciesURL)
-      .then(response => response.text())
-      .then(data =>
-        setKubescapeValidatingAdmissionPolicies(yaml.loadAll(data) as ValidatingAdmissionPolicy[])
-      );
+    getKubescapePluginUrl().then(baseUrl => {
+      fetch(baseUrl + '/validating-admission-policies.yaml')
+        .then(response => response.text())
+        .then(data =>
+          setKubescapeValidatingAdmissionPolicies(yaml.loadAll(data) as ValidatingAdmissionPolicy[])
+        );
+    });
   }, []);
 
   const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {

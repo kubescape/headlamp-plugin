@@ -167,13 +167,13 @@ function FrameworkEditor(
     setErrorMessage('');
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const frameworkForDownload = {
       ...framework,
       controlsIDs: frameworkControls.map(c => c.controlID),
     } as FrameWork;
 
-    const regoRulesUrl = getKubescapePluginUrl() + '/rego-rules.json';
+    const regoRulesUrl = (await getKubescapePluginUrl()) + '/rego-rules.json';
     fetch(regoRulesUrl)
       .then(response => {
         if (!response.ok) {

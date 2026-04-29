@@ -33,15 +33,16 @@ let cachedPromise: Promise<RegoData> | null = null;
 function fetchRegoData(): Promise<RegoData> {
   if (cachedPromise) return cachedPromise;
 
-  const baseUrl = getKubescapePluginUrl();
-
-  const fetchJson = (path: string) =>
+  const fetchJson = (baseUrl: string, path: string) =>
     fetch(`${baseUrl}/${path}`).then(r => {
       if (!r.ok) throw new Error(`Failed to fetch ${path}: HTTP ${r.status}`);
       return r.json();
     });
 
-  cachedPromise = Promise.all([fetchJson('controls.json'), fetchJson('frameworks.json')])
+  cachedPromise = getKubescapePluginUrl()
+    .then(baseUrl =>
+      Promise.all([fetchJson(baseUrl, 'controls.json'), fetchJson(baseUrl, 'frameworks.json')])
+    )
     .then(([fetchedControls, fetchedFrameworks]: [Control[], FrameWork[]]) => {
       for (const fw of fetchedFrameworks) {
         if (!fw.controls || fw.controls.length === 0) {
