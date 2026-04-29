@@ -1,5 +1,5 @@
-import { K8s } from '@kinvolk/headlamp-plugin/lib';
-import { ApiError } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
+import { Icon } from '@iconify/react';
+import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   Link as HeadlampLink,
   SectionBox,
@@ -7,35 +7,37 @@ import {
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
-import Pod from '@kinvolk/headlamp-plugin/lib/k8s/pod';
 import { localeDate } from '@kinvolk/headlamp-plugin/lib/Utils';
-import { Typography } from '@mui/material';
-import { useEffect, useRef, useState } from 'react';
-import { ErrorMessage } from '../common/ErrorMessage';
+import { Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
+import { getAlertmanagerUrl } from '../common/config-store';
 import { RoutingName } from '../index';
 import { applicationProfileClass } from '../model';
 import { AlertMessagePopup } from './AlertMessagePopup';
-import { NodeAgentLogLine } from './NodeAgentLogLine';
+
+interface AlertmanagerAlert {
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  startsAt: string;
+  endsAt: string;
+  status: { state: string };
+  fingerprint: string;
+}
 
 export function ApplicationProfiles() {
   const [applicationProfiles, setApplicationProfiles] = useState<KubeObject[] | null>(null);
 
   applicationProfileClass.useApiList(setApplicationProfiles);
 
-  if (!applicationProfiles) {
-    return <></>;
-  }
-
   return (
     <>
       <SectionBox title="Application Profiles">
-        <Typography variant="body1" component="div" sx={{ flexGrow: 1 }}>
-          Kubescape operator should be configured with "capabilities.runtimeDetection: enable" and
-          "alertCRD.installDefault: true". For testing a short learning period is recommended:
-          "nodeAgent.config.maxLearningPeriod: 10m".
+        <Typography variant="body1" sx={{ mb: 1 }}>
+          Kubescape operator should be configured with{' '}
+          <code>capabilities.runtimeDetection: enable</code>.
         </Typography>
         <HeadlampTable
-          data={applicationProfiles}
+          data={applicationProfiles ?? []}
           columns={[
             {
               header: 'Name',
@@ -63,172 +65,142 @@ export function ApplicationProfiles() {
               accessorFn: (profile: KubeObject) => profile.metadata.namespace,
             },
             {
-              header: 'Monitoring',
+              header: 'Status',
               accessorFn: (profile: KubeObject) =>
-                profile.jsonData.metadata.annotations['kubescape.io/status'],
+                profile.jsonData.metadata.annotations?.['kubescape.io/status'],
             },
           ]}
         />
       </SectionBox>
-      <NodeAgentLogging />
+
+      <AlertmanagerAlerts />
     </>
   );
 }
 
-function NodeAgentLogging() {
-  const [alerts, setAlerts] = useState<NodeAgentLogLine[]>([]);
-  const [nodeAgents, error] = K8s.ResourceClasses.Pod.useList({
-    labelSelector: 'app.kubernetes.io/component=node-agent,app.kubernetes.io/instance=kubescape',
-  });
-  const nodeAlerts = useRef<Map<string, NodeAgentLogLine[]>>(new Map());
+function AlertmanagerAlerts() {
+  const [alerts, setAlerts] = useState<AlertmanagerAlert[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
-  if (error) return <ErrorMessage error={error} />;
+  const fetchAlerts = () => {
+    setLoading(true);
+    setError('');
+    const base = getAlertmanagerUrl();
+    const url = `${base}/api/v2/alerts?filter=alertname%3D%22KubescapeRuleViolated%22&active=true&silenced=false&inhibited=false`;
+    request(url)
+      .then((data: any) => {
+        const items: AlertmanagerAlert[] = Array.isArray(data) ? data : [];
+        items.sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime());
+        setAlerts(items);
+        setLastRefresh(new Date());
+      })
+      .catch((err: any) => setError(err?.message ?? String(err)))
+      .finally(() => setLoading(false));
+  };
 
-  if (!nodeAgents) {
-    const error = new ApiError('Could not find Kubescape NodeAgent pods', {
-      status: 404,
-    });
-    return <ErrorMessage error={error} />;
-  }
-
-  function setNodeAgentAlerts(nodeName: string, lines: NodeAgentLogLine[]) {
-    nodeAlerts.current.set(nodeName, lines);
-    const all = Array.from(nodeAlerts.current.values()).flatMap(lines => lines);
-    setAlerts(all);
-  }
+  useEffect(() => {
+    fetchAlerts();
+    const interval = setInterval(fetchAlerts, 60_000);
+    return () => clearInterval(interval);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <SectionBox title="Runtime Detection">
-      {nodeAgents?.map(nodeAgent => (
-        <NodeLog nodeAgent={nodeAgent} setNodeAgentAlerts={setNodeAgentAlerts} />
-      ))}
+    <SectionBox
+      title={
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <span>Runtime Detection Alerts</span>
+          <Tooltip title="Refresh">
+            <IconButton size="small" onClick={fetchAlerts} disabled={loading}>
+              <Icon icon={loading ? 'mdi:loading' : 'mdi:refresh'} />
+            </IconButton>
+          </Tooltip>
+          {lastRefresh && (
+            <Typography variant="caption" color="text.secondary">
+              {new Date(lastRefresh).toLocaleTimeString()}
+            </Typography>
+          )}
+        </Stack>
+      }
+    >
+      {error && (
+        <Typography color="error" variant="body2" sx={{ mb: 1 }}>
+          {error}
+        </Typography>
+      )}
+
       <HeadlampTable
         data={alerts}
         columns={[
           {
             id: 'time',
             header: 'Time',
-            accessorKey: 'time',
-            gridTemplate: '1fr',
+            accessorKey: 'startsAt',
             Cell: ({ cell }: any) => {
+              const d = new Date(cell.getValue());
               const startOfToday = new Date().setUTCHours(0, 0, 0, 0);
-              if (new Date(cell.getValue()) < new Date(startOfToday)) {
-                return localeDate(cell.getValue());
-              } else {
-                return new Date(cell.getValue()).toLocaleTimeString();
-              }
+              return d < new Date(startOfToday)
+                ? localeDate(cell.getValue())
+                : d.toLocaleTimeString();
             },
+            gridTemplate: 'min-content',
           },
           {
-            header: 'Message',
-            accessorKey: 'message',
-            gridTemplate: '2fr',
+            header: 'Rule',
+            accessorFn: (a: AlertmanagerAlert) => a.labels.rule_name ?? a.labels.alertname,
+            gridTemplate: 'auto',
+          },
+          {
+            header: 'Severity',
+            accessorFn: (a: AlertmanagerAlert) => a.labels.severity,
+            Cell: ({ cell }: any) => {
+              const v = cell.getValue();
+              if (!v) return null;
+              const color: any = v === 'critical' ? 'error' : v === 'high' ? 'warning' : 'default';
+              return <Chip label={v} color={color} size="small" />;
+            },
+            gridTemplate: 'min-content',
           },
           {
             header: 'Pod',
-            accessorKey: 'RuntimeK8sDetails.podName',
-            gridTemplate: '1fr',
+            accessorFn: (a: AlertmanagerAlert) => a.labels.pod ?? a.labels.pod_name,
+            gridTemplate: 'auto',
           },
           {
             header: 'Workload',
-            accessorKey: 'RuntimeK8sDetails.workloadName',
-            gridTemplate: '1fr',
+            accessorFn: (a: AlertmanagerAlert) => a.labels.workload_name ?? a.labels.workload,
+            gridTemplate: 'auto',
           },
           {
             header: 'Namespace',
-            accessorKey: 'RuntimeK8sDetails.workloadNamespace',
-            gridTemplate: '1fr',
+            accessorFn: (a: AlertmanagerAlert) => a.labels.namespace ?? a.labels.workload_namespace,
+            gridTemplate: 'auto',
           },
           {
-            header: 'Node',
-            accessorKey: 'nodeName',
-            gridTemplate: '1fr',
-          },
-          {
-            header: 'Fix',
-            accessorKey: 'BaseRuntimeMetadata.fixSuggestions',
+            header: 'Message',
+            accessorFn: (a: AlertmanagerAlert) =>
+              a.annotations.summary ?? a.annotations.description ?? a.annotations.message,
             Cell: ({ cell }: any) => <ShowHideLabel>{cell.getValue()}</ShowHideLabel>,
-            gridTemplate: '4fr',
+            gridTemplate: '2fr',
           },
           {
             header: '',
             accessorFn: () => '...',
             Cell: ({ row }: any) => (
               <AlertMessagePopup
-                content={JSON.stringify(row.original, null, 2)}
-              ></AlertMessagePopup>
+                content={JSON.stringify(
+                  { labels: row.original.labels, annotations: row.original.annotations },
+                  null,
+                  2
+                )}
+              />
             ),
-            gridTemplate: '0.1fr',
+            gridTemplate: 'min-content',
           },
         ]}
-        initialState={{
-          sorting: [
-            {
-              id: 'time',
-              desc: true,
-            },
-          ],
-        }}
+        initialState={{ sorting: [{ id: 'time', desc: true }] }}
       />
     </SectionBox>
   );
-}
-
-function NodeLog(props: Readonly<{ nodeAgent: Pod; setNodeAgentAlerts: any }>) {
-  const { nodeAgent, setNodeAgentAlerts } = props;
-
-  useEffect(() => {
-    let callback: any = null;
-    const nodeName = nodeAgent.jsonData.metadata.name;
-
-    function setlogChunks(result: { logs: string[]; hasJsonLogs: boolean }) {
-      const lines = result.logs;
-      const nodeAgentAlerts = parseLogChunks(nodeName, lines).filter(
-        line => line.BaseRuntimeMetadata
-      );
-
-      setNodeAgentAlerts(nodeName, nodeAgentAlerts);
-    }
-
-    callback = nodeAgent.getLogs('node-agent', setlogChunks, {
-      tailLines: 200,
-    });
-
-    return function cleanup() {
-      if (callback) {
-        console.log('Cleanup callback for ' + nodeAgent.jsonData.spec.nodeName);
-        callback();
-      }
-    };
-  }, [nodeAgent]);
-
-  return <></>;
-}
-
-// chunks are just blocks from the log stream.
-// in each call to this method we get all the log chunks, this is how nodeAgent.getLogs() works
-function parseLogChunks(nodeName: string, logChunks: string[]) {
-  const nodeAgentLogLines: NodeAgentLogLine[] = [];
-
-  // join the chunks and split on newline
-  const lines = logChunks.join('').split('\n');
-
-  lines.forEach(line => {
-    // throw away lines which are non-json
-    if (!line.startsWith('{') || !line.endsWith('}')) {
-      return;
-    }
-
-    try {
-      const jsonLine: NodeAgentLogLine = JSON.parse(line);
-      jsonLine.nodeName = nodeName;
-      if (jsonLine.RuntimeK8sDetails.workloadName) {
-        nodeAgentLogLines.push(jsonLine);
-      }
-    } catch (e) {
-      // ignore, the last chunk might not be complete
-    }
-  });
-
-  return nodeAgentLogLines;
 }

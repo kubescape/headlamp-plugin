@@ -13,6 +13,15 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
     (kubescapeData?.pageSize || 50).toString()
   );
   const [error, setError] = React.useState<string>('');
+  const [alertmanagerUrl, setAlertmanagerUrl] = React.useState<string>(
+    kubescapeData?.alertmanagerUrl ??
+      '/api/v1/namespaces/observability/services/kube-prometheus-stack-alertmanager:9093/proxy'
+  );
+
+  React.useEffect(() => {
+    if (kubescapeData?.alertmanagerUrl !== undefined)
+      setAlertmanagerUrl(kubescapeData.alertmanagerUrl);
+  }, [kubescapeData?.alertmanagerUrl]);
 
   // Update input value when external data changes
   React.useEffect(() => {
@@ -83,6 +92,18 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
         error={!!error}
         helperText={error || 'Number of scans to fetch from backend in one request.'}
         inputProps={{ min: 1, max: 500 }}
+        fullWidth
+        margin="normal"
+      />
+
+      <TextField
+        label="Alertmanager Base URL"
+        value={alertmanagerUrl}
+        onChange={e => {
+          setAlertmanagerUrl(e.target.value);
+          if (onDataChange) onDataChange({ ...data, alertmanagerUrl: e.target.value });
+        }}
+        helperText="Kubernetes service proxy path to Alertmanager, e.g. /api/v1/namespaces/observability/services/kube-prometheus-stack-alertmanager:9093/proxy"
         fullWidth
         margin="normal"
       />
