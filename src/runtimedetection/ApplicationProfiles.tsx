@@ -1,4 +1,5 @@
 import { Icon } from '@iconify/react';
+import { Router } from '@kinvolk/headlamp-plugin/lib';
 import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   Link as HeadlampLink,
@@ -6,16 +7,23 @@ import {
   ShowHideLabel,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { localeDate } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { TabContext, TabList } from '@mui/lab';
 import { Chip, IconButton, Stack, Tab, Tooltip, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { useHistory } from 'react-router-dom';
 import { getAlertmanagerUrl } from '../common/config-store';
 import { TabPanel } from '../common/TabPanel';
 import { RoutingName } from '../index';
-import { applicationProfileClass, networkNeighborhoodsClass, rulesClass } from '../model';
+import {
+  applicationProfileClass,
+  listQuery,
+  networkNeighborhoodsClass,
+  rulesClass,
+} from '../model';
 import { AlertMessagePopup } from './AlertMessagePopup';
+
+const { createRouteURL } = Router;
 
 interface AlertmanagerAlert {
   labels: Record<string, string>;
@@ -184,9 +192,11 @@ function AlertsTab() {
 // ── Application Profiles ──────────────────────────────────────────────────────
 
 function ApplicationProfilesTab() {
-  const [profiles, setProfiles] = useState<KubeObject[] | null>(null);
+  const [profiles, setProfiles] = useState<any[]>([]);
 
-  applicationProfileClass.useApiList(setProfiles);
+  useEffect(() => {
+    listQuery(applicationProfileClass).then(setProfiles);
+  }, []);
 
   return (
     <>
@@ -195,12 +205,11 @@ function ApplicationProfilesTab() {
         <code>ap.*</code> CEL functions in rules.
       </Typography>
       <HeadlampTable
-        data={profiles ?? []}
+        data={profiles}
         columns={[
           {
             header: 'Name',
-            accessorFn: (p: KubeObject) =>
-              p.jsonData.metadata.labels?.['kubescape.io/workload-name'],
+            accessorFn: (p: any) => p.metadata.labels?.['kubescape.io/workload-name'],
             Cell: ({ cell, row }: any) => (
               <HeadlampLink
                 routeName={RoutingName.RuntimeDetection}
@@ -216,18 +225,17 @@ function ApplicationProfilesTab() {
           },
           {
             header: 'Kind',
-            accessorFn: (p: KubeObject) =>
-              p.jsonData.metadata.labels?.['kubescape.io/workload-kind'],
+            accessorFn: (p: any) => p.metadata.labels?.['kubescape.io/workload-kind'],
             gridTemplate: 'auto',
           },
           {
             header: 'Namespace',
-            accessorFn: (p: KubeObject) => p.metadata.namespace,
+            accessorFn: (p: any) => p.metadata.namespace,
             gridTemplate: 'auto',
           },
           {
             header: 'Status',
-            accessorFn: (p: KubeObject) => p.jsonData.metadata.annotations?.['kubescape.io/status'],
+            accessorFn: (p: any) => p.metadata.annotations?.['kubescape.io/status'],
             gridTemplate: 'auto',
           },
         ]}
@@ -239,9 +247,11 @@ function ApplicationProfilesTab() {
 // ── Network Neighborhoods ─────────────────────────────────────────────────────
 
 function NetworkNeighborhoodsTab() {
-  const [items, setItems] = useState<KubeObject[] | null>(null);
+  const [items, setItems] = useState<any[]>([]);
 
-  networkNeighborhoodsClass.useApiList(setItems);
+  useEffect(() => {
+    listQuery(networkNeighborhoodsClass).then(setItems);
+  }, []);
 
   return (
     <>
@@ -250,28 +260,38 @@ function NetworkNeighborhoodsTab() {
         functions in rules.
       </Typography>
       <HeadlampTable
-        data={items ?? []}
+        data={items}
         columns={[
           {
             header: 'Name',
-            accessorFn: (p: KubeObject) =>
-              p.jsonData.metadata.labels?.['kubescape.io/workload-name'] ?? p.metadata.name,
+            accessorFn: (p: any) =>
+              p.metadata.labels?.['kubescape.io/workload-name'] ?? p.metadata.name,
+            Cell: ({ cell, row }: any) => (
+              <HeadlampLink
+                routeName={RoutingName.NetworkNeighborhoodDetail}
+                params={{
+                  name: row.original.metadata.name,
+                  namespace: row.original.metadata.namespace,
+                }}
+              >
+                {cell.getValue()}
+              </HeadlampLink>
+            ),
             gridTemplate: 'auto',
           },
           {
             header: 'Kind',
-            accessorFn: (p: KubeObject) =>
-              p.jsonData.metadata.labels?.['kubescape.io/workload-kind'],
+            accessorFn: (p: any) => p.metadata.labels?.['kubescape.io/workload-kind'],
             gridTemplate: 'auto',
           },
           {
             header: 'Namespace',
-            accessorFn: (p: KubeObject) => p.metadata.namespace,
+            accessorFn: (p: any) => p.metadata.namespace,
             gridTemplate: 'auto',
           },
           {
             header: 'Containers',
-            accessorFn: (p: KubeObject) => p.jsonData.spec?.containers?.length ?? 0,
+            accessorFn: (p: any) => p.spec?.containers?.length ?? 0,
             gridTemplate: 'min-content',
           },
         ]}
@@ -284,6 +304,7 @@ function NetworkNeighborhoodsTab() {
 
 function RulesTab() {
   const [rulesCRDs] = rulesClass.useList() as any;
+  const history = useHistory();
 
   const items =
     rulesCRDs?.map((crd: any) => ({
@@ -294,10 +315,17 @@ function RulesTab() {
 
   return (
     <>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        <code>kubescape.io/v1 Rules</code> CRDs deployed in the cluster. Click a name to open the
-        rule editor.
-      </Typography>
+      <Stack direction="row" alignItems="center" spacing={0} sx={{ mb: 1 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+          <code>kubescape.io/v1 Rules</code> CRDs deployed in the cluster. Click a name to open the
+          rule editor.
+        </Typography>
+        <Tooltip title="Add new rule">
+          <IconButton onClick={() => history.push(createRouteURL(RoutingName.RuleNew))}>
+            <Icon icon="mdi:add-circle" />
+          </IconButton>
+        </Tooltip>
+      </Stack>
       <HeadlampTable
         data={items}
         columns={[

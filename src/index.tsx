@@ -48,6 +48,7 @@ namespace RoutingPath {
   export const RuleEdit = '/kubescape/rule/:namespace/:name';
   export const ApplicationProfiles = '/kubescape/applicationprofiles';
   export const RuntimeDetection = '/kubescape/runtimedetection/:namespace/:name';
+  export const NetworkNeighborhoodDetail = '/kubescape/networkneighborhood/:namespace/:name';
 }
 
 export namespace RoutingName {
@@ -73,6 +74,7 @@ export namespace RoutingName {
   export const KubescapeWorkloadConfigurationScanDetails = 'Configuration Scan';
   export const KubescapeWorkloadConfigurationScanFixes = 'Workload Configuration Fixes';
   export const RuntimeDetection = 'Runtime Detection';
+  export const NetworkNeighborhoodDetail = 'Network Neighborhood Detail';
   export const VAP = 'Validation Admission Policies';
   export const RuleList = 'Rule List';
   export const RuleNew = 'New Rule';
@@ -115,13 +117,6 @@ registerSidebarEntry({
   name: 'vap-policies',
   label: 'Policy Playground',
   url: RoutingPath.VAP,
-});
-
-registerSidebarEntry({
-  parent: kubescape,
-  name: 'rule-editor',
-  label: 'Rules',
-  url: RoutingPath.RuleList,
 });
 
 registerSidebarEntry({
@@ -369,6 +364,16 @@ registerRoute({
   component: () => <RuntimeDetection />,
   exact: true,
   name: RoutingName.RuntimeDetection,
+});
+
+import { NetworkNeighborhoodDetail } from './runtimedetection/NetworkNeighborhoodDetail';
+
+registerRoute({
+  path: RoutingPath.NetworkNeighborhoodDetail,
+  sidebar: 'runtime-detection',
+  component: () => <NetworkNeighborhoodDetail />,
+  exact: true,
+  name: RoutingName.NetworkNeighborhoodDetail,
 });
 
 import { FrameworksPage } from './framework/FrameworkList';
