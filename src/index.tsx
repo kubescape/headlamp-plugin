@@ -43,7 +43,9 @@ namespace RoutingPath {
   export const KubescapeNetworkPolicyDiagram = '/kubescape/networkpolicies/:namespace/:name';
   export const KubescapeSBOMDetails = '/kubescape/sbom/:namespace/:name';
   export const VAP = '/kubescape/vap';
-  export const RuleEditor = '/kubescape/rules-editor';
+  export const RuleList = '/kubescape/rules';
+  export const RuleNew = '/kubescape/rule/new';
+  export const RuleEdit = '/kubescape/rule/:namespace/:name';
   export const ApplicationProfiles = '/kubescape/applicationprofiles';
   export const RuntimeDetection = '/kubescape/runtimedetection/:namespace/:name';
 }
@@ -72,7 +74,9 @@ export namespace RoutingName {
   export const KubescapeWorkloadConfigurationScanFixes = 'Workload Configuration Fixes';
   export const RuntimeDetection = 'Runtime Detection';
   export const VAP = 'Validation Admission Policies';
-  export const RuleEditor = 'Rule Editor';
+  export const RuleList = 'Rule List';
+  export const RuleNew = 'New Rule';
+  export const RuleEdit = 'Edit Rule';
   export const VulnerabilitiesNamespaceSummary = 'Namespace Vulnerabilities';
 }
 
@@ -116,8 +120,8 @@ registerSidebarEntry({
 registerSidebarEntry({
   parent: kubescape,
   name: 'rule-editor',
-  label: 'Rule Editor',
-  url: RoutingPath.RuleEditor,
+  label: 'Rules',
+  url: RoutingPath.RuleList,
 });
 
 registerSidebarEntry({
@@ -320,14 +324,31 @@ registerRoute({
   name: RoutingName.VAP,
 });
 
-import { RuleEditor } from './rule-editor/RuleEditor';
+import { RuleEdit, RuleNew } from './rule-editor/RuleEditor';
+import { RuleList } from './rule-editor/RuleList';
 
 registerRoute({
-  path: RoutingPath.RuleEditor,
+  path: RoutingPath.RuleList,
   sidebar: 'rule-editor',
-  component: () => <RuleEditor />,
+  component: () => <RuleList />,
   exact: true,
-  name: RoutingName.RuleEditor,
+  name: RoutingName.RuleList,
+});
+
+registerRoute({
+  path: RoutingPath.RuleNew,
+  sidebar: 'rule-editor',
+  component: () => <RuleNew />,
+  exact: true,
+  name: RoutingName.RuleNew,
+});
+
+registerRoute({
+  path: RoutingPath.RuleEdit,
+  sidebar: 'rule-editor',
+  component: () => <RuleEdit />,
+  exact: true,
+  name: RoutingName.RuleEdit,
 });
 
 import { ApplicationProfiles } from './runtimedetection/ApplicationProfiles';
