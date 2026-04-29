@@ -34,6 +34,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import Autocomplete from '@mui/material/Autocomplete';
 import * as yaml from 'js-yaml';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TabPanel } from '../common/TabPanel';
@@ -68,6 +69,52 @@ const EVENT_TYPES: EventType[] = [
 
 const DEFAULT_NAMESPACE = 'kubescape';
 
+const MITRE_TACTICS: { id: string; name: string }[] = [
+  { id: 'TA0001', name: 'Initial Access' },
+  { id: 'TA0002', name: 'Execution' },
+  { id: 'TA0003', name: 'Persistence' },
+  { id: 'TA0004', name: 'Privilege Escalation' },
+  { id: 'TA0005', name: 'Defense Evasion' },
+  { id: 'TA0006', name: 'Credential Access' },
+  { id: 'TA0007', name: 'Discovery' },
+  { id: 'TA0008', name: 'Lateral Movement' },
+  { id: 'TA0009', name: 'Collection' },
+  { id: 'TA0010', name: 'Exfiltration' },
+  { id: 'TA0011', name: 'Command and Control' },
+  { id: 'TA0040', name: 'Impact' },
+  { id: 'TA0042', name: 'Resource Development' },
+  { id: 'TA0043', name: 'Reconnaissance' },
+];
+
+const MITRE_TECHNIQUES: { id: string; name: string }[] = [
+  { id: 'T1005', name: 'Data from Local System' },
+  { id: 'T1021.001', name: 'Remote Services: Remote Desktop Protocol' },
+  { id: 'T1036', name: 'Masquerading' },
+  { id: 'T1041', name: 'Exfiltration Over C2 Channel' },
+  { id: 'T1055', name: 'Process Injection' },
+  { id: 'T1059', name: 'Command and Scripting Interpreter' },
+  { id: 'T1068', name: 'Exploitation for Privilege Escalation' },
+  { id: 'T1071', name: 'Application Layer Protocol' },
+  { id: 'T1071.004', name: 'Application Layer Protocol: DNS' },
+  { id: 'T1078', name: 'Valid Accounts' },
+  { id: 'T1098', name: 'Account Manipulation' },
+  { id: 'T1190', name: 'Exploit Public-Facing Application' },
+  { id: 'T1210', name: 'Exploitation of Remote Services' },
+  { id: 'T1218', name: 'System Binary Proxy Execution' },
+  { id: 'T1496', name: 'Resource Hijacking' },
+  { id: 'T1525', name: 'Implant Internal Image' },
+  { id: 'T1528', name: 'Steal Application Access Token' },
+  { id: 'T1543', name: 'Create or Modify System Process' },
+  { id: 'T1547.006', name: 'Boot or Logon Autostart: Kernel Modules and Extensions' },
+  { id: 'T1552.001', name: 'Unsecured Credentials: Credentials In Files' },
+  { id: 'T1574.006', name: 'Hijack Execution Flow: Dynamic Linker Hijacking' },
+  { id: 'T1609', name: 'Container Administration Command' },
+  { id: 'T1610', name: 'Deploy Container' },
+  { id: 'T1611', name: 'Escape to Host' },
+  { id: 'T1613', name: 'Container and Resource Discovery' },
+  { id: 'T1622', name: 'Debugger Evasion' },
+];
+
 const EMPTY_RULE: Rule = {
   name: '',
   id: '',
@@ -82,6 +129,8 @@ const EMPTY_RULE: Rule = {
   severity: 5,
   supportPolicy: false,
   isTriggerAlert: true,
+  mitreTactic: '',
+  mitreTechnique: '',
   tags: [],
 };
 
@@ -214,6 +263,9 @@ function RuleFormPage({
     for (const r of rules) {
       if (!r.name) return setErrorMessage('Every rule must have a name');
       if (!r.id) return setErrorMessage('Every rule must have an ID');
+      if (!r.mitreTactic) return setErrorMessage(`Rule "${r.name || r.id}": Tactic is required`);
+      if (!r.mitreTechnique)
+        return setErrorMessage(`Rule "${r.name || r.id}": Technique is required`);
     }
 
     const body: any = {
@@ -243,23 +295,36 @@ function RuleFormPage({
     }
   };
 
+  const isReadOnly =
+    isEdit && ruleMeta.name === 'default-rules' && ruleMeta.namespace === 'kubescape';
+
   return (
     <SectionBox backLink>
       <Stack direction="row" alignItems="center" sx={{ mt: 2, mb: 2 }} spacing={0}>
         <Typography variant="h4" sx={{ mr: 2, fontWeight: 'bold' }}>
           {isEdit ? 'Edit Rule' : 'New Rule'}
         </Typography>
-        <Tooltip title="Save to cluster">
-          <IconButton onClick={handleSave}>
-            <Icon icon="mdi:content-save" />
-          </IconButton>
-        </Tooltip>
+        {!isReadOnly && (
+          <Tooltip title="Save to cluster">
+            <IconButton onClick={handleSave}>
+              <Icon icon="mdi:content-save" />
+            </IconButton>
+          </Tooltip>
+        )}
         <Tooltip title="Test rule in playground">
           <IconButton onClick={() => setPlaygroundOpen(true)}>
             <Icon icon="mdi:play-circle-outline" />
           </IconButton>
         </Tooltip>
       </Stack>
+
+      {isReadOnly && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Icon icon="mdi:lock-outline" style={{ verticalAlign: 'middle', marginRight: 4 }} />
+          <strong>default-rules</strong> is system-managed and cannot be edited here. Deploy a
+          custom Rules CRD to override individual rules.
+        </Typography>
+      )}
 
       <PlaygroundDialog
         open={playgroundOpen}
@@ -533,21 +598,53 @@ function RuleForm({
       <Divider sx={{ mb: 2 }} />
 
       <Stack direction="row" spacing={2} sx={row}>
-        <TextField
-          label="Tactic"
-          value={rule.mitreTactic ?? ''}
-          onChange={e => onRuleChange('mitreTactic', e.target.value || undefined)}
+        <Autocomplete
+          freeSolo
+          options={MITRE_TACTICS}
+          getOptionLabel={o => (typeof o === 'string' ? o : `${o.id} — ${o.name}`)}
+          value={MITRE_TACTICS.find(t => t.id === rule.mitreTactic) ?? rule.mitreTactic}
+          onChange={(_, v) =>
+            onRuleChange('mitreTactic', typeof v === 'string' ? v : v ? v.id : '')
+          }
+          onInputChange={(_, v, reason) => {
+            if (reason === 'input') onRuleChange('mitreTactic', v);
+          }}
           size="small"
           fullWidth
-          placeholder="e.g. TA0002"
+          renderInput={params => (
+            <TextField
+              {...params}
+              label="Tactic"
+              required
+              error={!rule.mitreTactic}
+              helperText={!rule.mitreTactic ? 'Required' : ''}
+              placeholder="e.g. TA0002"
+            />
+          )}
         />
-        <TextField
-          label="Technique"
-          value={rule.mitreTechnique ?? ''}
-          onChange={e => onRuleChange('mitreTechnique', e.target.value || undefined)}
+        <Autocomplete
+          freeSolo
+          options={MITRE_TECHNIQUES}
+          getOptionLabel={o => (typeof o === 'string' ? o : `${o.id} — ${o.name}`)}
+          value={MITRE_TECHNIQUES.find(t => t.id === rule.mitreTechnique) ?? rule.mitreTechnique}
+          onChange={(_, v) =>
+            onRuleChange('mitreTechnique', typeof v === 'string' ? v : v ? v.id : '')
+          }
+          onInputChange={(_, v, reason) => {
+            if (reason === 'input') onRuleChange('mitreTechnique', v);
+          }}
           size="small"
           fullWidth
-          placeholder="e.g. T1059"
+          renderInput={params => (
+            <TextField
+              {...params}
+              label="Technique"
+              required
+              error={!rule.mitreTechnique}
+              helperText={!rule.mitreTechnique ? 'Required' : ''}
+              placeholder="e.g. T1059"
+            />
+          )}
         />
       </Stack>
 
@@ -827,11 +924,11 @@ function nnCrdToMockYAML(crd: any): string {
     containers[c.name] = {
       egress: (c.egress ?? []).map((e: any) => ({
         ipAddress: e.ipAddress ?? '',
-        dns: e.dns ?? [],
+        dns: Array.isArray(e.dns) ? e.dns : [],
       })),
       ingress: (c.ingress ?? []).map((i: any) => ({
         ipAddress: i.ipAddress ?? '',
-        dns: i.dns ?? [],
+        dns: Array.isArray(i.dns) ? i.dns : [],
       })),
     };
   }

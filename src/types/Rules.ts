@@ -22,8 +22,8 @@ export interface Rule {
   severity: number;
   supportPolicy: boolean;
   isTriggerAlert: boolean;
-  mitreTactic?: string;
-  mitreTechnique?: string;
+  mitreTactic: string;
+  mitreTechnique: string;
   tags?: string[];
 }
 
