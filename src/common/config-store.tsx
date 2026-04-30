@@ -8,15 +8,13 @@ export type KubescapeConfig = {
   exceptionGroupName: string;
   activeFrameworks: string[];
   pageSize: number;
-  alertmanagerUrl: string;
+  alertmanagerUrl: string | undefined;
 };
 
 export const kubescapeConfigStore = new ConfigStore<KubescapeConfig>(PLUGIN_NAME);
 
 // Initialize or migrate existing config
 const currentConfig = kubescapeConfigStore.get();
-const DEFAULT_ALERTMANAGER_URL =
-  '/api/v1/namespaces/observability/services/kube-prometheus-stack-alertmanager:9093/proxy';
 
 if (!currentConfig) {
   kubescapeConfigStore.set({
@@ -24,18 +22,23 @@ if (!currentConfig) {
     exceptionGroupName: '',
     activeFrameworks: [],
     pageSize: 50,
-    alertmanagerUrl: DEFAULT_ALERTMANAGER_URL,
+    alertmanagerUrl: undefined,
   });
 } else {
   const updates: Partial<KubescapeConfig> = {};
   if (currentConfig.pageSize === undefined) updates.pageSize = 50;
-  if (currentConfig.alertmanagerUrl === undefined)
-    updates.alertmanagerUrl = DEFAULT_ALERTMANAGER_URL;
   if (Object.keys(updates).length) kubescapeConfigStore.set({ ...currentConfig, ...updates });
 }
 
-export function getAlertmanagerUrl(): string {
-  return kubescapeConfigStore.get()?.alertmanagerUrl ?? DEFAULT_ALERTMANAGER_URL;
+export function isValidAlertmanagerAddress(address: string): boolean {
+  return /^[a-z0-9-]+\/[a-z0-9-]+:[0-9]+$/.test(address);
+}
+
+export function getAlertmanagerUrl(): string | undefined {
+  const address = kubescapeConfigStore.get()?.alertmanagerUrl;
+  if (!address || !isValidAlertmanagerAddress(address)) return undefined;
+  const [namespace, serviceAndPort] = address.split('/');
+  return `/api/v1/namespaces/${namespace}/services/${serviceAndPort}/proxy`;
 }
 
 // Helper function to get page size from config

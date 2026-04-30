@@ -197,7 +197,7 @@ func errorString(err error) string {
 // Note: celEnvironment.Check returns errors for variables in expressions
 func (evaluator *AdmissionPolicyEvaluator) evalExpression(inputData map[string]any, expression string) (ref.Val, error) {
 	ast, issues := evaluator.celEnvironment.Parse(expression)
-	if issues.Err() != nil {
+	if issues != nil && issues.Err() != nil {
 		log.Printf("Parse: %v", issues.String())
 		return nil, issues.Err()
 	}

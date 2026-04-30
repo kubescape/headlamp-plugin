@@ -186,7 +186,7 @@ func (e *RuleEvaluator) Evaluate() RuleEvalResults {
 
 func (e *RuleEvaluator) evalExpression(inputData map[string]any, expression string) (ref.Val, error) {
 	ast, issues := e.celEnv.Parse(expression)
-	if issues.Err() != nil {
+	if issues != nil && issues.Err() != nil {
 		log.Printf("Parse error: %v", issues.String())
 		return nil, issues.Err()
 	}

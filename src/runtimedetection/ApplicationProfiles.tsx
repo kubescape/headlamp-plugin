@@ -9,7 +9,7 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { localeDate } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { TabContext, TabList } from '@mui/lab';
-import { Chip, IconButton, Stack, Tab, Tooltip, Typography } from '@mui/material';
+import { Alert, Chip, IconButton, Stack, Tab, Tooltip, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import { getAlertmanagerUrl } from '../common/config-store';
@@ -70,12 +70,13 @@ function AlertsTab() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const alertmanagerUrl = getAlertmanagerUrl();
 
   const fetchAlerts = () => {
+    if (!alertmanagerUrl) return;
     setLoading(true);
     setError('');
-    const base = getAlertmanagerUrl();
-    const url = `${base}/api/v2/alerts?filter=alertname%3D%22KubescapeRuleViolated%22&active=true&silenced=false&inhibited=false`;
+    const url = `${alertmanagerUrl}/api/v2/alerts?filter=alertname%3D%22KubescapeRuleViolated%22&active=true&silenced=false&inhibited=false`;
     request(url)
       .then((data: any) => {
         const items: AlertmanagerAlert[] = Array.isArray(data) ? data : [];
@@ -92,6 +93,14 @@ function AlertsTab() {
     const interval = setInterval(fetchAlerts, 60_000);
     return () => clearInterval(interval);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!alertmanagerUrl) {
+    return (
+      <Alert severity="warning" variant="filled">
+        Alertmanager URL is not configured. Please set it in the Kubescape plugin settings.
+      </Alert>
+    );
+  }
 
   return (
     <>
@@ -123,10 +132,9 @@ function AlertsTab() {
             accessorKey: 'startsAt',
             Cell: ({ cell }: any) => {
               const d = new Date(cell.getValue());
-              const startOfToday = new Date().setUTCHours(0, 0, 0, 0);
-              return d < new Date(startOfToday)
-                ? localeDate(cell.getValue())
-                : d.toLocaleTimeString();
+              const startOfToday = new Date();
+              startOfToday.setHours(0, 0, 0, 0);
+              return d < startOfToday ? localeDate(cell.getValue()) : d.toLocaleTimeString();
             },
             gridTemplate: 'min-content',
           },
@@ -193,9 +201,12 @@ function AlertsTab() {
 
 function ApplicationProfilesTab() {
   const [profiles, setProfiles] = useState<any[]>([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    listQuery(applicationProfileClass).then(setProfiles);
+    listQuery(applicationProfileClass)
+      .then(setProfiles)
+      .catch((err: any) => setError(err?.message ?? String(err)));
   }, []);
 
   return (
@@ -204,6 +215,7 @@ function ApplicationProfilesTab() {
         Baseline of workload behaviour recorded by Kubescape during the learning phase. Used by{' '}
         <code>ap.*</code> CEL functions in rules.
       </Typography>
+      {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
       <HeadlampTable
         data={profiles}
         columns={[
@@ -248,9 +260,12 @@ function ApplicationProfilesTab() {
 
 function NetworkNeighborhoodsTab() {
   const [items, setItems] = useState<any[]>([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    listQuery(networkNeighborhoodsClass).then(setItems);
+    listQuery(networkNeighborhoodsClass)
+      .then(setItems)
+      .catch((err: any) => setError(err?.message ?? String(err)));
   }, []);
 
   return (
@@ -259,6 +274,7 @@ function NetworkNeighborhoodsTab() {
         Baseline of workload network activity recorded by Kubescape. Used by <code>nn.*</code> CEL
         functions in rules.
       </Typography>
+      {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
       <HeadlampTable
         data={items}
         columns={[

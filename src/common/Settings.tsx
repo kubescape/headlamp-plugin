@@ -1,6 +1,14 @@
-import { Box, TextField, Typography } from '@mui/material';
+import { ApiProxy } from '@kinvolk/headlamp-plugin/lib';
+import { useClustersConf } from '@kinvolk/headlamp-plugin/lib/k8s';
+import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
+import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
 import React from 'react';
-import { KubescapeConfig } from './config-store';
+import { isValidAlertmanagerAddress, KubescapeConfig } from './config-store';
 
 interface SettingsProps {
   data?: { [key: string]: any };
@@ -9,71 +17,93 @@ interface SettingsProps {
 
 export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps>) {
   const kubescapeData = data as KubescapeConfig | undefined;
+  const clusters = useClustersConf() || {};
+  const [selectedCluster, setSelectedCluster] = React.useState('');
+
+  React.useEffect(() => {
+    if (Object.keys(clusters).length > 0 && !selectedCluster)
+      setSelectedCluster(Object.keys(clusters)[0]);
+  }, [clusters, selectedCluster]);
   const [inputValue, setInputValue] = React.useState<string>(
     (kubescapeData?.pageSize || 50).toString()
   );
   const [error, setError] = React.useState<string>('');
-  const [alertmanagerUrl, setAlertmanagerUrl] = React.useState<string>(
-    kubescapeData?.alertmanagerUrl ??
-      '/api/v1/namespaces/observability/services/kube-prometheus-stack-alertmanager:9093/proxy'
+  const [alertmanagerAddress, setAlertmanagerAddress] = React.useState<string>(
+    kubescapeData?.alertmanagerUrl ?? ''
   );
+  const [addressError, setAddressError] = React.useState(false);
+  const [testStatus, setTestStatus] = React.useState<'idle' | 'testing' | 'success' | 'error'>(
+    'idle'
+  );
+  const [testMessage, setTestMessage] = React.useState('');
 
   React.useEffect(() => {
     if (kubescapeData?.alertmanagerUrl !== undefined)
-      setAlertmanagerUrl(kubescapeData.alertmanagerUrl);
+      setAlertmanagerAddress(kubescapeData.alertmanagerUrl);
   }, [kubescapeData?.alertmanagerUrl]);
 
-  // Update input value when external data changes
   React.useEffect(() => {
     setInputValue((kubescapeData?.pageSize || 50).toString());
     setError('');
   }, [kubescapeData?.pageSize]);
 
+  React.useEffect(() => {
+    if (alertmanagerAddress) {
+      setAddressError(!isValidAlertmanagerAddress(alertmanagerAddress));
+      setTestStatus('idle');
+      setTestMessage('');
+    } else {
+      setAddressError(false);
+    }
+  }, [alertmanagerAddress]);
+
   const validatePageSize = (value: string): { isValid: boolean; error: string } => {
-    if (value === '') {
-      return { isValid: false, error: 'Page size is required' };
-    }
-
+    if (value === '') return { isValid: false, error: 'Page size is required' };
     const numValue = parseInt(value, 10);
-    if (isNaN(numValue)) {
-      return { isValid: false, error: 'Please enter a valid number' };
-    }
-
-    if (numValue <= 0) {
-      return { isValid: false, error: 'Page size must be greater than 0' };
-    }
-
-    if (numValue > 500) {
-      return { isValid: false, error: 'Page size cannot exceed 500' };
-    }
-
+    if (isNaN(numValue)) return { isValid: false, error: 'Please enter a valid number' };
+    if (numValue <= 0) return { isValid: false, error: 'Page size must be greater than 0' };
+    if (numValue > 500) return { isValid: false, error: 'Page size cannot exceed 500' };
     return { isValid: true, error: '' };
   };
 
   const handlePageSizeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = event.target.value;
     setInputValue(rawValue);
-
-    // Clear error when user starts typing
     setError('');
-
-    // Only save valid values immediately
     if (onDataChange && rawValue !== '') {
       const validation = validatePageSize(rawValue);
-      if (validation.isValid) {
-        onDataChange({ ...data, pageSize: parseInt(rawValue, 10) });
-      }
+      if (validation.isValid) onDataChange({ ...data, pageSize: parseInt(rawValue, 10) });
     }
-    // Don't update config when field is empty or invalid - let user type new value
   };
 
   const handlePageSizeBlur = () => {
     const validation = validatePageSize(inputValue);
     setError(validation.error);
-
-    // Only save if valid (no errors)
-    if (validation.isValid && onDataChange) {
+    if (validation.isValid && onDataChange)
       onDataChange({ ...data, pageSize: parseInt(inputValue, 10) });
+  };
+
+  const handleTestConnection = async () => {
+    if (!alertmanagerAddress || !isValidAlertmanagerAddress(alertmanagerAddress)) {
+      setAddressError(true);
+      setTestMessage('Invalid address format');
+      setTestStatus('error');
+      return;
+    }
+
+    setTestStatus('testing');
+    setTestMessage('Testing connection…');
+
+    try {
+      if (!selectedCluster) throw new Error('No cluster selected');
+      const [namespace, serviceAndPort] = alertmanagerAddress.split('/');
+      const proxyUrl = `/clusters/${selectedCluster}/api/v1/namespaces/${namespace}/services/${serviceAndPort}/proxy/api/v2/alerts`;
+      await ApiProxy.request(proxyUrl);
+      setTestStatus('success');
+      setTestMessage('Connection successful!');
+    } catch (err) {
+      setTestStatus('error');
+      setTestMessage(`Connection failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -96,17 +126,59 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
         margin="normal"
       />
 
-      <TextField
-        label="Alertmanager Base URL"
-        value={alertmanagerUrl}
-        onChange={e => {
-          setAlertmanagerUrl(e.target.value);
-          if (onDataChange) onDataChange({ ...data, alertmanagerUrl: e.target.value });
-        }}
-        helperText="Kubernetes service proxy path to Alertmanager, e.g. /api/v1/namespaces/observability/services/kube-prometheus-stack-alertmanager:9093/proxy"
-        fullWidth
-        margin="normal"
-      />
+      <Box display="flex" flexDirection="column" mt={2}>
+        <Box display="flex" alignItems="center" gap={2} mb={1}>
+          <Typography variant="body2" color="text.secondary">
+            Test against cluster:
+          </Typography>
+          <Select
+            size="small"
+            value={selectedCluster}
+            onChange={e => setSelectedCluster(e.target.value)}
+          >
+            {Object.keys(clusters).map(name => (
+              <MenuItem key={name} value={name}>
+                {name}
+              </MenuItem>
+            ))}
+          </Select>
+        </Box>
+        <Box display="flex" gap={2} alignItems="flex-start">
+          <TextField
+            label="Alertmanager Service Address"
+            value={alertmanagerAddress}
+            error={addressError}
+            helperText={
+              addressError
+                ? 'Invalid format. Use: namespace/service-name:port'
+                : 'Address of the Alertmanager service. Format: namespace/service-name:port'
+            }
+            onChange={e => {
+              setAlertmanagerAddress(e.target.value);
+              if (onDataChange) onDataChange({ ...data, alertmanagerUrl: e.target.value });
+            }}
+            fullWidth
+          />
+          <Button
+            variant="contained"
+            disabled={
+              addressError || !alertmanagerAddress || testStatus === 'testing'
+            }
+            onClick={handleTestConnection}
+            sx={{ mt: 1, minWidth: '140px' }}
+          >
+            {testStatus === 'testing' ? 'Testing…' : 'Test Connection'}
+          </Button>
+        </Box>
+        {testStatus !== 'idle' && testMessage && (
+          <Alert
+            severity={testStatus === 'success' ? 'success' : testStatus === 'testing' ? 'info' : 'error'}
+            sx={{ mt: 2, width: 'fit-content' }}
+          >
+            {testMessage}
+          </Alert>
+        )}
+      </Box>
     </Box>
   );
 }

@@ -1,7 +1,6 @@
 package rules
 
 import (
-	"bytes"
 	"net"
 	"strings"
 
@@ -362,6 +361,25 @@ func libraryEnvOptions(profile MockProfile, network MockNetwork, k8sMock MockK8s
 	}
 }
 
+var privateIPNets = func() []*net.IPNet {
+	cidrs := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"169.254.0.0/16",
+		"fc00::/7",
+		"fe80::/10",
+	}
+	nets := make([]*net.IPNet, 0, len(cidrs))
+	for _, cidr := range cidrs {
+		_, n, _ := net.ParseCIDR(cidr)
+		if n != nil {
+			nets = append(nets, n)
+		}
+	}
+	return nets
+}()
+
 func isPrivateIP(ipStr string) bool {
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
@@ -370,15 +388,8 @@ func isPrivateIP(ipStr string) bool {
 	if ip.IsLoopback() {
 		return true
 	}
-	ip = ip.To16()
-	privateRanges := []struct{ start, end net.IP }{
-		{net.ParseIP("10.0.0.0").To16(), net.ParseIP("10.255.255.255").To16()},
-		{net.ParseIP("172.16.0.0").To16(), net.ParseIP("172.31.255.255").To16()},
-		{net.ParseIP("192.168.0.0").To16(), net.ParseIP("192.168.255.255").To16()},
-		{net.ParseIP("169.254.0.0").To16(), net.ParseIP("169.254.255.255").To16()},
-	}
-	for _, r := range privateRanges {
-		if bytes.Compare(ip, r.start) >= 0 && bytes.Compare(ip, r.end) <= 0 {
+	for _, n := range privateIPNets {
+		if n.Contains(ip) {
 			return true
 		}
 	}

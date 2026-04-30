@@ -23,8 +23,12 @@ export function RuleList() {
     })) ?? [];
 
   const handleDelete = async (namespace: string, crdName: string) => {
-    await remove(`/apis/kubescape.io/v1/namespaces/${namespace}/rules/${crdName}`);
-    enqueueSnackbar(`${crdName} deleted`, { variant: 'success' });
+    try {
+      await remove(`/apis/kubescape.io/v1/namespaces/${namespace}/rules/${crdName}`);
+      enqueueSnackbar(`${crdName} deleted`, { variant: 'success' });
+    } catch (err: any) {
+      enqueueSnackbar(err?.message ?? `Failed to delete ${crdName}`, { variant: 'error' });
+    }
   };
 
   return (

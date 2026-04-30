@@ -17,6 +17,7 @@ func main() {
 
 	// Expose the Go functions to JavaScript
 	js.Global().Set("AdmissionEval", js.FuncOf(admissionEval))
+	js.Global().Set("RuleEval", js.FuncOf(ruleEval))
 
 	// Block the program from exiting
 	<-done

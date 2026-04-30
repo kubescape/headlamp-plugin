@@ -195,14 +195,16 @@ export function RuleEdit() {
   const [initialRules, setInitialRules] = useState<Rule[] | null>(null);
 
   useEffect(() => {
-    request(`/apis/kubescape.io/v1/namespaces/${namespace}/rules/${name}`).then((crd: any) => {
-      setInitialMeta({
-        name: crd.metadata.name,
-        namespace: crd.metadata.namespace,
-        resourceVersion: crd.metadata.resourceVersion,
-      });
-      setInitialRules(crd.spec?.rules?.length ? crd.spec.rules : [EMPTY_RULE]);
-    });
+    request(`/apis/kubescape.io/v1/namespaces/${namespace}/rules/${name}`)
+      .then((crd: any) => {
+        setInitialMeta({
+          name: crd.metadata.name,
+          namespace: crd.metadata.namespace,
+          resourceVersion: crd.metadata.resourceVersion,
+        });
+        setInitialRules(crd.spec?.rules?.length ? crd.spec.rules : [EMPTY_RULE]);
+      })
+      .catch((err: any) => console.error('Failed to load rule:', err));
   }, [name, namespace]);
 
   if (!initialMeta || !initialRules) return null;
@@ -1090,7 +1092,9 @@ function PlaygroundDialog({
   rules: Rule[];
   ruleMeta: { name: string; namespace: string };
 }>) {
-  loadWasm();
+  useEffect(() => {
+    void loadWasm();
+  }, []);
 
   const [eventType, setEventType] = useState<EventType>('exec');
   const [eventData, setEventData] = useState(JSON.stringify(defaultEventData.exec, null, 2));
