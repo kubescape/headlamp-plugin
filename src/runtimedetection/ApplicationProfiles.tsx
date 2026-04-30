@@ -215,7 +215,11 @@ function ApplicationProfilesTab() {
         Baseline of workload behaviour recorded by Kubescape during the learning phase. Used by{' '}
         <code>ap.*</code> CEL functions in rules.
       </Typography>
-      {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
+      {error && (
+        <Alert severity="error" sx={{ mb: 1 }}>
+          {error}
+        </Alert>
+      )}
       <HeadlampTable
         data={profiles}
         columns={[
@@ -274,7 +278,11 @@ function NetworkNeighborhoodsTab() {
         Baseline of workload network activity recorded by Kubescape. Used by <code>nn.*</code> CEL
         functions in rules.
       </Typography>
-      {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
+      {error && (
+        <Alert severity="error" sx={{ mb: 1 }}>
+          {error}
+        </Alert>
+      )}
       <HeadlampTable
         data={items}
         columns={[

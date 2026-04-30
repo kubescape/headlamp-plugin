@@ -161,9 +161,7 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
           />
           <Button
             variant="contained"
-            disabled={
-              addressError || !alertmanagerAddress || testStatus === 'testing'
-            }
+            disabled={addressError || !alertmanagerAddress || testStatus === 'testing'}
             onClick={handleTestConnection}
             sx={{ mt: 1, minWidth: '140px' }}
           >
@@ -172,7 +170,9 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
         </Box>
         {testStatus !== 'idle' && testMessage && (
           <Alert
-            severity={testStatus === 'success' ? 'success' : testStatus === 'testing' ? 'info' : 'error'}
+            severity={
+              testStatus === 'success' ? 'success' : testStatus === 'testing' ? 'info' : 'error'
+            }
             sx={{ mt: 2, width: 'fit-content' }}
           >
             {testMessage}
