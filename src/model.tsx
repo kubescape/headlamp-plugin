@@ -129,6 +129,15 @@ export const knownServersClass = makeCustomResourceClass({
   customResourceDefinition: undefined as any,
 });
 
+export const rulesClass = makeCustomResourceClass({
+  apiInfo: [{ group: 'kubescape.io', version: 'v1' }],
+  isNamespaced: true,
+  singularName: 'rules',
+  pluralName: 'rules',
+  kind: 'Rules',
+  customResourceDefinition: undefined as any,
+});
+
 export async function listQuery(objectClass: KubeObjectClass): Promise<any> {
   const namespaces: string[] = getAllowedNamespaces();
   const group = objectClass.apiEndpoint.apiInfo[0].group;
