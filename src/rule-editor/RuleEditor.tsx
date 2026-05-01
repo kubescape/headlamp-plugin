@@ -476,28 +476,48 @@ function RuleForm({
     const timeout = setTimeout(() => {
       if (!window.RuleEval) return;
       try {
-        const et = rule.expressions.ruleExpression[0]?.eventType ?? 'exec';
-        const result: RuleEvalResults = JSON.parse(
-          window.RuleEval(
-            yaml.dump({
-              apiVersion: 'kubescape.io/v1',
-              kind: 'Rules',
-              metadata: { name: 'validate', namespace: 'kubescape' },
-              spec: { rules: [rule] },
-            }),
-            et,
-            JSON.stringify(defaultEventData[et] ?? {}),
-            '',
-            ''
-          )
-        );
-        setSyntaxErrors({
-          message: rule.expressions.message ? result.message?.error || undefined : undefined,
-          uniqueId: rule.expressions.uniqueId ? result.uniqueId?.error || undefined : undefined,
-          expressions: rule.expressions.ruleExpression.map((expr, i) =>
-            expr.expression ? result.ruleExpression?.[i]?.error || undefined : undefined
-          ),
+        const ruleYAML = yaml.dump({
+          apiVersion: 'kubescape.io/v1',
+          kind: 'Rules',
+          metadata: { name: 'validate', namespace: 'kubescape' },
+          spec: { rules: [rule] },
         });
+
+        const distinctTypes = [
+          ...new Set(rule.expressions.ruleExpression.map(e => e.eventType)),
+        ];
+
+        const exprErrors: (string | undefined)[] = rule.expressions.ruleExpression.map(
+          () => undefined
+        );
+        let messageError: string | undefined;
+        let uniqueIdError: string | undefined;
+
+        for (const et of distinctTypes) {
+          const result: RuleEvalResults = JSON.parse(
+            window.RuleEval(ruleYAML, et, JSON.stringify(defaultEventData[et] ?? {}), '', '')
+          );
+
+          // Go's Evaluate() returns only expressions matching `et`, in their original order.
+          // Reconstruct which original indices those correspond to.
+          const matchingIndices = rule.expressions.ruleExpression
+            .map((e, i) => (e.eventType === et ? i : -1))
+            .filter(i => i !== -1);
+
+          result.ruleExpression.forEach((r, j) => {
+            const origIdx = matchingIndices[j];
+            if (origIdx !== undefined && rule.expressions.ruleExpression[origIdx].expression) {
+              exprErrors[origIdx] = r.error || undefined;
+            }
+          });
+
+          if (!messageError && rule.expressions.message && result.message?.error)
+            messageError = result.message.error;
+          if (!uniqueIdError && rule.expressions.uniqueId && result.uniqueId?.error)
+            uniqueIdError = result.uniqueId.error;
+        }
+
+        setSyntaxErrors({ message: messageError, uniqueId: uniqueIdError, expressions: exprErrors });
       } catch {
         // WASM not ready yet
       }
