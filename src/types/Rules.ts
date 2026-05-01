@@ -56,7 +56,8 @@ export type EventType =
   | 'iouring'
   | 'http'
   | 'fork'
-  | 'exit';
+  | 'exit'
+  | 'procfs';
 
 // 0 = Required (rule always needs a profile), 1 = Optional, 2 = NotRequired
 export type ProfileDependency = 0 | 1 | 2;
@@ -233,6 +234,13 @@ export const defaultEventData: Record<EventType, object> = {
   exit: {
     comm: 'bash',
     pid: 1234,
+    containerId: 'abc123',
+    containerName: 'my-container',
+  },
+  procfs: {
+    comm: 'cat',
+    pid: 1234,
+    path: '/proc/1/mem',
     containerId: 'abc123',
     containerName: 'my-container',
   },

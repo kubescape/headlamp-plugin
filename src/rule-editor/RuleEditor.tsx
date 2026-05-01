@@ -49,23 +49,7 @@ import {
 } from '../types/Rules';
 import { loadWasm } from '../wasm/initWasmModule';
 
-const EVENT_TYPES: EventType[] = [
-  'exec',
-  'open',
-  'syscall',
-  'capabilities',
-  'dns',
-  'network',
-  'bpf',
-  'kmod',
-  'ssh',
-  'symlink',
-  'hardlink',
-  'ptrace',
-  'randomx',
-  'unshare',
-  'iouring',
-];
+const EVENT_TYPES = Object.keys(defaultEventData) as EventType[];
 
 const DEFAULT_NAMESPACE = 'kubescape';
 
@@ -301,7 +285,7 @@ function RuleFormPage({
   };
 
   const isReadOnly =
-    isEdit && ruleMeta.name === 'default-rules' && ruleMeta.namespace === 'kubescape';
+    isEdit && initialMeta?.name === 'default-rules' && initialMeta?.namespace === 'kubescape';
 
   return (
     <SectionBox backLink>
@@ -599,7 +583,11 @@ function RuleForm({
         label="Severity (1–10)"
         type="number"
         value={rule.severity}
-        onChange={e => onRuleChange('severity', Math.min(10, Math.max(1, Number(e.target.value))))}
+        onChange={e => {
+          const next = Number(e.target.value);
+          if (!Number.isFinite(next)) return;
+          onRuleChange('severity', Math.min(10, Math.max(1, next)));
+        }}
         size="small"
         sx={{ ...row, width: 160 }}
         inputProps={{ min: 1, max: 10 }}
@@ -1145,6 +1133,10 @@ function PlaygroundDialog({
   };
 
   const evaluate = useCallback(() => {
+    if (!window.RuleEval) {
+      setResults([]);
+      return;
+    }
     const next: RuleTestResult[] = rules.map(rule => {
       if (rule.enabled === false) return { rule, evalResult: null, evalError: '' };
       const singleYAML = yaml.dump({
