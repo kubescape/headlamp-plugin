@@ -254,11 +254,13 @@ function RuleFormPage({
   const addRule = () => {
     setRules(rs => [...rs, { ...EMPTY_RULE }]);
     setExpanded(rules.length);
+    setSaved(false);
   };
 
   const removeRule = (idx: number) => {
     setRules(rs => rs.filter((_, i) => i !== idx));
     setExpanded(Math.max(0, idx - 1));
+    setSaved(false);
   };
 
   const handleSave = async () => {
@@ -285,8 +287,10 @@ function RuleFormPage({
 
     try {
       if (isEdit) {
+        const origName = initialMeta?.name ?? ruleMeta.name;
+        const origNamespace = initialMeta?.namespace ?? ruleMeta.namespace;
         await put(
-          `/apis/kubescape.io/v1/namespaces/${ruleMeta.namespace}/rules/${ruleMeta.name}`,
+          `/apis/kubescape.io/v1/namespaces/${origNamespace}/rules/${origName}`,
           body
         );
       } else {
@@ -359,7 +363,7 @@ function RuleFormPage({
               <TextField
                 label="Name"
                 value={ruleMeta.name}
-                onChange={e => setRuleMeta(m => ({ ...m, name: e.target.value }))}
+                onChange={e => { setRuleMeta(m => ({ ...m, name: e.target.value })); setSaved(false); }}
                 size="small"
                 fullWidth
                 required
@@ -368,7 +372,7 @@ function RuleFormPage({
               <TextField
                 label="Namespace"
                 value={ruleMeta.namespace}
-                onChange={e => setRuleMeta(m => ({ ...m, namespace: e.target.value }))}
+                onChange={e => { setRuleMeta(m => ({ ...m, namespace: e.target.value })); setSaved(false); }}
                 size="small"
                 fullWidth
               />
