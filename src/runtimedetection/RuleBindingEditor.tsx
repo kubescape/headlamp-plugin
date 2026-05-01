@@ -238,6 +238,15 @@ function RuleBindingForm({
   const handleSave = async () => {
     if (!name.trim()) return setErrorMessage('Name is required');
     if (rules.some(r => !r.ruleName.trim())) return setErrorMessage('All rules must have a name');
+    const hasEmptyInNotIn = [...nsExpressions, ...podExpressions].some(
+      e =>
+        (e.operator === 'In' || e.operator === 'NotIn') &&
+        e.values
+          .split(',')
+          .map((v: string) => v.trim())
+          .filter(Boolean).length === 0
+    );
+    if (hasEmptyInNotIn) return setErrorMessage('In/NotIn expressions require at least one value');
 
     const body: any = {
       apiVersion: 'kubescape.io/v1',

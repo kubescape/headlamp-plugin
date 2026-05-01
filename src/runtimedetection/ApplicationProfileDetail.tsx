@@ -26,11 +26,12 @@ export function ApplicationProfileDetail() {
           rows={[
             {
               name: 'Workload',
-              value: profile.metadata.labels['kubescape.io/workload-name'],
+              value:
+                profile.metadata.labels?.['kubescape.io/workload-name'] ?? profile.metadata.name,
             },
             {
               name: 'Kind',
-              value: profile.metadata.labels['kubescape.io/workload-kind'],
+              value: profile.metadata.labels?.['kubescape.io/workload-kind'] ?? '—',
             },
             {
               name: 'Namespace',
