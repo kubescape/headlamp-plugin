@@ -138,6 +138,15 @@ export const rulesClass = makeCustomResourceClass({
   customResourceDefinition: undefined as any,
 });
 
+export const runtimeRuleAlertBindingClass = makeCustomResourceClass({
+  apiInfo: [{ group: 'kubescape.io', version: 'v1' }],
+  isNamespaced: false,
+  singularName: 'runtimerulealertbinding',
+  pluralName: 'runtimerulealertbindings',
+  kind: 'RuntimeRuleAlertBinding',
+  customResourceDefinition: undefined as any,
+});
+
 export async function listQuery(objectClass: KubeObjectClass): Promise<any> {
   const namespaces: string[] = getAllowedNamespaces();
   const group = objectClass.apiEndpoint.apiInfo[0].group;

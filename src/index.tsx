@@ -49,6 +49,8 @@ namespace RoutingPath {
   export const ApplicationProfiles = '/kubescape/applicationprofiles';
   export const RuntimeDetection = '/kubescape/runtimedetection/:namespace/:name';
   export const NetworkNeighborhoodDetail = '/kubescape/networkneighborhood/:namespace/:name';
+  export const RuleBindingNew = '/kubescape/rulebinding/new';
+  export const RuleBindingEdit = '/kubescape/rulebinding/:name';
 }
 
 export namespace RoutingName {
@@ -79,6 +81,8 @@ export namespace RoutingName {
   export const RuleList = 'Rule List';
   export const RuleNew = 'New Rule';
   export const RuleEdit = 'Edit Rule';
+  export const RuleBindingNew = 'New Rule Binding';
+  export const RuleBindingEdit = 'Edit Rule Binding';
   export const VulnerabilitiesNamespaceSummary = 'Namespace Vulnerabilities';
 }
 
@@ -346,24 +350,42 @@ registerRoute({
   name: RoutingName.RuleEdit,
 });
 
-import { ApplicationProfiles } from './runtimedetection/ApplicationProfiles';
+import { RuntimeDetection } from './runtimedetection/RuntimeDetection';
 
 registerRoute({
   path: RoutingPath.ApplicationProfiles,
   sidebar: 'runtime-detection',
-  component: () => <ApplicationProfiles />,
+  component: () => <RuntimeDetection />,
   exact: true,
   name: RoutingName.ApplicationProfiles,
 });
 
-import { RuntimeDetection } from './runtimedetection/RuntimeDetection';
+import { ApplicationProfileDetail } from './runtimedetection/ApplicationProfileDetail';
 
 registerRoute({
   path: RoutingPath.RuntimeDetection,
   sidebar: 'runtime-detection',
-  component: () => <RuntimeDetection />,
+  component: () => <ApplicationProfileDetail />,
   exact: true,
   name: RoutingName.RuntimeDetection,
+});
+
+import { RuleBindingEdit, RuleBindingNew } from './runtimedetection/RuleBindingEditor';
+
+registerRoute({
+  path: RoutingPath.RuleBindingNew,
+  sidebar: 'runtime-detection',
+  component: () => <RuleBindingNew />,
+  exact: true,
+  name: RoutingName.RuleBindingNew,
+});
+
+registerRoute({
+  path: RoutingPath.RuleBindingEdit,
+  sidebar: 'runtime-detection',
+  component: () => <RuleBindingEdit />,
+  exact: true,
+  name: RoutingName.RuleBindingEdit,
 });
 
 import { NetworkNeighborhoodDetail } from './runtimedetection/NetworkNeighborhoodDetail';
