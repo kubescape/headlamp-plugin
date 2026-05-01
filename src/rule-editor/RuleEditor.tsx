@@ -478,7 +478,10 @@ function RuleForm({
   }>({ expressions: [] });
 
   useEffect(() => {
-    loadWasm();
+    void loadWasm();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     const timeout = setTimeout(() => {
       if (!window.RuleEval) return;
       try {
@@ -969,9 +972,9 @@ function ClusterMockLoader({
 
   const handleOpen = () => {
     setOpen(true);
-    request('/api/v1/namespaces').then((res: any) =>
-      setNamespaces(res.items?.map((ns: any) => ns.metadata.name) ?? [])
-    );
+    request('/api/v1/namespaces')
+      .then((res: any) => setNamespaces(res.items?.map((ns: any) => ns.metadata.name) ?? []))
+      .catch(() => setNamespaces([]));
   };
 
   useEffect(() => {

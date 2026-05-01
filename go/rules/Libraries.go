@@ -304,9 +304,12 @@ func libraryEnvOptions(profile MockProfile, network MockNetwork, k8sMock MockK8s
 			cel.Overload("k8s_get_container_mount_paths",
 				[]*cel.Type{cel.DynType, cel.DynType, cel.DynType}, cel.ListType(cel.DynType),
 				cel.FunctionBinding(func(values ...ref.Val) ref.Val {
-					ns, _ := strVal(values[0])
-					pod, _ := strVal(values[1])
-					container, _ := strVal(values[2])
+					ns, ok1 := strVal(values[0])
+					pod, ok2 := strVal(values[1])
+					container, ok3 := strVal(values[2])
+					if !ok1 || !ok2 || !ok3 {
+						return types.DefaultTypeAdapter.NativeToValue([]ref.Val{})
+					}
 					key := ns + "/" + pod + "/" + container
 					paths := k8sMock.MountPaths[key]
 					vals := make([]ref.Val, len(paths))

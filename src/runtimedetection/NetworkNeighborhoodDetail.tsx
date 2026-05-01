@@ -46,8 +46,8 @@ export function NetworkNeighborhoodDetail() {
         language={'yaml'}
         theme={localStorage.headlampThemePreference === 'dark' ? 'vs-dark' : ''}
         value={yaml.dump(nn)}
-        height={window.innerHeight * 0.6}
-        width={window.innerWidth * 0.6}
+        height="60vh"
+        width="60vw"
         options={{
           readOnly: true,
           lineNumbers: 'off',

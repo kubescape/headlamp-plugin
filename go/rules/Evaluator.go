@@ -112,7 +112,9 @@ func NewRuleEvaluator(ruleYAML []byte, eventType string, eventData, profileData,
 // matching ruleExpression entry — otherwise those expressions reference fields that don't
 // exist in the current event data.
 func (e *RuleEvaluator) Evaluate() RuleEvalResults {
-	results := RuleEvalResults{}
+	results := RuleEvalResults{
+		RuleExpression: []RuleExprResult{},
+	}
 
 	inputData := map[string]any{
 		"event":     e.eventData,
@@ -156,6 +158,8 @@ func (e *RuleEvaluator) Evaluate() RuleEvalResults {
 		} else if val != nil {
 			if b, ok := val.Value().(bool); ok {
 				r.Result = &b
+			} else {
+				r.Error = fmt.Sprintf("expression must return bool, got %T", val.Value())
 			}
 		}
 		results.RuleExpression = append(results.RuleExpression, r)
