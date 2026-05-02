@@ -1,6 +1,6 @@
 {
   "name": "kubescape-plugin",
-  "version": "v0.10.10",
+  "version": "v0.11.0",
   "description": "Kubescape plugin",
   "scripts": {
     "start": "headlamp-plugin start",
