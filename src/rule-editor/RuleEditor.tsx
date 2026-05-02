@@ -483,9 +483,7 @@ function RuleForm({
           spec: { rules: [rule] },
         });
 
-        const distinctTypes = [
-          ...new Set(rule.expressions.ruleExpression.map(e => e.eventType)),
-        ];
+        const distinctTypes = [...new Set(rule.expressions.ruleExpression.map(e => e.eventType))];
 
         const exprErrors: (string | undefined)[] = rule.expressions.ruleExpression.map(
           () => undefined
@@ -517,7 +515,11 @@ function RuleForm({
             uniqueIdError = result.uniqueId.error;
         }
 
-        setSyntaxErrors({ message: messageError, uniqueId: uniqueIdError, expressions: exprErrors });
+        setSyntaxErrors({
+          message: messageError,
+          uniqueId: uniqueIdError,
+          expressions: exprErrors,
+        });
       } catch {
         // WASM not ready yet
       }
