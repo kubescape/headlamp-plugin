@@ -212,6 +212,10 @@ function RuleFormPage({
     }
   );
   const [rules, setRules] = useState<Rule[]>(initialRules ?? [EMPTY_RULE]);
+  const ruleKeyCounter = useRef(0);
+  const [ruleKeys, setRuleKeys] = useState<string[]>(() =>
+    (initialRules ?? [EMPTY_RULE]).map(() => String(ruleKeyCounter.current++))
+  );
   const [expanded, setExpanded] = useState<number>(0);
   const [tabValue, setTabValue] = useState(1);
   const [errorMessage, setErrorMessage] = useState('');
@@ -237,12 +241,14 @@ function RuleFormPage({
 
   const addRule = () => {
     setRules(rs => [...rs, { ...EMPTY_RULE }]);
+    setRuleKeys(ks => [...ks, String(ruleKeyCounter.current++)]);
     setExpanded(rules.length);
     setSaved(false);
   };
 
   const removeRule = (idx: number) => {
     setRules(rs => rs.filter((_, i) => i !== idx));
+    setRuleKeys(ks => ks.filter((_, i) => i !== idx));
     setExpanded(Math.max(0, idx - 1));
     setSaved(false);
   };
@@ -369,7 +375,7 @@ function RuleFormPage({
             {/* Rules accordion */}
             {rules.map((r, idx) => (
               <Accordion
-                key={idx}
+                key={ruleKeys[idx]}
                 expanded={expanded === idx}
                 onChange={() => setExpanded(expanded === idx ? -1 : idx)}
                 sx={{ mb: 1 }}
@@ -443,24 +449,33 @@ function RuleForm({
   const setExpr = (patch: Partial<Rule['expressions']>) =>
     onRuleChange('expressions', { ...rule.expressions, ...patch });
 
+  const exprKeyCounter = useRef(0);
+  const exprKeys = useRef<string[]>(
+    rule.expressions.ruleExpression.map(() => String(exprKeyCounter.current++))
+  );
+
   const updateExpression = (idx: number, field: keyof RuleExpression, value: string) => {
     const exprs = [...rule.expressions.ruleExpression];
     exprs[idx] = { ...exprs[idx], [field]: value };
     setExpr({ ruleExpression: exprs });
   };
 
-  const addExpression = () =>
+  const addExpression = () => {
+    exprKeys.current.push(String(exprKeyCounter.current++));
     setExpr({
       ruleExpression: [
         ...rule.expressions.ruleExpression,
         { eventType: 'exec' as EventType, expression: '' },
       ],
     });
+  };
 
-  const removeExpression = (idx: number) =>
+  const removeExpression = (idx: number) => {
+    exprKeys.current.splice(idx, 1);
     setExpr({
       ruleExpression: rule.expressions.ruleExpression.filter((_, i) => i !== idx),
     });
+  };
 
   const [syntaxErrors, setSyntaxErrors] = useState<{
     message?: string;
@@ -733,7 +748,7 @@ function RuleForm({
       </Stack>
       {rule.expressions.ruleExpression.map((expr, idx) => (
         <Box
-          key={`expr-${idx}`}
+          key={exprKeys.current[idx]}
           sx={{ mb: 2, pl: 1, borderLeft: '3px solid', borderColor: 'divider' }}
         >
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
@@ -998,9 +1013,9 @@ function ClusterMockLoader({
     if (!namespace) return;
     setWorkload('');
     setWorkloads([]);
-    request(`/apis/${SPDX_API}/namespaces/${namespace}/${crdKind}`).then((res: any) =>
-      setWorkloads(res.items?.map((i: any) => i.metadata.name) ?? [])
-    );
+    request(`/apis/${SPDX_API}/namespaces/${namespace}/${crdKind}`)
+      .then((res: any) => setWorkloads(res.items?.map((i: any) => i.metadata.name) ?? []))
+      .catch(() => setWorkloads([]));
   }, [namespace, crdKind]);
 
   const emptyComment =
