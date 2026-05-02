@@ -392,16 +392,18 @@ function RuleFormPage({
                       {r.id}
                     </Typography>
                     <Box sx={{ flex: 1 }} />
-                    <IconButton
-                      size="small"
-                      onClick={e => {
-                        e.stopPropagation();
-                        removeRule(idx);
-                      }}
-                      disabled={rules.length <= 1}
-                    >
-                      <Icon icon="mdi:delete-outline" />
-                    </IconButton>
+                    {!isReadOnly && (
+                      <IconButton
+                        size="small"
+                        onClick={e => {
+                          e.stopPropagation();
+                          removeRule(idx);
+                        }}
+                        disabled={rules.length <= 1}
+                      >
+                        <Icon icon="mdi:delete-outline" />
+                      </IconButton>
+                    )}
                   </Stack>
                 </AccordionSummary>
                 <AccordionDetails>
@@ -409,18 +411,21 @@ function RuleFormPage({
                     rule={r}
                     onRuleChange={(key, value) => updateRule(idx, key, value)}
                     submitted={submitted}
+                    readOnly={isReadOnly}
                   />
                 </AccordionDetails>
               </Accordion>
             ))}
-            <Button
-              size="small"
-              startIcon={<Icon icon="mdi:plus" />}
-              onClick={addRule}
-              sx={{ mt: 1 }}
-            >
-              Add rule
-            </Button>
+            {!isReadOnly && (
+              <Button
+                size="small"
+                startIcon={<Icon icon="mdi:plus" />}
+                onClick={addRule}
+                sx={{ mt: 1 }}
+              >
+                Add rule
+              </Button>
+            )}
           </Box>
         </TabPanel>
         <TabPanel value={2}>
@@ -441,10 +446,12 @@ function RuleForm({
   rule,
   onRuleChange,
   submitted,
+  readOnly = false,
 }: Readonly<{
   rule: Rule;
   onRuleChange: <K extends keyof Rule>(key: K, value: Rule[K]) => void;
   submitted: boolean;
+  readOnly?: boolean;
 }>) {
   const setExpr = (patch: Partial<Rule['expressions']>) =>
     onRuleChange('expressions', { ...rule.expressions, ...patch });
@@ -546,7 +553,11 @@ function RuleForm({
   const mono = { style: { fontFamily: 'monospace', fontSize: 13 } };
 
   return (
-    <Box>
+    <Box
+      component={readOnly ? 'fieldset' : 'div'}
+      disabled={readOnly}
+      sx={{ border: 0, p: 0, m: 0 }}
+    >
       <Stack direction="row" spacing={2} sx={row}>
         <TextField
           label="Name"
@@ -654,6 +665,14 @@ function RuleForm({
           options={MITRE_TACTICS}
           getOptionLabel={o => (typeof o === 'string' ? o : `${o.id} — ${o.name}`)}
           inputValue={rule.mitreTactic}
+          filterOptions={(options, { inputValue }) => {
+            const isStoredId = options.some(o => o.id === inputValue);
+            if (!inputValue || isStoredId) return options;
+            const q = inputValue.toLowerCase();
+            return options.filter(
+              o => o.id.toLowerCase().includes(q) || o.name.toLowerCase().includes(q)
+            );
+          }}
           onInputChange={(_, v, reason) => {
             if (reason !== 'reset') onRuleChange('mitreTactic', v);
           }}
@@ -678,6 +697,14 @@ function RuleForm({
           options={MITRE_TECHNIQUES}
           getOptionLabel={o => (typeof o === 'string' ? o : `${o.id} — ${o.name}`)}
           inputValue={rule.mitreTechnique}
+          filterOptions={(options, { inputValue }) => {
+            const isStoredId = options.some(o => o.id === inputValue);
+            if (!inputValue || isStoredId) return options;
+            const q = inputValue.toLowerCase();
+            return options.filter(
+              o => o.id.toLowerCase().includes(q) || o.name.toLowerCase().includes(q)
+            );
+          }}
           onInputChange={(_, v, reason) => {
             if (reason !== 'reset') onRuleChange('mitreTechnique', v);
           }}
@@ -767,13 +794,15 @@ function RuleForm({
               ))}
             </TextField>
             <Box sx={{ flex: 1 }} />
-            <IconButton
-              size="small"
-              onClick={() => removeExpression(idx)}
-              disabled={rule.expressions.ruleExpression.length <= 1}
-            >
-              <Icon icon="mdi:delete-outline" />
-            </IconButton>
+            {!readOnly && (
+              <IconButton
+                size="small"
+                onClick={() => removeExpression(idx)}
+                disabled={rule.expressions.ruleExpression.length <= 1}
+              >
+                <Icon icon="mdi:delete-outline" />
+              </IconButton>
+            )}
           </Stack>
           <TextField
             value={expr.expression}
@@ -786,12 +815,15 @@ function RuleForm({
             inputProps={mono}
             error={!!syntaxErrors.expressions[idx]}
             helperText={syntaxErrors.expressions[idx]}
+            InputProps={{ readOnly }}
           />
         </Box>
       ))}
-      <IconButton size="small" onClick={addExpression} sx={{ mt: 0.5 }}>
-        <Icon icon="mdi:plus-circle-outline" />
-      </IconButton>
+      {!readOnly && (
+        <IconButton size="small" onClick={addExpression} sx={{ mt: 0.5 }}>
+          <Icon icon="mdi:plus-circle-outline" />
+        </IconButton>
+      )}
     </Box>
   );
 }
