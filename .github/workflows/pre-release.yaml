@@ -21,6 +21,7 @@ jobs:
     name: Create Release
     permissions:
       contents: write # needed for EndBug/add-and-commit and softprops/action-gh-release
+      id-token: write # needed for cosign keyless signing
     runs-on: ubuntu-latest
 
     defaults:
@@ -111,12 +112,20 @@ jobs:
             - package.json
             - examples/headlamp-helm-values.yaml
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@fb28c2b6339dcd94da6e4cbcbc5e888961f6f8c3 # v3.9.0
+
+      - name: Sign release artifact
+        run: cosign sign-blob --yes ${RELEASE_TAR} --bundle ${RELEASE_TAR}.bundle
+
       - name: Create Release Draft
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           tag_name: ${{ github.event.inputs.releaseName }}
           prerelease: true
-          files: ${{ env.RELEASE_TAR }}
+          files: |
+            ${{ env.RELEASE_TAR }}
+            ${{ env.RELEASE_TAR }}.bundle
           token: ${{ github.token }}
 
       - name: Set up QEMU
@@ -140,3 +149,6 @@ jobs:
           context: .
           push: true
           tags: quay.io/${{ github.repository }}:${{ github.event.inputs.releaseName }}
+
+      - name: Sign Docker image
+        run: cosign sign --yes quay.io/${{ github.repository }}@${{ steps.push.outputs.digest }}
