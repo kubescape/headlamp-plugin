@@ -116,7 +116,10 @@ jobs:
         uses: sigstore/cosign-installer@fb28c2b6339dcd94da6e4cbcbc5e888961f6f8c3 # v3.9.0
 
       - name: Sign release artifact
-        run: cosign sign-blob --yes ${RELEASE_TAR} --bundle ${RELEASE_TAR}.bundle
+        run: |
+          cosign sign-blob --yes ${RELEASE_TAR} \
+            --output-signature ${RELEASE_TAR}.sig \
+            --output-certificate ${RELEASE_TAR}.pem
 
       - name: Create Release Draft
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
@@ -125,7 +128,8 @@ jobs:
           prerelease: true
           files: |
             ${{ env.RELEASE_TAR }}
-            ${{ env.RELEASE_TAR }}.bundle
+            ${{ env.RELEASE_TAR }}.sig
+            ${{ env.RELEASE_TAR }}.pem
           token: ${{ github.token }}
 
       - name: Set up QEMU
