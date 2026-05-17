@@ -16,6 +16,8 @@ keywords:
   - network-policies
   - runtime-detection
 links:
+  - name: Source Code
+    url: https://github.com/kubescape/headlamp-plugin
   - name: Headlamp
     url: https://headlamp.dev/
   - name: Kubescape operator
