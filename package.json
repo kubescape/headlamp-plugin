@@ -31,10 +31,7 @@
       "plugin:jsx-a11y/recommended"
     ],
     "ignorePatterns": [
-      "src/wasm/*",
-      "src/rego/controls.ts",
-      "src/rego/frameworks.ts",
-      "src/compliance/frameworks.ts"
+      "src/wasm/*"
     ]
   },
   "devDependencies": {
