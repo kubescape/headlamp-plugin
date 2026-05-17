@@ -73,6 +73,9 @@ jobs:
           value: '${{ github.event.inputs.releaseName }}'
           commitChange: false
 
+      - name: Update package-lock.json
+        run: npm install --package-lock-only
+
       - name: Update headlamp-helm-values
         uses: fjogeleit/yaml-update-action@04ff6ec06568fd21197db746472e36cc425de850 # v0.16.1
         with:
@@ -110,6 +113,7 @@ jobs:
           add: |
             - artifacthub-pkg.yml
             - package.json
+            - package-lock.json
             - examples/headlamp-helm-values.yaml
 
       - name: Install cosign
