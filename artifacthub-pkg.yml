@@ -2,9 +2,19 @@ version: v0.11.2
 name: headlamp_kubescape
 displayName: Kubescape Headlamp Plugin
 createdAt: '2026-05-17T07:01:11Z'
-description: Kubescape compliance and vulnerabilities in Headlamp.
+description: Kubescape Headlamp plugin — compliance, vulnerabilities, network policies, and runtime threat detection
+license: Apache-2.0
 homeURL: https://github.com/kubescape/headlamp-plugin
 logoURL: https://avatars.githubusercontent.com/u/100554170
+keywords:
+  - headlamp
+  - kubernetes
+  - kubescape
+  - security
+  - compliance
+  - vulnerabilities
+  - network-policies
+  - runtime-detection
 links:
   - name: Headlamp
     url: https://headlamp.dev/
@@ -64,13 +74,22 @@ readme: |
   - Custom frameworks and exceptions
 
   The queries to the Kubescape database use Headlamps feature `Allowed namespaces`, supporting multi tenant clusters. Configuration of this setting is done per user in Settings/Cluster.
+maintainers:
+  - name: Matthijs Galesloot
+    email: matthijs.galesloot@gmail.com
+  - name: Matthias Bertschy
+    email: matthias.bertschy@gmail.com
+provider:
+  name: Kubescape
+recommendations:
+  - url: https://artifacthub.io/packages/helm/kubescape/kubescape-operator
+  - url: https://artifacthub.io/packages/helm/headlamp/headlamp
 install: |
   Desktop Headlamp 
   - Install Headlamp (https://headlamp.dev/docs/latest/installation/desktop/)
   - Open Plugin Catalog 
   - Select the KubeScape Headlamp plugin and click the install button
-  - After install you may need to restart Headlamp 
-
+  
   In-cluster Headlamp 
   - Install Headlamp (https://headlamp.dev/docs/latest/installation/in-cluster/)
   - Add an initContainer to the headlamp deployment to download the kubescape-plugin files. See [example helm values](https://github.com/kubescape/headlamp-plugin/blob/main/examples/headlamp-helm-values.yaml).
