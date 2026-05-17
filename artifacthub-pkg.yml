@@ -2,7 +2,7 @@ version: v0.11.2
 name: headlamp_kubescape
 displayName: Kubescape Headlamp Plugin
 createdAt: '2026-05-17T07:01:11Z'
-description: Kubescape Headlamp plugin — compliance, vulnerabilities, network policies, and runtime threat detection
+description: Kubescape Headlamp plugin — compliance, vulnerabilities, network policies, admission policies, and runtime threat detection
 license: Apache-2.0
 homeURL: https://github.com/kubescape/headlamp-plugin
 logoURL: https://avatars.githubusercontent.com/u/100554170
