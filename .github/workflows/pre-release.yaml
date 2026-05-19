@@ -66,7 +66,7 @@ jobs:
         run: echo "RELEASE_DATE=$(date +'%Y-%m-%dT%H:%M:%SZ')" >> ${GITHUB_ENV}
 
       - name: Update package.json
-        uses: fjogeleit/yaml-update-action@04ff6ec06568fd21197db746472e36cc425de850 # v0.16.1
+        uses: fjogeleit/yaml-update-action@dffe9a5223d84653c13374032382f6bb5de8e5ef # v0.17.0
         with:
           valueFile: package.json
           propertyPath: version
@@ -77,7 +77,7 @@ jobs:
         run: npm install --package-lock-only
 
       - name: Update headlamp-helm-values
-        uses: fjogeleit/yaml-update-action@04ff6ec06568fd21197db746472e36cc425de850 # v0.16.1
+        uses: fjogeleit/yaml-update-action@dffe9a5223d84653c13374032382f6bb5de8e5ef # v0.17.0
         with:
           valueFile: examples/headlamp-helm-values.yaml
           propertyPath: initContainers[0].image
@@ -94,7 +94,7 @@ jobs:
         run: echo "CHECKSUM=$(sha256sum ${RELEASE_TAR} | cut -d' ' -f1)" >> ${GITHUB_ENV}
 
       - name: Update artifacthub-pkg.yml
-        uses: fjogeleit/yaml-update-action@04ff6ec06568fd21197db746472e36cc425de850 # v0.16.1
+        uses: fjogeleit/yaml-update-action@dffe9a5223d84653c13374032382f6bb5de8e5ef # v0.17.0
         with:
           valueFile: artifacthub-pkg.yml
           changes: |
