@@ -11,6 +11,7 @@ import { Link } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { getURLSegments } from '../common/url';
+import { CreateExceptionButton } from '../exceptions/CreateExceptionButton';
 import { RoutingName } from '../index';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
 import { useRegoData } from '../rego';
@@ -102,13 +103,14 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
             id: 'Status',
             header: 'Status',
             accessorKey: 'status.status',
-            Cell: ({ row }: any) => makeStatusLabel(workloadConfigurationScan, row.original),
+            Cell: ({ row }: { row: { original: WorkloadConfigurationScan.Control } }) =>
+              makeStatusLabel(workloadConfigurationScan, row.original),
             gridTemplate: 'min-content',
           },
           {
             header: 'Control',
             accessorKey: 'controlID',
-            Cell: ({ cell }: any) => {
+            Cell: ({ cell }: { cell: { getValue: () => string } }) => {
               return (
                 <Link
                   target="_blank"
@@ -168,6 +170,32 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
                   </HeadlampLink>
                 );
               }
+            },
+            gridTemplate: 'min-content',
+          },
+          {
+            header: 'Exception',
+            accessorFn: (control: WorkloadConfigurationScan.Control) => {
+              const isFailed = control.status.status === 'failed';
+              const isExcepted =
+                workloadConfigurationScan.exceptedByPolicy || control.exceptedByPolicy;
+              if (!isFailed || isExcepted) {
+                return null;
+              }
+              return (
+                <CreateExceptionButton
+                  prefillControlID={control.controlID}
+                  prefillWorkloadKind={
+                    workloadConfigurationScan.metadata.labels['kubescape.io/workload-kind']
+                  }
+                  prefillWorkloadName={
+                    workloadConfigurationScan.metadata.labels['kubescape.io/workload-name']
+                  }
+                  prefillNamespace={
+                    workloadConfigurationScan.metadata.labels['kubescape.io/workload-namespace']
+                  }
+                />
+              );
             },
             gridTemplate: 'min-content',
           },
