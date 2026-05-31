@@ -10,6 +10,7 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { FormControlLabel, Link, Switch } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { CreateExceptionButton } from '../exceptions/CreateExceptionButton';
 import makeSeverityLabel from '../common/SeverityLabel';
 import { getURLSegments } from '../common/url';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
@@ -76,7 +77,15 @@ export default function KubescapeVulnerabilityDetails() {
             ]}
           />
 
-          {manifestAll && <Matches manifest={manifestAll} relevant={manifestRelevant} />}
+          {manifestAll && (
+            <Matches
+              manifest={manifestAll}
+              relevant={manifestRelevant}
+              workloadKind={summary.metadata.labels['kubescape.io/workload-kind']}
+              workloadName={summary.metadata.labels['kubescape.io/workload-name']}
+              workloadNamespace={summary.metadata.labels['kubescape.io/workload-namespace']}
+            />
+          )}
         </SectionBox>
 
         {/* <SectionBox title="Summary">
@@ -91,11 +100,16 @@ export default function KubescapeVulnerabilityDetails() {
   );
 }
 
-function Matches(props: {
-  manifest: VulnerabilityManifest;
-  relevant: VulnerabilityManifest | null;
-}) {
-  const { manifest, relevant } = props;
+function Matches(
+  props: Readonly<{
+    manifest: VulnerabilityManifest;
+    relevant: VulnerabilityManifest | null;
+    workloadKind: string;
+    workloadName: string;
+    workloadNamespace: string;
+  }>
+) {
+  const { manifest, relevant, workloadKind, workloadName, workloadNamespace } = props;
   const results: VulnerabilityManifest.Match[] = manifest?.spec.payload.matches;
   const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useState(true);
 
@@ -112,7 +126,7 @@ function Matches(props: {
         checked={isRelevantCVESwitchChecked}
         control={<Switch color="primary" />}
         label={'Relevant CVE'}
-        onChange={(event: any, checked: boolean) => {
+        onChange={(_event: any, checked: boolean) => {
           setIsRelevantCVESwitchChecked(checked);
         }}
       />
@@ -122,14 +136,25 @@ function Matches(props: {
           {
             header: 'Severity',
             accessorKey: 'vulnerability.severity',
-            Cell: ({ cell }: any) => makeSeverityLabel(cell.getValue()),
+            Cell: ({ cell }: { cell: { getValue: () => string } }) =>
+              makeSeverityLabel(cell.getValue()),
             gridTemplate: 'auto',
           },
           {
             header: 'CVE',
             accessorKey: 'vulnerability.id',
-            Cell: ({ cell }: any) => (
-              <Link target="_blank" href={cell.row.original.vulnerability.dataSource}>
+            Cell: ({
+              cell,
+              row,
+            }: {
+              cell: { getValue: () => string };
+              row: { original: VulnerabilityManifest.Match };
+            }) => (
+              <Link
+                target="_blank"
+                rel="noopener noreferrer"
+                href={row.original.vulnerability.dataSource}
+              >
                 {cell.getValue()}
               </Link>
             ),
@@ -182,7 +207,22 @@ function Matches(props: {
           {
             header: 'Description',
             accessorKey: 'vulnerability.description',
-            Cell: ({ cell }: any) => <ShowHideLabel>{cell.getValue()}</ShowHideLabel>,
+            Cell: ({ cell }: { cell: { getValue: () => string } }) => (
+              <ShowHideLabel>{cell.getValue()}</ShowHideLabel>
+            ),
+          },
+          {
+            header: 'Exception',
+            accessorFn: (match: VulnerabilityManifest.Match) => (
+              <CreateExceptionButton
+                prefillCVEID={match.vulnerability.id}
+                prefillWorkloadKind={workloadKind}
+                prefillWorkloadName={workloadName}
+                prefillNamespace={workloadNamespace}
+                defaultType="vulnerability"
+              />
+            ),
+            gridTemplate: 'min-content',
           },
         ]}
         initialState={{
