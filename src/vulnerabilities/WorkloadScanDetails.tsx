@@ -150,7 +150,11 @@ function Matches(
               cell: { getValue: () => string };
               row: { original: VulnerabilityManifest.Match };
             }) => (
-              <Link target="_blank" href={row.original.vulnerability.dataSource}>
+              <Link
+                target="_blank"
+                rel="noopener noreferrer"
+                href={row.original.vulnerability.dataSource}
+              >
                 {cell.getValue()}
               </Link>
             ),
@@ -215,6 +219,7 @@ function Matches(
                 prefillWorkloadKind={workloadKind}
                 prefillWorkloadName={workloadName}
                 prefillNamespace={workloadNamespace}
+                defaultType="vulnerability"
               />
             ),
             gridTemplate: 'min-content',

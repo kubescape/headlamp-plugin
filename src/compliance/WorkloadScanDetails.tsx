@@ -194,6 +194,7 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
                   prefillNamespace={
                     workloadConfigurationScan.metadata.labels['kubescape.io/workload-namespace']
                   }
+                  defaultType="posture"
                 />
               );
             },

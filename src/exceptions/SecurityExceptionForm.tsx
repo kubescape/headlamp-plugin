@@ -24,16 +24,13 @@ import {
 } from '@mui/material';
 import { useMemo, useState } from 'react';
 import { ErrorContainer } from '../common/ErrorContainer';
+import {
+  VulnerabilityStatus,
+  VulnerabilityJustification,
+} from '../softwarecomposition/SecurityException';
 
 type SecurityExceptionKind = 'SecurityException' | 'ClusterSecurityException';
 type PostureAction = 'ignore' | 'alert_only';
-type VulnerabilityStatus = 'not_affected' | 'fixed' | 'under_investigation';
-type VulnerabilityJustification =
-  | 'component_not_present'
-  | 'vulnerable_code_not_present'
-  | 'vulnerable_code_not_in_execute_path'
-  | 'vulnerable_code_cannot_be_controlled_by_adversary'
-  | 'inline_mitigations_already_exist';
 
 interface LabelSelector {
   matchLabels?: Record<string, string>;
@@ -115,6 +112,8 @@ interface SecurityExceptionFormProps {
   prefillWorkloadName?: string;
   prefillNamespace?: string;
   onClose?: () => void;
+  /** when provided, hide the exception-type chooser and preselect posture or vulnerability */
+  defaultType?: 'posture' | 'vulnerability';
 }
 
 interface FormErrors {
@@ -128,11 +127,7 @@ interface ValidationResult {
 
 const steps = ['Scope', 'Exception Type', 'Metadata', 'Review'];
 const postureActions: PostureAction[] = ['ignore', 'alert_only'];
-const vulnerabilityStatuses: VulnerabilityStatus[] = [
-  'not_affected',
-  'fixed',
-  'under_investigation',
-];
+const vulnerabilityStatuses: VulnerabilityStatus[] = ['not_affected', 'fixed', 'under_investigation'];
 const vulnerabilityJustifications: VulnerabilityJustification[] = [
   'component_not_present',
   'vulnerable_code_not_present',
@@ -149,6 +144,7 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
     prefillWorkloadName,
     prefillNamespace,
     onClose,
+    defaultType,
   } = props;
 
   const [activeStep, setActiveStep] = useState<number>(0);
@@ -161,8 +157,12 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
   const [workloadKind, setWorkloadKind] = useState<string>(prefillWorkloadKind ?? '');
   const [workloadName, setWorkloadName] = useState<string>(prefillWorkloadName ?? '');
 
-  const [includePosture, setIncludePosture] = useState<boolean>(Boolean(prefillControlID));
-  const [includeVulnerability, setIncludeVulnerability] = useState<boolean>(Boolean(prefillCVEID));
+  const [includePosture, setIncludePosture] = useState<boolean>(
+    defaultType ? defaultType === 'posture' : Boolean(prefillControlID)
+  );
+  const [includeVulnerability, setIncludeVulnerability] = useState<boolean>(
+    defaultType ? defaultType === 'vulnerability' : Boolean(prefillCVEID)
+  );
 
   const [posture, setPosture] = useState<PostureEntryForm>({
     controlID: prefillControlID ?? '',
@@ -290,14 +290,36 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
     setIsSubmitting(true);
     try {
       const manifest = buildManifest();
-      const path = buildApiPath(kind, namespace);
-      const created = (await post(path, manifest)) as SecurityExceptionResource;
+      const created = (await postWithVersionFallback(manifest, kind, namespace)) as SecurityExceptionResource;
       setCreatedResource(created);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to create SecurityException';
       setErrorMessage(message);
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function postWithVersionFallback(manifest: SecurityExceptionResource, kind: SecurityExceptionKind, ns: string) {
+    // try v1 first, then fall back to v1beta1 if 404/not found
+    const tryPost = async (version: 'v1' | 'v1beta1') => {
+      const m = { ...manifest, apiVersion: `kubescape.io/${version}` };
+      const path =
+        kind === 'SecurityException'
+          ? `/apis/kubescape.io/${version}/namespaces/${encodeURIComponent(ns)}/securityexceptions`
+          : `/apis/kubescape.io/${version}/clustersecurityexceptions`;
+      return post(path, m);
+    };
+
+    try {
+      return await tryPost('v1');
+    } catch (err: any) {
+      const message = err?.message ?? String(err);
+      const isNotFound = message.includes('404') || message.toLowerCase().includes('not found');
+      if (isNotFound) {
+        return await tryPost('v1beta1');
+      }
+      throw err;
     }
   }
 
@@ -450,7 +472,8 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
     )}`;
   }
 
-  const canContinue = validation.valid && !isSubmitting;
+  const isComplete = Boolean(createdResource);
+  const canContinue = validation.valid && !isSubmitting && !isComplete;
   const detailUrl = createdResource ? buildDetailUrl(createdResource) : null;
 
   return (
@@ -745,7 +768,7 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
         <Button
           variant="outlined"
           onClick={() => setActiveStep(prev => Math.max(prev - 1, 0))}
-          disabled={activeStep === 0 || isSubmitting}
+          disabled={activeStep === 0 || isSubmitting || isComplete}
         >
           Back
         </Button>
