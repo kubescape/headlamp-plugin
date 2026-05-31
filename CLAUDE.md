@@ -118,6 +118,7 @@ Provides CEL evaluation for Kubernetes ValidatingAdmissionPolicies without requi
 - **Multi-cluster**: Plugin supports Headlamp's multi-cluster features with backward compatibility
 - **Security**: All Kubernetes API access goes through Headlamp's secure proxy, no direct cluster access
 - **Build Dependencies**: WASM build requires Go installation; frontend build only requires npm
+- **API Groups**: Most CRDs use `spdx.softwarecomposition.kubescape.io/v1beta1`. The `SecurityException` and `ClusterSecurityException` CRDs use `kubescape.io/v1beta1` (operator-owned, defined in `src/softwarecomposition/SecurityException.ts`).
 
 ## Release Process
 

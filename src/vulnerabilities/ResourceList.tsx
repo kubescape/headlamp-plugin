@@ -1,5 +1,5 @@
-/* 
-  Show workload configuration scans. This view is part of the main Vulnerabilities page.  
+/*
+  Show workload configuration scans. This view is part of the main Vulnerabilities page.
 */
 import {
   Link,
@@ -117,7 +117,7 @@ export default function WorkloadScanListView(
                         name:
                           workloadScan.relevant?.manifestName ??
                           workloadScan.imageScan?.manifestName,
-                        namespace: workloadScan.imageScan?.namespace, //  namespace in vulnerabilitiesRef is wrong in refering to workload namespace
+                        namespace: workloadScan.imageScan?.namespace,
                       }}
                       search={workloadScan.relevant ? '?filtered' : ''}
                     >

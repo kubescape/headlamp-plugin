@@ -1,6 +1,7 @@
 /* 
   Show vulnerability scan results for a workload. 
 */
+import { Icon } from '@iconify/react';
 import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   NameValueTable,
@@ -8,10 +9,11 @@ import {
   ShowHideLabel,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { FormControlLabel, Link, Switch } from '@mui/material';
+import { FormControlLabel, IconButton, Link, Switch, Tooltip } from '@mui/material';
 import { useEffect, useState } from 'react';
 import makeSeverityLabel from '../common/SeverityLabel';
 import { getURLSegments } from '../common/url';
+import { GuidedVulnerabilityExceptionForm } from '../exceptions/GuidedVulnerabilityExceptionForm';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
 import { getCVESummary } from './CVESummary';
@@ -76,28 +78,36 @@ export default function KubescapeVulnerabilityDetails() {
             ]}
           />
 
-          {manifestAll && <Matches manifest={manifestAll} relevant={manifestRelevant} />}
+          {manifestAll && (
+            <Matches
+              manifest={manifestAll}
+              relevant={manifestRelevant}
+              workloadName={summary.metadata.labels['kubescape.io/workload-name']}
+              workloadNamespace={summary.metadata.labels['kubescape.io/workload-namespace']}
+              workloadKind={summary.metadata.labels['kubescape.io/workload-kind']}
+              imageRef={summary.metadata.annotations['kubescape.io/image-tag']}
+            />
+          )}
         </SectionBox>
-
-        {/* <SectionBox title="Summary">
-          <pre>{manifestAll ? YAML.stringify(manifestAll) : 'Not found'}</pre>
-        </SectionBox>
-
-        <SectionBox title="Manifest Relevant">
-          <pre>{manifestRelevant ? YAML.stringify(manifestRelevant) : 'Not found'}</pre>
-        </SectionBox> */}
       </>
     )
   );
 }
 
-function Matches(props: {
-  manifest: VulnerabilityManifest;
-  relevant: VulnerabilityManifest | null;
-}) {
-  const { manifest, relevant } = props;
+function Matches(
+  props: Readonly<{
+    manifest: VulnerabilityManifest;
+    relevant: VulnerabilityManifest | null;
+    workloadName: string;
+    workloadNamespace: string;
+    workloadKind: string;
+    imageRef?: string;
+  }>
+) {
+  const { manifest, relevant, workloadName, workloadNamespace, workloadKind, imageRef } = props;
   const results: VulnerabilityManifest.Match[] = manifest?.spec.payload.matches;
   const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useState(true);
+  const [selectedCve, setSelectedCve] = useState<string | null>(null);
 
   let relevantResults;
   if (isRelevantCVESwitchChecked && relevant?.spec.payload.matches && results) {
@@ -184,6 +194,17 @@ function Matches(props: {
             accessorKey: 'vulnerability.description',
             Cell: ({ cell }: any) => <ShowHideLabel>{cell.getValue()}</ShowHideLabel>,
           },
+          {
+            header: '',
+            accessorFn: (item: VulnerabilityManifest.Match) => (
+              <Tooltip title="Create Vulnerability Exception">
+                <IconButton size="small" onClick={() => setSelectedCve(item.vulnerability.id)}>
+                  <Icon icon="mdi:shield-plus-outline" />
+                </IconButton>
+              </Tooltip>
+            ),
+            gridTemplate: 'min-content',
+          },
         ]}
         initialState={{
           sorting: [
@@ -194,6 +215,17 @@ function Matches(props: {
           ],
         }}
       />
+
+      {selectedCve && (
+        <GuidedVulnerabilityExceptionForm
+          cveId={selectedCve}
+          imageRef={imageRef}
+          workloadName={workloadName}
+          workloadNamespace={workloadNamespace}
+          workloadKind={workloadKind}
+          onClose={() => setSelectedCve(null)}
+        />
+      )}
     </SectionBox>
   );
 }

@@ -1,14 +1,17 @@
-/* 
-  Provide information on a CVE and the workloads vulnerable for this CVE. 
+/*
+  Provide information on a CVE and the workloads vulnerable for this CVE.
 */
+import { Icon } from '@iconify/react';
 import {
   Link as HeadlampLink,
   NameValueTable,
   SectionBox,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { Link } from '@mui/material';
+import { IconButton, Link, Tooltip } from '@mui/material';
+import { useState } from 'react';
 import { getURLSegments } from '../common/url';
+import { GuidedVulnerabilityExceptionForm } from '../exceptions/GuidedVulnerabilityExceptionForm';
 import { RoutingName } from '../index';
 import { vulnerabilityContext, WorkloadScan } from './Vulnerabilities';
 
@@ -57,6 +60,7 @@ export default function KubescapeCVEResults() {
 
 function Workloads(props: Readonly<{ cve: string; workloads: WorkloadScan[] }>) {
   const { cve, workloads } = props;
+  const [exceptionFormWorkload, setExceptionFormWorkload] = useState<WorkloadScan | null>(null);
 
   return (
     <SectionBox title="Workloads">
@@ -122,8 +126,29 @@ function Workloads(props: Readonly<{ cve: string; workloads: WorkloadScan[] }>) 
             accessorFn: (workload: WorkloadScan) => workload.imageScan?.imageName,
             gridTemplate: 'auto',
           },
+          {
+            header: '',
+            accessorFn: (workload: WorkloadScan) => (
+              <Tooltip title="Create Security Exception">
+                <IconButton size="small" onClick={() => setExceptionFormWorkload(workload)}>
+                  <Icon icon="mdi:shield-plus-outline" />
+                </IconButton>
+              </Tooltip>
+            ),
+            gridTemplate: 'auto',
+          },
         ]}
       />
+      {exceptionFormWorkload && (
+        <GuidedVulnerabilityExceptionForm
+          cveId={cve}
+          imageRef={exceptionFormWorkload.imageScan?.imageName}
+          workloadName={exceptionFormWorkload.name}
+          workloadNamespace={exceptionFormWorkload.namespace}
+          workloadKind={exceptionFormWorkload.kind}
+          onClose={() => setExceptionFormWorkload(null)}
+        />
+      )}
     </SectionBox>
   );
 }

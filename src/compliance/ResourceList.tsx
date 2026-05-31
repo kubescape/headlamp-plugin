@@ -2,9 +2,7 @@
   List configuration scans for all workloads.  
 */
 import { Link, Table, TableColumn } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { Box, FormControlLabel, Stack, Switch, Tooltip } from '@mui/material';
-import { useSnackbar } from 'notistack';
-import { mutateResourceException } from '../exceptions/mutate-exception';
+import { Box, Stack, Tooltip } from '@mui/material';
 import { RoutingName, useHLSelectedClusters } from '../index';
 import { FrameWork } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
@@ -12,36 +10,16 @@ import { WorkloadConfigurationScanSummary } from '../softwarecomposition/Workloa
 export default function KubescapeWorkloadConfigurationScanList(
   props: Readonly<{
     workloadScanData: WorkloadConfigurationScanSummary[] | null;
-    setWorkloadScanData: (workloadScanData: WorkloadConfigurationScanSummary[]) => void;
     framework: FrameWork;
     isFailedControlSwitchChecked: boolean;
   }>
 ) {
   const clusters = useHLSelectedClusters();
 
-  const { enqueueSnackbar } = useSnackbar();
-  const { workloadScanData, setWorkloadScanData, framework, isFailedControlSwitchChecked } = props;
+  const { workloadScanData, framework, isFailedControlSwitchChecked } = props;
   if (!workloadScanData) {
     return <></>;
   }
-
-  const handleExcludeResource = async (
-    workloadScan: WorkloadConfigurationScanSummary,
-    checked: boolean
-  ) => {
-    const errorMessage = await mutateResourceException(
-      workloadScan.metadata.labels['kubescape.io/workload-name'],
-      workloadScan.metadata.namespace,
-      workloadScan.metadata.labels['kubescape.io/workload-kind'],
-      checked
-    );
-    if (errorMessage) {
-      enqueueSnackbar(errorMessage, { variant: 'error' });
-    } else {
-      workloadScan.exceptedByPolicy = checked;
-      setWorkloadScanData([...workloadScanData]);
-    }
-  };
 
   const workloadsWithFindings = getWorkloadsWithFindings(workloadScanData);
   return (
@@ -70,16 +48,7 @@ export default function KubescapeWorkloadConfigurationScanList(
           {
             header: 'Excluded',
             accessorKey: 'exceptedByPolicy',
-            Cell: ({ cell }: any) => (
-              <FormControlLabel
-                label=""
-                checked={cell.getValue() === true}
-                control={<Switch color="primary" />}
-                onChange={(event: any, checked: boolean) => {
-                  handleExcludeResource(cell.row.original, checked);
-                }}
-              />
-            ),
+            Cell: ({ cell }: any) => (cell.getValue() ? 'Yes' : 'No'),
             gridTemplate: 'auto',
           },
           {
