@@ -42,7 +42,7 @@ export function CreateExceptionButton(props: Readonly<CreateExceptionButtonProps
         </span>
       </Tooltip>
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>Create SecurityException</DialogTitle>
+        <DialogTitle>Create Security Exception</DialogTitle>
         <DialogContent className="pt-4">
           <SecurityExceptionForm
             prefillControlID={prefillControlID}
