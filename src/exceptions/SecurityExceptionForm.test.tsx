@@ -1,15 +1,16 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { post } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import { SecurityExceptionForm } from './SecurityExceptionForm';
 
-jest.mock('@kinvolk/headlamp-plugin/lib/ApiProxy', () => ({
-  post: jest.fn(),
-}));
+// stub canvas getContext (xterm may call this during transforms)
+(HTMLCanvasElement.prototype as any).getContext = () => ({ /* stub */ });
 
-jest.mock('@kinvolk/headlamp-plugin/lib/Utils', () => ({
-  getCluster: () => 'test-cluster',
-}));
+// Use vitest's vi.mock to ensure mocks are applied correctly
+declare const vi: any;
+vi.mock('@kinvolk/headlamp-plugin/lib/ApiProxy', () => ({ post: vi.fn() }));
+vi.mock('@kinvolk/headlamp-plugin/lib/Utils', () => ({ getCluster: () => 'test-cluster' }));
 
 interface CreatedResource {
   metadata: {
@@ -19,7 +20,13 @@ interface CreatedResource {
   kind: 'SecurityException' | 'ClusterSecurityException';
 }
 
-const postMock = post as jest.MockedFunction<typeof post>;
+const postMock = post as any;
+
+const theme = createTheme();
+(theme.palette as any).tables = { head: { borderColor: '#ccc' } };
+function renderWithProviders(ui: any) {
+  return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>);
+}
 
 function fillScope() {
   fireEvent.change(screen.getByLabelText('Namespace'), { target: { value: 'default' } });
@@ -54,7 +61,7 @@ describe('SecurityExceptionForm', () => {
   });
 
   it('renders and navigates all steps', () => {
-    render(<SecurityExceptionForm />);
+    renderWithProviders(<SecurityExceptionForm />);
     expect(screen.getByText('Scope')).toBeInTheDocument();
     fillScope();
     goNext();
@@ -66,7 +73,7 @@ describe('SecurityExceptionForm', () => {
   });
 
   it('prefills fields from props', () => {
-    render(
+    renderWithProviders(
       <SecurityExceptionForm
         prefillControlID="C-0034"
         prefillWorkloadKind="Deployment"
@@ -82,7 +89,7 @@ describe('SecurityExceptionForm', () => {
   });
 
   it('disables Next until scope fields are valid', () => {
-    render(<SecurityExceptionForm />);
+    renderWithProviders(<SecurityExceptionForm />);
     const next = screen.getByRole('button', { name: 'Next' });
     expect(next).toBeDisabled();
     fillScope();
@@ -90,7 +97,7 @@ describe('SecurityExceptionForm', () => {
   });
 
   it('blocks submit when reason is empty', () => {
-    render(<SecurityExceptionForm />);
+    renderWithProviders(<SecurityExceptionForm />);
     fillScope();
     goNext();
     enablePosture();
@@ -100,7 +107,7 @@ describe('SecurityExceptionForm', () => {
   });
 
   it('blocks submit when expiresAt is in the past', () => {
-    render(<SecurityExceptionForm />);
+    renderWithProviders(<SecurityExceptionForm />);
     fillScope();
     goNext();
     enablePosture();
@@ -112,7 +119,7 @@ describe('SecurityExceptionForm', () => {
   });
 
   it('blocks step 2 when no exception type is selected', () => {
-    render(<SecurityExceptionForm />);
+    renderWithProviders(<SecurityExceptionForm />);
     fillScope();
     goNext();
     const next = screen.getByRole('button', { name: 'Next' });
@@ -120,7 +127,7 @@ describe('SecurityExceptionForm', () => {
   });
 
   it('requires justification when status is not_affected', () => {
-    render(<SecurityExceptionForm />);
+    renderWithProviders(<SecurityExceptionForm />);
     fillScope();
     goNext();
     enableVulnerability();

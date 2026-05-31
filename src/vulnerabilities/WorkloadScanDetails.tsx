@@ -9,7 +9,7 @@ import {
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { FormControlLabel, Link, Switch } from '@mui/material';
-import { ChangeEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CreateExceptionButton } from '../exceptions/CreateExceptionButton';
 import makeSeverityLabel from '../common/SeverityLabel';
 import { getURLSegments } from '../common/url';
@@ -126,7 +126,7 @@ function Matches(
         checked={isRelevantCVESwitchChecked}
         control={<Switch color="primary" />}
         label={'Relevant CVE'}
-        onChange={(event: ChangeEvent<HTMLInputElement>, checked: boolean) => {
+        onChange={(_event: any, checked: boolean) => {
           setIsRelevantCVESwitchChecked(checked);
         }}
       />

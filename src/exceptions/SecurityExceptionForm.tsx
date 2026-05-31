@@ -460,7 +460,7 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
     if (!resource.metadata.name) {
       return null;
     }
-    const cluster = getCluster();
+    const cluster = getCluster() ?? '';
     const plural =
       resource.kind === 'SecurityException' ? 'securityexceptions' : 'clustersecurityexceptions';
     const namespaceSegment =
@@ -554,21 +554,29 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
 
       {activeStep === 1 && (
         <Stack spacing={3} className="rounded border border-slate-200 p-4">
-          <FormControlLabel
-            control={
-              <Switch checked={includePosture} onChange={event => setIncludePosture(event.target.checked)} />
-            }
-            label="Posture exception"
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={includeVulnerability}
-                onChange={event => setIncludeVulnerability(event.target.checked)}
+          {!defaultType ? (
+            <>
+              <FormControlLabel
+                control={
+                  <Switch checked={includePosture} onChange={event => setIncludePosture(event.target.checked)} />
+                }
+                label="Posture exception"
               />
-            }
-            label="Vulnerability exception"
-          />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={includeVulnerability}
+                    onChange={event => setIncludeVulnerability(event.target.checked)}
+                  />
+                }
+                label="Vulnerability exception"
+              />
+            </>
+          ) : (
+            <Typography variant="body2">
+              Creating {defaultType === 'posture' ? 'a posture' : 'a vulnerability'} exception.
+            </Typography>
+          )}
           {validation.errors.exceptionType && (
             <FormHelperText error>{validation.errors.exceptionType}</FormHelperText>
           )}
