@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.1.0",
-    "@dagrejs/graphlib": "^4.0.1",
+    "@dagrejs/graphlib": "^4.0.5",
     "@xyflow/react": "^12.11.3"
   }
 }
