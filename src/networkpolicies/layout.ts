@@ -1,5 +1,4 @@
-import dagre from '@dagrejs/dagre';
-import { Graph } from '@dagrejs/graphlib';
+import dagre, { Graph } from '@dagrejs/dagre';
 import { Edge, MarkerType, Node } from '@xyflow/react';
 import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
 
