@@ -1,9 +1,9 @@
-import dagre, { Graph } from '@dagrejs/dagre';
+import dagre from '@dagrejs/dagre';
 import { Edge, MarkerType, Node } from '@xyflow/react';
 import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
 
 export function layoutElements(nodes: Node[], edges: Edge[]) {
-  const dagreGraph = new Graph();
+  const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
   dagreGraph.setGraph({ rankdir: 'LR' });
 
@@ -23,8 +23,8 @@ export function layoutElements(nodes: Node[], edges: Edge[]) {
   nodes.forEach(node => {
     const nodeWithPosition = dagreGraph.node(node.id);
     node.position = {
-      x: nodeWithPosition.x,
-      y: nodeWithPosition.y,
+      x: nodeWithPosition.x ?? 0,
+      y: nodeWithPosition.y ?? 0,
     };
   });
 }
