@@ -1,7 +1,11 @@
+import { Icon } from '@iconify/react';
 import {
+  Autocomplete,
   Box,
+  Button,
   FormControl,
   FormControlLabel,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
@@ -11,11 +15,15 @@ import {
   Typography,
 } from '@mui/material';
 import {
+  LabelSelectorRequirement,
   VulnerabilityJustification,
   VulnerabilityStatus,
 } from '../softwarecomposition/SecurityException';
 
-export const RESOURCE_KINDS = [
+// Suggestions only. Kubescape maps match.resources[].kind straight onto the
+// exception designator, so controls on any kind (Service, Role, ClusterRole, ...)
+// can be excepted and the field must stay free text.
+export const RESOURCE_KIND_SUGGESTIONS = [
   'CronJob',
   'DaemonSet',
   'Deployment',
@@ -33,6 +41,32 @@ export const JUSTIFICATION_OPTIONS: VulnerabilityJustification[] = [
   'inline_mitigations_already_exist',
 ];
 
+// A date picker gives us a day, and the user means "valid through that day".
+// Anchoring to the end of the day avoids creating an exception that is already
+// expired the moment it is saved.
+export const EXPIRES_AT_TIME = 'T23:59:59Z';
+
+export function toExpiresAt(date: string): string {
+  return `${date}${EXPIRES_AT_TIME}`;
+}
+
+export function expiresAtToDate(expiresAt?: string): string {
+  return expiresAt ? expiresAt.split('T')[0] : '';
+}
+
+export interface LabelRow {
+  key: string;
+  value: string;
+}
+
+export function matchLabelsToRows(matchLabels?: Record<string, string>): LabelRow[] {
+  return Object.entries(matchLabels ?? {}).map(([key, value]) => ({ key, value }));
+}
+
+export function rowsToMatchLabels(rows: LabelRow[]): Record<string, string> {
+  return Object.fromEntries(rows.filter(r => r.key).map(r => [r.key, r.value]));
+}
+
 export function SectionTitle({ title }: Readonly<{ title: string }>) {
   return (
     <Typography variant="subtitle1" fontWeight="bold" sx={{ mt: 1 }}>
@@ -48,6 +82,8 @@ export function MetadataFields(
     nameDisabled?: boolean;
     namespace?: string; // undefined = hide namespace field
     onNamespaceChange?: (v: string) => void; // undefined = read-only
+    author?: string; // undefined = hide author field
+    onAuthorChange?: (v: string) => void;
     reason: string;
     onReasonChange: (v: string) => void;
     expiresDate: string;
@@ -60,6 +96,8 @@ export function MetadataFields(
     nameDisabled,
     namespace,
     onNamespaceChange,
+    author,
+    onAuthorChange,
     reason,
     onReasonChange,
     expiresDate,
@@ -87,6 +125,15 @@ export function MetadataFields(
           />
         )}
       </Stack>
+      {author !== undefined && (
+        <TextField
+          label="Author"
+          fullWidth
+          placeholder="who is accepting this risk"
+          value={author}
+          onChange={e => onAuthorChange?.(e.target.value)}
+        />
+      )}
       <TextField
         label="Reason"
         fullWidth
@@ -98,6 +145,7 @@ export function MetadataFields(
         type="date"
         fullWidth
         InputLabelProps={{ shrink: true }}
+        helperText="Valid through the end of this day (UTC)"
         value={expiresDate}
         onChange={e => onExpiresDateChange(e.target.value)}
       />
@@ -115,6 +163,88 @@ export function ContextBadge({ label, value }: Readonly<{ label: string; value: 
         {value}
       </Typography>
     </Stack>
+  );
+}
+
+export function ResourceKindInput({
+  value,
+  onChange,
+}: Readonly<{ value: string; onChange: (v: string) => void }>) {
+  return (
+    <Autocomplete
+      freeSolo
+      options={RESOURCE_KIND_SUGGESTIONS}
+      value={value}
+      sx={{ minWidth: 200 }}
+      onChange={(_, v) => onChange(v ?? '')}
+      onInputChange={(_, v) => onChange(v)}
+      renderInput={params => <TextField {...params} label="Kind" placeholder="Deployment" />}
+    />
+  );
+}
+
+/**
+ * Editor for the matchLabels half of a label selector. matchExpressions are not
+ * editable here, but the caller keeps them and writes them back untouched, so
+ * editing an exception authored with kubectl does not drop them.
+ */
+export function LabelSelectorEditor(
+  props: Readonly<{
+    rows: LabelRow[];
+    onChange: (rows: LabelRow[]) => void;
+    addLabel: string;
+    emptyHint: string;
+    preservedExpressions?: LabelSelectorRequirement[];
+  }>
+) {
+  const { rows, onChange, addLabel, emptyHint, preservedExpressions } = props;
+  return (
+    <>
+      {rows.length === 0 && (
+        <Typography variant="body2" color="text.secondary">
+          {emptyHint}
+        </Typography>
+      )}
+      {rows.map((r, i) => (
+        <Stack key={`sel-${i}`} direction="row" spacing={1} alignItems="center">
+          <TextField
+            label="Label key"
+            value={r.key}
+            onChange={e => {
+              const updated = [...rows];
+              updated[i] = { ...r, key: e.target.value };
+              onChange(updated);
+            }}
+          />
+          <TextField
+            label="Label value"
+            value={r.value}
+            onChange={e => {
+              const updated = [...rows];
+              updated[i] = { ...r, value: e.target.value };
+              onChange(updated);
+            }}
+          />
+          <IconButton onClick={() => onChange(rows.filter((_, idx) => idx !== i))}>
+            <Icon icon="mdi:delete" />
+          </IconButton>
+        </Stack>
+      ))}
+      <Button
+        startIcon={<Icon icon="mdi:plus" />}
+        onClick={() => onChange([...rows, { key: '', value: '' }])}
+        size="small"
+      >
+        {addLabel}
+      </Button>
+      {preservedExpressions && preservedExpressions.length > 0 && (
+        <Typography variant="caption" color="text.secondary">
+          {preservedExpressions.length} matchExpressions rule
+          {preservedExpressions.length === 1 ? '' : 's'} on this selector are kept as they are. Edit
+          them with kubectl.
+        </Typography>
+      )}
+    </>
   );
 }
 
@@ -142,7 +272,7 @@ export function VulnerabilityStatusSelect({
           <Box>
             <Typography variant="body2">not_affected</Typography>
             <Typography variant="caption" color="text.secondary">
-              CVE does not apply — requires justification
+              CVE does not apply, requires justification
             </Typography>
           </Box>
         </MenuItem>
@@ -151,6 +281,45 @@ export function VulnerabilityStatusSelect({
             <Typography variant="body2">fixed</Typography>
             <Typography variant="caption" color="text.secondary">
               Fix has been applied or is planned
+            </Typography>
+          </Box>
+        </MenuItem>
+      </Select>
+    </FormControl>
+  );
+}
+
+export function PostureActionSelect({
+  value,
+  onChange,
+  fullWidth = false,
+}: Readonly<{
+  value: 'ignore' | 'alert_only';
+  onChange: (v: 'ignore' | 'alert_only') => void;
+  fullWidth?: boolean;
+}>) {
+  return (
+    <FormControl fullWidth={fullWidth} sx={fullWidth ? undefined : { minWidth: 120 }}>
+      <InputLabel>Action</InputLabel>
+      <Select
+        value={value}
+        label="Action"
+        onChange={e => onChange(e.target.value as 'ignore' | 'alert_only')}
+      >
+        <MenuItem value="ignore">
+          <Box>
+            <Typography variant="body2">ignore</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Remove the finding from results and scoring
+            </Typography>
+          </Box>
+        </MenuItem>
+        <MenuItem value="alert_only">
+          <Box>
+            <Typography variant="body2">alert_only</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Record the finding as accepted risk. Kubescape currently scores this the same as
+              ignore.
             </Typography>
           </Box>
         </MenuItem>
