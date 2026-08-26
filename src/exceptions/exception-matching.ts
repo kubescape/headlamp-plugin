@@ -185,7 +185,7 @@ export function countExcludedControls(workloadScanData: WorkloadConfigurationSca
     .filter(w => !w.exceptedByPolicy)
     .reduce(
       (excluded, w) =>
-        excluded + Object.values(w.spec.controls).filter(scan => scan.exceptedByPolicy).length,
+        excluded + Object.values(w.spec.controls ?? {}).filter(scan => scan.exceptedByPolicy).length,
       0
     );
 }
@@ -196,7 +196,7 @@ export function countExcludedWorkloadsForControl(
 ) {
   let excluded = 0;
   workloadScanData.forEach(w => {
-    Object.values(w.spec.controls).forEach(scan => {
+    Object.values(w.spec.controls ?? {}).forEach(scan => {
       if (scan.controlID === control.controlID && (w.exceptedByPolicy || scan.exceptedByPolicy))
         excluded++;
     });

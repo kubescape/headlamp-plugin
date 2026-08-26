@@ -132,7 +132,7 @@ function useMatchedWorkloads(exception: AnySecurityException | null): MatchedWor
     async function resolve(target: AnySecurityException) {
       const [context, scans] = await Promise.all([
         fetchMatchContext([target]),
-        listQuery(workloadConfigurationScanSummaryClass) as Promise<
+        listQuery(workloadConfigurationScanSummaryClass, { fullSpec: true }) as Promise<
           WorkloadConfigurationScanSummary[]
         >,
       ]);
@@ -152,7 +152,7 @@ function useMatchedWorkloads(exception: AnySecurityException | null): MatchedWor
         if (isResourceLevel) {
           scope = 'Whole resource';
         } else if (postureIDs.length > 0) {
-          const covered = Object.values(scan.spec.controls)
+          const covered = Object.values(scan.spec.controls ?? {})
             .filter(c => postureIDs.includes(c.controlID))
             .map(c => c.controlID);
           scope = covered.length > 0 ? covered.join(', ') : 'No control in this scan';
