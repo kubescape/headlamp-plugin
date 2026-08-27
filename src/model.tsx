@@ -169,29 +169,22 @@ export const clusterSecurityExceptionClass = makeCustomResourceClass({
   customResourceDefinition: undefined as any,
 });
 
-export async function listQuery(
-  objectClass: KubeObjectClass,
-  options: { fullSpec?: boolean } = {}
-): Promise<any> {
+export async function listQuery(objectClass: KubeObjectClass): Promise<any> {
   const namespaces: string[] = getAllowedNamespaces();
   const group = objectClass.apiEndpoint.apiInfo[0].group;
   const version = objectClass.apiEndpoint.apiInfo[0].version;
   const pluralName = objectClass.pluralName;
-  // The Kubescape storage apiserver trims heavy fields (such as
-  // WorkloadConfigurationScanSummary.spec.controls) from list responses unless
-  // resourceVersion=fullSpec is requested.
-  const queryFragment = options.fullSpec ? `${pluralName}?resourceVersion=fullSpec` : pluralName;
 
   if (namespaces?.length > 0) {
     const listOfLists: any[] = await Promise.all(
       namespaces.map(namespace =>
-        request(`/apis/${group}/${version}/namespaces/${namespace}/${queryFragment}`)
+        request(`/apis/${group}/${version}/namespaces/${namespace}/${pluralName}`)
       )
     );
 
     return listOfLists.flatMap(list => list.items);
   } else {
-    const overviewList = await request(`/apis/${group}/${version}/${queryFragment}`);
+    const overviewList = await request(`/apis/${group}/${version}/${pluralName}`);
     return overviewList.items;
   }
 }

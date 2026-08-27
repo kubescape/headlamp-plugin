@@ -5,17 +5,19 @@ import {
   SectionBox,
   Table,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
+import { getAllowedNamespaces, KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
+import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { Chip, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { kubescapeConfigStore } from '../common/config-store';
 import { getURLSegments } from '../common/url';
 import { RoutingName } from '../index';
 import {
   clusterSecurityExceptionClass,
-  listQuery,
   securityExceptionClass,
   workloadConfigurationScanSummaryClass,
 } from '../model';
+import { paginatedListQuery } from '../query';
 import {
   ClusterSecurityException,
   SecurityException,
@@ -130,45 +132,62 @@ function useMatchedWorkloads(exception: AnySecurityException | null): MatchedWor
     let cancelled = false;
 
     async function resolve(target: AnySecurityException) {
-      const [context, scans] = await Promise.all([
-        fetchMatchContext([target]),
-        listQuery(workloadConfigurationScanSummaryClass, { fullSpec: true }) as Promise<
-          WorkloadConfigurationScanSummary[]
-        >,
-      ]);
+      // The detail route carries no cluster, so the exception itself was read from
+      // the current one. Resolve its matches against that same cluster.
+      const cluster = getCluster() ?? '';
+      const allowedNamespaces = getAllowedNamespaces(cluster);
+      const context = await fetchMatchContext([target], cluster);
       if (cancelled) return;
 
       const postureIDs = (target.spec.posture ?? []).map(p => p.controlID);
       const isResourceLevel =
         (target.spec.posture ?? []).length === 0 && (target.spec.vulnerabilities ?? []).length === 0;
 
+      // Scan summaries are the heaviest list the plugin reads, so page through them
+      // and keep only the matching rows rather than the whole collection.
+      const pageSize = kubescapeConfigStore.get()?.pageSize || 50;
       const rows: MatchedWorkload[] = [];
-      for (const scan of scans) {
-        const { kind, name, namespace } = workloadIdentity(scan);
-        if (!kind || !name) continue;
-        if (!exceptionMatchesWorkload(target, kind, name, namespace, context)) continue;
+      let continuation: number | undefined = 0;
 
-        let scope: string;
-        if (isResourceLevel) {
-          scope = 'Whole resource';
-        } else if (postureIDs.length > 0) {
-          const covered = Object.values(scan.spec.controls ?? {})
-            .filter(c => postureIDs.includes(c.controlID))
-            .map(c => c.controlID);
-          scope = covered.length > 0 ? covered.join(', ') : 'No control in this scan';
-        } else {
-          scope = 'Vulnerability entries only';
+      while (!cancelled && continuation !== undefined) {
+        const response = await paginatedListQuery(
+          cluster,
+          workloadConfigurationScanSummaryClass,
+          continuation,
+          pageSize,
+          allowedNamespaces
+        );
+        continuation = response.continuation;
+
+        for (const scan of response.items as WorkloadConfigurationScanSummary[]) {
+          const { kind, name, namespace } = workloadIdentity(scan);
+          if (!kind || !name) continue;
+          if (!exceptionMatchesWorkload(target, kind, name, namespace, context)) continue;
+
+          let scope: string;
+          if (isResourceLevel) {
+            scope = 'Whole resource';
+          } else if (postureIDs.length > 0) {
+            const covered = Object.values(scan.spec.controls ?? {})
+              .filter(c => postureIDs.includes(c.controlID))
+              .map(c => c.controlID);
+            scope = covered.length > 0 ? covered.join(', ') : 'No control in this scan';
+          } else {
+            scope = 'Vulnerability entries only';
+          }
+          rows.push({
+            kind,
+            name,
+            namespace,
+            scope,
+            scanName: scan.metadata.name,
+            // paginatedListQuery stamps metadata.cluster, which the scan detail route needs.
+            cluster: scan.metadata.cluster,
+          });
         }
-        rows.push({
-          kind,
-          name,
-          namespace,
-          scope,
-          scanName: scan.metadata.name,
-          cluster: scan.metadata.cluster,
-        });
       }
-      setMatched(rows);
+
+      if (!cancelled) setMatched(rows);
     }
 
     resolve(exception).catch(error => {

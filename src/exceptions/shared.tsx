@@ -225,7 +225,10 @@ export function LabelSelectorEditor(
               onChange(updated);
             }}
           />
-          <IconButton onClick={() => onChange(rows.filter((_, idx) => idx !== i))}>
+          <IconButton
+            aria-label={`Remove label ${r.key || i + 1}`}
+            onClick={() => onChange(rows.filter((_, idx) => idx !== i))}
+          >
             <Icon icon="mdi:delete" />
           </IconButton>
         </Stack>
