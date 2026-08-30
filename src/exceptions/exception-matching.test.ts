@@ -360,3 +360,45 @@ describe('applySecurityExceptionsToWorkloadScans', () => {
     expect(scan.spec.controls['C-0034'].exceptedByPolicy).toBe(true);
   });
 });
+
+describe('labelsMatchSelector with an unrecognized operator', () => {
+  it('fails closed rather than widening the exception', () => {
+    const selector = {
+      matchExpressions: [{ key: 'app', operator: 'Equals' as any, values: ['nginx'] }],
+    };
+
+    expect(labelsMatchSelector(selector, { app: 'nginx' })).toBe(false);
+  });
+
+  it('fails closed even when the rest of the selector matches', () => {
+    const selector = {
+      matchLabels: { tier: 'frontend' },
+      matchExpressions: [
+        { key: 'app', operator: 'Exists' as const },
+        { key: 'env', operator: 'SomethingNew' as any },
+      ],
+    };
+
+    expect(labelsMatchSelector(selector, { tier: 'frontend', app: 'nginx', env: 'prod' })).toBe(
+      false
+    );
+  });
+});
+
+describe('scans returned without spec.controls', () => {
+  it('does not throw when the apiserver trimmed the controls out of the list', () => {
+    const scan = makeScan();
+    delete (scan.spec as any).controls;
+
+    const data: SecurityExceptionData = {
+      ...emptySecurityExceptionData(),
+      namespaced: [
+        makeSE({ match: {}, posture: [{ controlID: 'C-0034', action: 'ignore' }] }),
+      ],
+    };
+
+    expect(() =>
+      applySecurityExceptionsToWorkloadScans([scan], new Map([['cluster-a', data]]))
+    ).not.toThrow();
+  });
+});

@@ -132,6 +132,13 @@ function useMatchedWorkloads(exception: AnySecurityException | null): MatchedWor
     let cancelled = false;
 
     async function resolve(target: AnySecurityException) {
+      // An expired exception applies to nothing at scan time, so it covers no
+      // workload here either, whatever it still matches structurally.
+      if (isExpired(target.spec.expiresAt)) {
+        setMatched([]);
+        return;
+      }
+
       // The detail route carries no cluster, so the exception itself was read from
       // the current one. Resolve its matches against that same cluster.
       const cluster = getCluster() ?? '';

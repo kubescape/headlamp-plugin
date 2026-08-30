@@ -64,10 +64,24 @@ export function labelsMatchSelector(
   for (const expr of selector.matchExpressions ?? []) {
     const has = expr.key in labels;
     const val = labels[expr.key];
-    if (expr.operator === 'Exists' && !has) return false;
-    if (expr.operator === 'DoesNotExist' && has) return false;
-    if (expr.operator === 'In' && !expr.values?.includes(val)) return false;
-    if (expr.operator === 'NotIn' && expr.values?.includes(val)) return false;
+    // An operator we do not understand must not silently widen the exception, so
+    // it fails closed like every other unresolved case in this matcher.
+    switch (expr.operator) {
+      case 'Exists':
+        if (!has) return false;
+        break;
+      case 'DoesNotExist':
+        if (has) return false;
+        break;
+      case 'In':
+        if (!expr.values?.includes(val)) return false;
+        break;
+      case 'NotIn':
+        if (expr.values?.includes(val)) return false;
+        break;
+      default:
+        return false;
+    }
   }
   return true;
 }
@@ -168,7 +182,7 @@ export function applySecurityExceptionsToWorkloadScans(
     );
 
     // Control-level exceptions
-    Object.entries(w.spec.controls).forEach(([, value]) => {
+    Object.entries(w.spec.controls ?? {}).forEach(([, value]) => {
       value.exceptedByPolicy = matched.some(ex =>
         ex.spec.posture?.some(p => p.controlID === value.controlID)
       );

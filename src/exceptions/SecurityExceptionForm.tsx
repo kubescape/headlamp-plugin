@@ -104,6 +104,26 @@ export interface ExceptionSpecInput {
   vulnEntries: VulnRow[];
 }
 
+/**
+ * Fields carried over from the stored spec belong to the identity they were read
+ * with. Editing that identity makes the row a different resource/control/CVE, so
+ * the carried fields are dropped rather than reattached to the new one.
+ */
+export function withResourceKind(row: ResourceRow, kind: string): ResourceRow {
+  if (kind === row.kind) return { ...row, kind };
+  return { ...row, kind, apiGroup: undefined };
+}
+
+export function withControlID(row: PostureRow, controlID: string): PostureRow {
+  if (controlID === row.controlID) return { ...row, controlID };
+  return { ...row, controlID, original: undefined };
+}
+
+export function withCveID(row: VulnRow, cveId: string): VulnRow {
+  if (cveId === row.cveId) return { ...row, cveId };
+  return { ...row, cveId, aliases: undefined, original: undefined };
+}
+
 function setOrDelete(target: Record<string, any>, key: string, value: any) {
   if (value === undefined || value === '' || value === false) {
     delete target[key];
@@ -507,7 +527,7 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
                   value={r.kind}
                   onChange={value => {
                     const updated = [...resources];
-                    updated[i] = { ...r, kind: value };
+                    updated[i] = withResourceKind(r, value);
                     setResources(updated);
                   }}
                 />
@@ -584,7 +604,7 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
                     value={p.controlID}
                     onChange={e => {
                       const updated = [...postureEntries];
-                      updated[i] = { ...p, controlID: e.target.value };
+                      updated[i] = withControlID(p, e.target.value);
                       setPostureEntries(updated);
                     }}
                   />
@@ -644,7 +664,7 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
                     value={v.cveId}
                     onChange={e => {
                       const updated = [...vulnEntries];
-                      updated[i] = { ...v, cveId: e.target.value };
+                      updated[i] = withCveID(v, e.target.value);
                       setVulnEntries(updated);
                     }}
                   />

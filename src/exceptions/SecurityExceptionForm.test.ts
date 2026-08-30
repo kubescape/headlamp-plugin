@@ -1,5 +1,11 @@
 import { SecurityExceptionSpec } from '../softwarecomposition/SecurityException';
-import { buildExceptionSpec, ExceptionSpecInput } from './SecurityExceptionForm';
+import {
+  buildExceptionSpec,
+  ExceptionSpecInput,
+  withControlID,
+  withCveID,
+  withResourceKind,
+} from './SecurityExceptionForm';
 
 function input(overrides: Partial<ExceptionSpecInput> = {}): ExceptionSpecInput {
   return {
@@ -186,5 +192,70 @@ describe('buildExceptionSpec', () => {
       });
       expect(spec.match.objectSelector).toBeUndefined();
     });
+  });
+});
+
+describe('editing the identity of a row', () => {
+  it('keeps apiGroup while the kind is unchanged', () => {
+    const row = { kind: 'Deployment', name: 'nginx', apiGroup: 'apps' };
+
+    expect(withResourceKind(row, 'Deployment')).toEqual(row);
+  });
+
+  it('drops a stale apiGroup when the kind changes', () => {
+    const row = { kind: 'Deployment', name: 'nginx', apiGroup: 'apps' };
+
+    // apps/Service does not exist, so carrying the group over would match nothing.
+    expect(withResourceKind(row, 'Service')).toEqual({
+      kind: 'Service',
+      name: 'nginx',
+      apiGroup: undefined,
+    });
+  });
+
+  it('drops preserved fields when the control ID changes', () => {
+    const original = { controlID: 'C-0034', action: 'ignore' as const };
+    const row = { controlID: 'C-0034', frameworkName: 'NSA', action: 'ignore' as const, original };
+
+    expect(withControlID(row, 'C-0034').original).toBe(original);
+    expect(withControlID(row, 'C-0016').original).toBeUndefined();
+    expect(withControlID(row, 'C-0016').frameworkName).toBe('NSA');
+  });
+
+  it('drops aliases and preserved fields when the CVE changes', () => {
+    const row = {
+      cveId: 'CVE-2024-0001',
+      status: 'not_affected' as const,
+      justification: '' as const,
+      impactStatement: 'not reachable',
+      expiredOnFix: false,
+      aliases: ['GHSA-aaaa-bbbb-cccc'],
+      original: { vulnerability: { id: 'CVE-2024-0001' }, status: 'not_affected' as const },
+    };
+
+    expect(withCveID(row, 'CVE-2024-0001').aliases).toEqual(['GHSA-aaaa-bbbb-cccc']);
+
+    const changed = withCveID(row, 'CVE-2025-9999');
+    expect(changed.aliases).toBeUndefined();
+    expect(changed.original).toBeUndefined();
+    // Fields the user actually typed are still theirs to keep.
+    expect(changed.impactStatement).toBe('not reachable');
+  });
+
+  it('does not write the previous CVE aliases onto the new id', () => {
+    const row = {
+      cveId: 'CVE-2024-0001',
+      status: 'fixed' as const,
+      justification: '' as const,
+      impactStatement: '',
+      expiredOnFix: false,
+      aliases: ['GHSA-old'],
+    };
+
+    const spec = buildExceptionSpec(input({ vulnEntries: [withCveID(row, 'CVE-2025-9999')] }));
+
+    expect(spec.vulnerabilities).toEqual([
+      { vulnerability: { id: 'CVE-2025-9999' }, status: 'fixed' },
+    ]);
   });
 });
