@@ -61,7 +61,7 @@ export default function KubescapeVulnerabilityDetails() {
               },
               {
                 name: 'Last scan',
-                value: summary.metadata.creationTimestamp,
+                value: manifestAll?.spec.metadata?.report?.createdAt || 'Unknown',
               },
               {
                 name: 'Type',

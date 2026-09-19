@@ -22,6 +22,7 @@ export default function ImageVulnerabilityDetails() {
   vulnerabilityManifestClass.useApiGet(setManifestVulnerability, name, namespace);
 
   if (manifestVulnerability) {
+    const manifest: VulnerabilityManifest = manifestVulnerability.jsonData;
     return (
       <>
         <SectionBox title="Image Vulnerabilities" backLink>
@@ -35,13 +36,13 @@ export default function ImageVulnerabilityDetails() {
               },
               {
                 name: 'Last scan',
-                value: manifestVulnerability.metadata.creationTimestamp,
+                value: manifest.spec.metadata?.report?.createdAt || 'Unknown',
               },
             ]}
           />
         </SectionBox>
 
-        <Matches manifestVulnerability={manifestVulnerability.jsonData} />
+        <Matches manifestVulnerability={manifest} />
       </>
     );
   }

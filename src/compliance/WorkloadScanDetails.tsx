@@ -76,7 +76,7 @@ export default function KubescapeWorkloadConfigurationScanDetails() {
             },
             {
               name: 'Last scan',
-              value: configurationScan.metadata.creationTimestamp,
+              value: configurationScan.spec.metadata?.report?.createdAt || 'Unknown',
             },
             {
               name: 'Results',

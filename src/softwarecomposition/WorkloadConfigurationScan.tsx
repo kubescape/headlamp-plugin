@@ -6,6 +6,11 @@ import { Metadata } from './Metadata';
 export interface WorkloadConfigurationScan {
   metadata: Metadata;
   spec: {
+    metadata?: {
+      report?: {
+        createdAt?: string;
+      };
+    };
     controls: WorkloadConfigurationScan.Controls;
     relatedObjects: WorkloadConfigurationScan.RelatedObject[];
   };
