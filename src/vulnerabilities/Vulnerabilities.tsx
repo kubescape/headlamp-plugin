@@ -60,7 +60,7 @@ export interface ImageScan {
   namespace: string;
   cluster: string;
   imageName: string;
-  lastScan: string | undefined;
+  creationTimestamp: string;
   matches: VulnerabilityManifest.Match[];
 }
 
@@ -395,7 +395,7 @@ async function initQueryTasks(
         namespace: v.metadata.namespace,
         cluster: v.metadata.cluster,
         imageName: v.metadata.annotations['kubescape.io/image-tag'],
-        lastScan: v.spec.metadata?.report?.createdAt,
+        creationTimestamp: v.metadata.creationTimestamp,
         matches: v.spec.payload.matches ?? [],
       };
 

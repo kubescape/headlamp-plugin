@@ -60,8 +60,8 @@ export default function KubescapeVulnerabilityDetails() {
                 value: summary.metadata.annotations['kubescape.io/image-tag'],
               },
               {
-                name: 'Last scan',
-                value: manifestAll?.spec.metadata?.report?.createdAt || 'Unknown',
+                name: 'Scan record created',
+                value: summary.metadata.creationTimestamp,
               },
               {
                 name: 'Type',

@@ -57,9 +57,10 @@ export default function ImageListView(props: Readonly<{ workloadScans: WorkloadS
               gridTemplate: 'auto',
             },
             {
-              header: 'Last scan',
-              accessorFn: (imageScan: ImageScan) =>
-                imageScan.lastScan ? <DateLabel date={imageScan.lastScan} /> : 'Unknown',
+              header: 'Scan record created',
+              accessorFn: (imageScan: ImageScan) => (
+                <DateLabel date={imageScan.creationTimestamp} />
+              ),
               gridTemplate: 'auto',
             },
             {
