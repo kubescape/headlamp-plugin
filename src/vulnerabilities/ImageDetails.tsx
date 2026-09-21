@@ -34,7 +34,7 @@ export default function ImageVulnerabilityDetails() {
                   : '',
               },
               {
-                name: 'Last scan',
+                name: 'Scan record created',
                 value: manifestVulnerability.metadata.creationTimestamp,
               },
             ]}

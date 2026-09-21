@@ -5,7 +5,6 @@ export const PLUGIN_NAME = 'kubescape-plugin';
 
 export type KubescapeConfig = {
   framework: string;
-  exceptionGroupName: string;
   activeFrameworks: string[];
   pageSize: number;
   alertmanagerUrl: string | undefined;
@@ -19,7 +18,6 @@ const currentConfig = kubescapeConfigStore.get();
 if (!currentConfig) {
   kubescapeConfigStore.set({
     framework: '',
-    exceptionGroupName: '',
     activeFrameworks: [],
     pageSize: 50,
     alertmanagerUrl: undefined,

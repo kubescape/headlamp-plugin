@@ -1,4 +1,5 @@
 // Types for SecurityException CRD (kubescape.io/v1beta1 compatible)
+// https://github.com/kubescape/operator (kubescape.io/v1beta1 CRDs)
 
 export interface LabelSelectorRequirement {
   key: string;
@@ -10,6 +11,7 @@ export interface ResourceMatch {
   apiGroup?: string;
   kind: string;
   name?: string;
+  name?: string; // omit to match all resources of this kind
 }
 
 export interface SecurityExceptionMatchSpec {
@@ -23,6 +25,13 @@ export interface SecurityExceptionMatchSpec {
   };
   resources?: ResourceMatch[];
   images?: string[];
+  }; // ClusterSecurityException only
+  objectSelector?: {
+    matchLabels?: Record<string, string>;
+    matchExpressions?: LabelSelectorRequirement[];
+  }; // deferred
+  resources?: ResourceMatch[];
+  images?: string[]; // glob patterns — for vulnerability exceptions only
 }
 
 export interface PostureException {
@@ -57,6 +66,7 @@ export interface SecurityExceptionSpec {
   author?: string;
   reason?: string;
   expiresAt?: string;
+  expiresAt?: string; // RFC3339
   match?: SecurityExceptionMatchSpec;
   posture?: PostureException[];
   vulnerabilities?: VulnerabilityException[];
@@ -66,6 +76,14 @@ export interface SecurityException {
   apiVersion: 'kubescape.io/v1beta1' | string;
   kind: 'SecurityException';
   metadata: { name: string; namespace: string; creationTimestamp?: string; uid?: string };
+  apiVersion: 'kubescape.io/v1beta1';
+  kind: 'SecurityException';
+  metadata: {
+    name: string;
+    namespace: string;
+    creationTimestamp?: string;
+    uid?: string;
+  };
   spec: SecurityExceptionSpec;
 }
 
@@ -73,5 +91,12 @@ export interface ClusterSecurityException {
   apiVersion: 'kubescape.io/v1beta1' | string;
   kind: 'ClusterSecurityException';
   metadata: { name: string; creationTimestamp?: string; uid?: string };
+  apiVersion: 'kubescape.io/v1beta1';
+  kind: 'ClusterSecurityException';
+  metadata: {
+    name: string;
+    creationTimestamp?: string;
+    uid?: string;
+  };
   spec: SecurityExceptionSpec;
 }
