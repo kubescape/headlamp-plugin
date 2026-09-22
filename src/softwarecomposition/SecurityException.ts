@@ -20,7 +20,7 @@ export interface SecurityExceptionMatchSpec {
   objectSelector?: {
     matchLabels?: Record<string, string>;
     matchExpressions?: LabelSelectorRequirement[];
-  }; // deferred
+  }; // matches workload labels; valid on both kinds
   resources?: ResourceMatch[];
   images?: string[]; // glob patterns — for vulnerability exceptions only
 }

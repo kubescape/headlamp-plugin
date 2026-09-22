@@ -37,7 +37,9 @@ import {
   countExcludedControls,
   countExcludedResources,
   countExcludedWorkloadsForControl,
+  emptySecurityExceptionData,
   fetchSecurityExceptions,
+  SecurityExceptionData,
 } from '../exceptions/apply-security-exceptions';
 import { GuidedClusterComplianceExceptionForm } from '../exceptions/GuidedClusterComplianceExceptionForm';
 import { RoutingName, useHLSelectedClusters } from '../index';
@@ -122,12 +124,22 @@ export default function ComplianceView(): JSX.Element {
       await fetchCustomFrameworks(controls, setCustomFrameworks);
 
       // TEMPORARY: client-side exception apply — remove once operator handles this at scan time
-      const exceptions = await fetchSecurityExceptions().catch(() => ({
-        namespaced: [],
-        cluster: [],
-        namespaceLabelsByName: new Map(),
-      }));
-      applySecurityExceptionsToWorkloadScans(configurationScanContext.workloadScans, exceptions);
+      // Fetched per cluster: the scans below come from every selected cluster, and
+      // an exception only applies to the cluster it lives in.
+      const exceptionsByCluster = new Map<string, SecurityExceptionData>();
+      await Promise.all(
+        clusters.map(async cluster => {
+          const data = await fetchSecurityExceptions(cluster).catch(error => {
+            console.error(`Failed to load security exceptions for cluster ${cluster}`, error);
+            return emptySecurityExceptionData();
+          });
+          exceptionsByCluster.set(cluster, data);
+        })
+      );
+      applySecurityExceptionsToWorkloadScans(
+        configurationScanContext.workloadScans,
+        exceptionsByCluster
+      );
 
       setWorkloadScanData([...configurationScanContext.workloadScans]);
     }
