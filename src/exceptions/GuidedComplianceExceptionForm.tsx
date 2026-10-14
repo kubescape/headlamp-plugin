@@ -6,23 +6,24 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
-  InputLabel,
-  MenuItem,
   Radio,
   RadioGroup,
-  Select,
   Stack,
   Typography,
 } from '@mui/material';
 import { FormControlLabel } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
-import { ContextBadge, MetadataFields, sanitizeName } from './shared';
+import {
+  ContextBadge,
+  MetadataFields,
+  PostureActionSelect,
+  sanitizeName,
+  toExpiresAt,
+} from './shared';
 
 export interface GuidedComplianceFormProps {
   controlID: string;
-  frameworkName?: string;
   workloadName: string;
   workloadNamespace: string;
   workloadKind: string;
@@ -38,6 +39,7 @@ export function GuidedComplianceExceptionForm(props: Readonly<GuidedComplianceFo
   const [scope, setScope] = useState<ComplianceScope>('workload');
   const [action, setAction] = useState<'ignore' | 'alert_only'>('ignore');
   const [name, setName] = useState(sanitizeName(`${controlID}-${workloadName}`));
+  const [author, setAuthor] = useState('');
   const [reason, setReason] = useState('');
   const [expiresDate, setExpiresDate] = useState('');
 
@@ -87,8 +89,9 @@ export function GuidedComplianceExceptionForm(props: Readonly<GuidedComplianceFo
     // 'namespace' and 'cluster' scopes: empty match — applies to all workloads in scope
 
     const spec = {
+      ...(author && { author }),
       ...(reason && { reason }),
-      ...(expiresDate && { expiresAt: `${expiresDate}T00:00:00Z` }),
+      ...(expiresDate && { expiresAt: toExpiresAt(expiresDate) }),
       match,
       posture: [{ controlID, action }],
     };
@@ -128,6 +131,8 @@ export function GuidedComplianceExceptionForm(props: Readonly<GuidedComplianceFo
             name={name}
             onNameChange={setName}
             namespace={isCluster ? undefined : workloadNamespace}
+            author={author}
+            onAuthorChange={setAuthor}
             reason={reason}
             onReasonChange={setReason}
             expiresDate={expiresDate}
@@ -161,31 +166,7 @@ export function GuidedComplianceExceptionForm(props: Readonly<GuidedComplianceFo
             </RadioGroup>
           </Box>
 
-          <FormControl fullWidth>
-            <InputLabel>Action</InputLabel>
-            <Select
-              value={action}
-              label="Action"
-              onChange={e => setAction(e.target.value as 'ignore' | 'alert_only')}
-            >
-              <MenuItem value="ignore">
-                <Box>
-                  <Typography variant="body2">ignore</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Remove from results and scoring entirely
-                  </Typography>
-                </Box>
-              </MenuItem>
-              <MenuItem value="alert_only">
-                <Box>
-                  <Typography variant="body2">alert_only</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Still fails in scoring, but marked as acknowledged
-                  </Typography>
-                </Box>
-              </MenuItem>
-            </Select>
-          </FormControl>
+          <PostureActionSelect value={action} onChange={setAction} fullWidth />
         </Stack>
       </DialogContent>
       <DialogActions>

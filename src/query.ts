@@ -74,23 +74,44 @@ export async function paginatedListQuery(
   const version = objectClass.apiEndpoint.apiInfo[0].version;
   const pluralName = objectClass.pluralName;
 
-  let queryFragment = `${pluralName}?resourceVersion=fullSpec&continue=${continuation}`;
-  if (pageSize !== undefined) {
-    queryFragment += `&limit=${pageSize}`;
+  function queryFragmentFor(offset: number) {
+    let fragment = `${pluralName}?resourceVersion=fullSpec&continue=${offset}`;
+    if (pageSize !== undefined) {
+      fragment += `&limit=${pageSize}`;
+    }
+    return fragment;
   }
+
+  const queryFragment = queryFragmentFor(continuation);
   if (allowedNamespaces.length > 0) {
-    const listOfLists: any[] = await Promise.all(
-      allowedNamespaces.map(namespace =>
-        request(`/apis/${group}/${version}/namespaces/${namespace}/${queryFragment}`)
-      )
+    // The apiserver pages each namespace separately, and this function returns a
+    // single continuation token, which cannot express one offset per namespace.
+    // So each namespace is drained here instead of reporting a token the caller
+    // could not act on; returning undefined while a namespace still had pages is
+    // what silently truncated the results.
+    const listOfLists: any[][] = await Promise.all(
+      allowedNamespaces.map(async namespace => {
+        const items: any[] = [];
+        let offset: number | undefined = continuation;
+
+        while (offset !== undefined) {
+          const list = await request(
+            `/apis/${group}/${version}/namespaces/${namespace}/${queryFragmentFor(offset)}`
+          );
+          items.push(...list.items);
+          offset = list.metadata?.continue || undefined;
+        }
+
+        return items;
+      })
     );
 
-    listOfLists.forEach(list => {
-      list.items.forEach((item: any) => {
+    listOfLists.forEach(items => {
+      items.forEach((item: any) => {
         item.metadata.cluster = cluster;
       });
     });
-    return { items: listOfLists.flatMap(list => list.items), continuation: undefined };
+    return { items: listOfLists.flat(), continuation: undefined };
   } else {
     // await new Promise(resolve => setTimeout(resolve, 2000));
     const overviewList = await request(`/apis/${group}/${version}/${queryFragment}`, {
