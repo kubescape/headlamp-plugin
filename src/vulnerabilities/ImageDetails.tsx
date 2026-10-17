@@ -2,26 +2,32 @@
   Show vulnerability scan results for a container image. 
 */
 import {
+  DateLabel,
   NameValueTable,
   SectionBox,
   ShowHideLabel,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
+import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { Link } from '@mui/material';
 import { useState } from 'react';
 import makeSeverityLabel from '../common/SeverityLabel';
 import { getURLSegments } from '../common/url';
 import { vulnerabilityManifestClass } from '../model';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
+import { getVulnerabilityReportCreatedAt } from './reportTimestamp';
 
 export default function ImageVulnerabilityDetails() {
   const [name, namespace] = getURLSegments(-1, -2);
   const [manifestVulnerability, setManifestVulnerability] = useState<KubeObject | null>(null);
 
-  vulnerabilityManifestClass.useApiGet(setManifestVulnerability, name, namespace);
+  vulnerabilityManifestClass.useApiGet(setManifestVulnerability, name, namespace, undefined, {
+    cluster: getCluster() ?? undefined,
+  });
 
   if (manifestVulnerability) {
+    const evaluatedAt = getVulnerabilityReportCreatedAt(manifestVulnerability.jsonData);
     return (
       <>
         <SectionBox title="Image Vulnerabilities" backLink>
@@ -32,6 +38,10 @@ export default function ImageVulnerabilityDetails() {
                 value: manifestVulnerability.metadata.annotations
                   ? manifestVulnerability.metadata.annotations['kubescape.io/image-tag']
                   : '',
+              },
+              {
+                name: 'Last evaluated',
+                value: evaluatedAt ? <DateLabel date={evaluatedAt} /> : 'Unknown',
               },
               {
                 name: 'Scan record created',
@@ -49,7 +59,7 @@ export default function ImageVulnerabilityDetails() {
 
 function Matches(props: { manifestVulnerability: VulnerabilityManifest }) {
   const { manifestVulnerability } = props;
-  const results = manifestVulnerability.spec.payload.matches;
+  const results = manifestVulnerability.spec.payload.matches ?? [];
 
   return (
     <SectionBox title="Findings">

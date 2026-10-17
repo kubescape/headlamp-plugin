@@ -81,7 +81,7 @@ export async function paginatedListQuery(
   if (allowedNamespaces.length > 0) {
     const listOfLists: any[] = await Promise.all(
       allowedNamespaces.map(namespace =>
-        request(`/apis/${group}/${version}/namespaces/${namespace}/${queryFragment}`)
+        request(`/apis/${group}/${version}/namespaces/${namespace}/${queryFragment}`, { cluster })
       )
     );
 

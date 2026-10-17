@@ -4,11 +4,13 @@
 import { Icon } from '@iconify/react';
 import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
+  DateLabel,
   NameValueTable,
   SectionBox,
   ShowHideLabel,
   Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { FormControlLabel, IconButton, Link, Switch, Tooltip } from '@mui/material';
 import { useEffect, useState } from 'react';
 import makeSeverityLabel from '../common/SeverityLabel';
@@ -17,21 +19,37 @@ import { GuidedVulnerabilityExceptionForm } from '../exceptions/GuidedVulnerabil
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
 import { getCVESummary } from './CVESummary';
+import { getVulnerabilityReportCreatedAt } from './reportTimestamp';
+import { getManifestNamespace } from './scanData';
 
 export default function KubescapeVulnerabilityDetails() {
   const [name, namespace] = getURLSegments(-1, -2);
+  const cluster = getCluster() ?? undefined;
 
   const [summary, setSummary] = useState<VulnerabilityManifestSummary | null>(null);
   const [manifestAll, setManifestAll] = useState<VulnerabilityManifest | null>(null);
   const [manifestRelevant, setManifestRelevant] = useState<VulnerabilityManifest | null>(null);
 
   useEffect(() => {
-    fetchVulnerabilityManifest(name, namespace).then((response: any[]) => {
-      setSummary(response[0]);
-      setManifestAll(response[1]);
-      setManifestRelevant(response[2]);
-    });
-  }, []);
+    let cancelled = false;
+    setSummary(null);
+    setManifestAll(null);
+    setManifestRelevant(null);
+    fetchVulnerabilityManifest(name, namespace, cluster)
+      .then(([summary, all, relevant]) => {
+        if (cancelled) return;
+        setSummary(summary);
+        setManifestAll(all);
+        setManifestRelevant(relevant);
+      })
+      .catch(error => console.error(error));
+    return () => {
+      cancelled = true;
+    };
+  }, [name, namespace, cluster]);
+
+  const imageEvaluatedAt = getVulnerabilityReportCreatedAt(manifestAll);
+  const relevantEvaluatedAt = getVulnerabilityReportCreatedAt(manifestRelevant);
 
   return (
     summary && (
@@ -58,6 +76,14 @@ export default function KubescapeVulnerabilityDetails() {
               {
                 name: 'Image',
                 value: summary.metadata.annotations['kubescape.io/image-tag'],
+              },
+              {
+                name: 'Image last evaluated',
+                value: imageEvaluatedAt ? <DateLabel date={imageEvaluatedAt} /> : 'Unknown',
+              },
+              {
+                name: 'Relevant findings last evaluated',
+                value: relevantEvaluatedAt ? <DateLabel date={relevantEvaluatedAt} /> : 'Unknown',
               },
               {
                 name: 'Scan record created',
@@ -105,7 +131,7 @@ function Matches(
   }>
 ) {
   const { manifest, relevant, workloadName, workloadNamespace, workloadKind, imageRef } = props;
-  const results: VulnerabilityManifest.Match[] = manifest?.spec.payload.matches;
+  const results: VulnerabilityManifest.Match[] = manifest.spec.payload.matches ?? [];
   const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useState(true);
   const [selectedCve, setSelectedCve] = useState<string | null>(null);
 
@@ -230,36 +256,38 @@ function Matches(
   );
 }
 
-// Fetch vulnerabilitymanifestsummary and then vulnerabilitymanifest (if available)
-async function fetchVulnerabilityManifest(name: string, namespace: string) {
-  function getVulnerabilityManifestSummary(): Promise<any> {
-    return request(
-      `/apis/spdx.softwarecomposition.kubescape.io/v1beta1/namespaces/${namespace}/vulnerabilitymanifestsummaries/${name}`
-    );
-  }
+// Full reports carry evaluation times; the summary only supplies their references.
+export async function fetchVulnerabilityManifest(
+  name: string,
+  namespace: string,
+  cluster?: string
+): Promise<
+  [VulnerabilityManifestSummary, VulnerabilityManifest | null, VulnerabilityManifest | null]
+> {
+  const summary: VulnerabilityManifestSummary = await request(
+    `/apis/spdx.softwarecomposition.kubescape.io/v1beta1/namespaces/${namespace}/vulnerabilitymanifestsummaries/${name}`,
+    { cluster }
+  );
 
-  function getVulnerabilityManifest(name: string): Promise<any> {
-    if (name === '') {
-      return Promise.resolve();
+  async function getManifest(reference?: {
+    name?: string;
+    namespace?: string;
+  }): Promise<VulnerabilityManifest | null> {
+    if (!reference?.name) return null;
+    try {
+      return await request(
+        `/apis/spdx.softwarecomposition.kubescape.io/v1beta1/namespaces/${getManifestNamespace(
+          reference
+        )}/vulnerabilitymanifests/${reference.name}`,
+        { cluster }
+      );
+    } catch (error) {
+      console.error(error);
+      return null;
     }
-    return request(
-      `/apis/spdx.softwarecomposition.kubescape.io/v1beta1/namespaces/kubescape/vulnerabilitymanifests/${name}`
-    );
   }
 
-  const summary = await getVulnerabilityManifestSummary();
-  let allManifest: VulnerabilityManifest | null = null;
-  await getVulnerabilityManifest(summary.spec.vulnerabilitiesRef.all.name)
-    .then(result => {
-      allManifest = result;
-    })
-    .catch(error => console.log(error.message));
-  let relevantManifest: VulnerabilityManifest | null = null;
-  await getVulnerabilityManifest(summary.spec.vulnerabilitiesRef.relevant.name)
-    .then(result => {
-      relevantManifest = result;
-    })
-    .catch(error => console.log(error.message));
-
-  return [summary, allManifest, relevantManifest];
+  const all = await getManifest(summary.spec.vulnerabilitiesRef?.all);
+  const relevant = await getManifest(summary.spec.vulnerabilitiesRef?.relevant);
+  return [summary, all, relevant];
 }
