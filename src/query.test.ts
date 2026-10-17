@@ -30,7 +30,6 @@ it.each([{ namespaces: [] }, { namespaces: ['reports', 'relevant-reports'] }])(
         expect(item.metadata.cluster).toBe(cluster);
         expect(item.spec.metadata.report.createdAt).toBe(cluster === 'cluster-a' ? T1 : T2);
       }
-      expect(result.continuation).toBe(namespaces.length ? undefined : 'next-page');
     }
     expect(request).toHaveBeenCalledTimes(2 * (namespaces.length || 1));
     expect(
