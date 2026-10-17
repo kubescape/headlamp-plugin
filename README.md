@@ -99,6 +99,8 @@ For any questions or feedback, please open an issue on the GitHub repository.
 
 Contributions are welcome! Please fork the repository and submit a pull request.
 
+See [GOVERNANCE.md](./GOVERNANCE.md) for project governance, and [ADOPTERS.md](./ADOPTERS.md) for the centralized adopter list and registration guidelines.
+
 ## License
 
 This project is licensed under the Apache-2.0 License. See the LICENSE file for details.
