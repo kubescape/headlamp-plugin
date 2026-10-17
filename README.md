@@ -99,7 +99,7 @@ For any questions or feedback, please open an issue on the GitHub repository.
 
 Contributions are welcome! Please fork the repository and submit a pull request.
 
-See [GOVERNANCE.md](./GOVERNANCE.md) for decision-making processes and maintainer responsibilities, and [ADOPTERS.md](./ADOPTERS.md) to register your use of the plugin.
+See [GOVERNANCE.md](./GOVERNANCE.md) for project governance, and [ADOPTERS.md](./ADOPTERS.md) for the centralized adopter list and registration guidelines.
 
 ## License
 
