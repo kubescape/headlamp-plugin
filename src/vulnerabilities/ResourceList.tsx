@@ -40,6 +40,7 @@ export default function WorkloadScanListView(
                 return (
                   <Link
                     routeName={RoutingName.KubescapeVulnerabilityDetails}
+                    activeCluster={cell.row.original.cluster}
                     params={{
                       name: cell.row.original.manifestName,
                       namespace: cell.row.original.namespace,
@@ -113,11 +114,12 @@ export default function WorkloadScanListView(
                   return (
                     <Link
                       routeName={RoutingName.KubescapeSBOMDetails}
+                      activeCluster={workloadScan.cluster}
                       params={{
                         name:
                           workloadScan.relevant?.manifestName ??
                           workloadScan.imageScan?.manifestName,
-                        namespace: workloadScan.imageScan?.namespace,
+                        namespace: (workloadScan.relevant ?? workloadScan.imageScan).namespace,
                       }}
                       search={workloadScan.relevant ? '?filtered' : ''}
                     >

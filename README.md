@@ -32,6 +32,8 @@ The plugin has been tested with current versions of Headlamp (browser and deskto
 - eBPF-based runtime threat detection
 - Custom frameworks and exceptions
 
+Vulnerability image lists and detail pages show **Last evaluated** from the report's `spec.metadata.report.createdAt`. Workload details show image and relevant-findings evaluation times separately. These dates require a vulnerability producer that populates the field; legacy reports show **Unknown**. **Scan record created** remains the Kubernetes object's creation date and does not indicate a rescan.
+
 The queries to the Kubescape database use Headlamps feature `Allowed namespaces`, supporting multi tenant clusters. Configuration of this setting is done per user in Settings/Cluster.
 
 You can create custom frameworks by combining one or more controls. These frameworks are stored as a ConfigMap in the Kubernetes cluster, within the namespace where Kubescape is installed, making them reusable. Additionally, you can export the frameworks to a JSON file, which can be used with the Kubescape CLI for scanning.

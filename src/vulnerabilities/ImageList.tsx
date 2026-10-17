@@ -9,7 +9,7 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, Stack, Tooltip } from '@mui/material';
 import { RoutingName } from '../index';
-import { ImageScan, WorkloadScan } from './Vulnerabilities';
+import { getImageScanKey, getImageScans, ImageScan, WorkloadScan } from './scanData';
 
 export default function ImageListView(props: Readonly<{ workloadScans: WorkloadScan[] | null }>) {
   const { workloadScans } = props;
@@ -33,6 +33,7 @@ export default function ImageListView(props: Readonly<{ workloadScans: WorkloadS
                 return (
                   <HeadlampLink
                     routeName={RoutingName.ImageVulnerabilityDetails}
+                    activeCluster={row.original.cluster}
                     params={{
                       name: cell.getValue(),
                       namespace: row.original.namespace,
@@ -48,12 +49,27 @@ export default function ImageListView(props: Readonly<{ workloadScans: WorkloadS
               header: 'Workload',
               accessorFn: (imageScan: ImageScan) => {
                 const workloads = workloadScans
-                  .filter(scan => scan.imageScan?.manifestName === imageScan.manifestName)
+                  .filter(
+                    scan =>
+                      scan.imageScan &&
+                      getImageScanKey(scan.imageScan) === getImageScanKey(imageScan)
+                  )
                   .map(scan => `${scan.name}/${scan.container}`);
 
                 const uniqueWorkloads = [...new Set(workloads)];
                 return <div style={{ whiteSpace: 'pre-line' }}>{uniqueWorkloads.join('\n')}</div>;
               },
+              gridTemplate: 'auto',
+            },
+            {
+              id: 'Last evaluated',
+              header: 'Last evaluated',
+              accessorFn: (imageScan: ImageScan) => imageScan.reportCreatedAt,
+              sortingFn: 'basic',
+              sortUndefined: 'last',
+              sortDescFirst: false,
+              Cell: ({ cell }: any) =>
+                cell.getValue() ? <DateLabel date={cell.getValue()} /> : 'Unknown',
               gridTemplate: 'auto',
             },
             {
@@ -76,6 +92,7 @@ export default function ImageListView(props: Readonly<{ workloadScans: WorkloadS
                 return (
                   <HeadlampLink
                     routeName={RoutingName.KubescapeSBOMDetails}
+                    activeCluster={imageScan.cluster}
                     params={{
                       name: imageScan.manifestName,
                       namespace: imageScan.namespace,
@@ -170,14 +187,4 @@ function cveList(imageScan: ImageScan, severity: string) {
       </>
     );
   }
-}
-
-function getImageScans(workloadScans: WorkloadScan[]): ImageScan[] {
-  const imageScans = new Map<string, ImageScan>();
-
-  workloadScans.forEach(w => {
-    if (w.imageScan) imageScans.set(w.imageScan.manifestName, w.imageScan);
-  });
-
-  return Array.from(imageScans.values());
 }
