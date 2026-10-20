@@ -1,21 +1,21 @@
 import { post } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
-  Box,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
   Stack,
-  Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
-import { ContextBadge, MetadataFields, sanitizeName } from './shared';
+import {
+  ContextBadge,
+  MetadataFields,
+  PostureActionSelect,
+  sanitizeName,
+  toExpiresAt,
+} from './shared';
 
 export interface GuidedClusterComplianceExceptionFormProps {
   controlID: string;
@@ -30,6 +30,7 @@ export function GuidedClusterComplianceExceptionForm(
 
   const [action, setAction] = useState<'ignore' | 'alert_only'>('ignore');
   const [name, setName] = useState(sanitizeName(`${controlID}-cluster`));
+  const [author, setAuthor] = useState('');
   const [reason, setReason] = useState('');
   const [expiresDate, setExpiresDate] = useState('');
 
@@ -40,8 +41,9 @@ export function GuidedClusterComplianceExceptionForm(
     }
 
     const spec = {
+      ...(author && { author }),
       ...(reason && { reason }),
-      ...(expiresDate && { expiresAt: `${expiresDate}T00:00:00Z` }),
+      ...(expiresDate && { expiresAt: toExpiresAt(expiresDate) }),
       match: {},
       posture: [{ controlID, action }],
     };
@@ -68,6 +70,8 @@ export function GuidedClusterComplianceExceptionForm(
           <MetadataFields
             name={name}
             onNameChange={setName}
+            author={author}
+            onAuthorChange={setAuthor}
             reason={reason}
             onReasonChange={setReason}
             expiresDate={expiresDate}
@@ -77,31 +81,7 @@ export function GuidedClusterComplianceExceptionForm(
           <ContextBadge label="Control" value={controlID} />
           <ContextBadge label="Scope" value="All namespaces — cluster-wide" />
 
-          <FormControl fullWidth>
-            <InputLabel>Action</InputLabel>
-            <Select
-              value={action}
-              label="Action"
-              onChange={e => setAction(e.target.value as 'ignore' | 'alert_only')}
-            >
-              <MenuItem value="ignore">
-                <Box>
-                  <Typography variant="body2">ignore</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Remove from results and scoring entirely
-                  </Typography>
-                </Box>
-              </MenuItem>
-              <MenuItem value="alert_only">
-                <Box>
-                  <Typography variant="body2">alert_only</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Still fails in scoring, but marked as acknowledged
-                  </Typography>
-                </Box>
-              </MenuItem>
-            </Select>
-          </FormControl>
+          <PostureActionSelect value={action} onChange={setAction} fullWidth />
         </Stack>
       </DialogContent>
       <DialogActions>
