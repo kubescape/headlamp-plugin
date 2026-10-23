@@ -17,10 +17,13 @@ import { TabPanel } from '../common/TabPanel';
 import { RoutingName } from '../index';
 import {
   applicationProfileClass,
+  containerProfileClass,
   listQuery,
   networkNeighborhoodsClass,
   rulesClass,
 } from '../model';
+import { ContainerProfile } from '../softwarecomposition/ContainerProfile';
+import { discoverProfileResource } from '../softwarecomposition/profileApi';
 import { AlertMessagePopup } from './AlertMessagePopup';
 
 const { createRouteURL } = Router;
@@ -51,10 +54,10 @@ export function RuntimeDetection() {
           <AlertsTab />
         </TabPanel>
         <TabPanel value="profiles">
-          <ApplicationProfilesTab />
+          {tabValue === 'profiles' && <ApplicationProfilesTab />}
         </TabPanel>
         <TabPanel value="networks">
-          <NetworkNeighborhoodsTab />
+          {tabValue === 'networks' && <NetworkNeighborhoodsTab />}
         </TabPanel>
         <TabPanel value="rules">
           <RulesTab />
@@ -201,129 +204,119 @@ function AlertsTab() {
   );
 }
 
-// ── Application Profiles ──────────────────────────────────────────────────────
+// ── Container Profile perspectives ───────────────────────────────────────────
 
 function ApplicationProfilesTab() {
-  const [profiles, setProfiles] = useState<any[]>([]);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    listQuery(applicationProfileClass)
-      .then(setProfiles)
-      .catch((err: any) => setError(err?.message ?? String(err)));
-  }, []);
-
-  return (
-    <>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Baseline of workload behaviour recorded by Kubescape during the learning phase. Used by{' '}
-        <code>ap.*</code> CEL functions in rules.
-      </Typography>
-      {error && (
-        <Alert severity="error" sx={{ mb: 1 }}>
-          {error}
-        </Alert>
-      )}
-      <HeadlampTable
-        data={profiles}
-        columns={[
-          {
-            header: 'Name',
-            accessorFn: (p: any) => p.metadata.labels?.['kubescape.io/workload-name'],
-            Cell: ({ cell, row }: any) => (
-              <HeadlampLink
-                routeName={RoutingName.RuntimeDetection}
-                params={{
-                  name: row.original.metadata.name,
-                  namespace: row.original.metadata.namespace,
-                }}
-              >
-                {cell.getValue()}
-              </HeadlampLink>
-            ),
-            gridTemplate: 'auto',
-          },
-          {
-            header: 'Kind',
-            accessorFn: (p: any) => p.metadata.labels?.['kubescape.io/workload-kind'],
-            gridTemplate: 'auto',
-          },
-          {
-            header: 'Namespace',
-            accessorFn: (p: any) => p.metadata.namespace,
-            gridTemplate: 'auto',
-          },
-          {
-            header: 'Status',
-            accessorFn: (p: any) => p.metadata.annotations?.['kubescape.io/status'],
-            gridTemplate: 'auto',
-          },
-        ]}
-      />
-    </>
-  );
+  return <ContainerProfilesTab view="behavior" />;
 }
 
-// ── Network Neighborhoods ─────────────────────────────────────────────────────
-
 function NetworkNeighborhoodsTab() {
-  const [items, setItems] = useState<any[]>([]);
+  return <ContainerProfilesTab view="network" />;
+}
+
+function ContainerProfilesTab({ view }: Readonly<{ view: 'behavior' | 'network' }>) {
+  const [items, setItems] = useState<ContainerProfile[]>([]);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    listQuery(networkNeighborhoodsClass)
-      .then(setItems)
-      .catch((err: any) => setError(err?.message ?? String(err)));
-  }, []);
+    let active = true;
+    discoverProfileResource(view)
+      .then(source =>
+        listQuery(
+          source.modern
+            ? containerProfileClass
+            : view === 'behavior'
+            ? applicationProfileClass
+            : networkNeighborhoodsClass
+        )
+      )
+      .then((profiles: ContainerProfile[]) => {
+        if (active) setItems(profiles);
+      })
+      .catch((err: any) => {
+        if (active) setError(err?.message ?? String(err));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [view]);
 
+  const behavior = view === 'behavior';
   return (
     <>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Baseline of workload network activity recorded by Kubescape. Used by <code>nn.*</code> CEL
-        functions in rules.
+        {behavior ? (
+          <>
+            Workload behaviour baselines recorded by Kubescape. Used by <code>ap.*</code> CEL
+            functions in rules.
+          </>
+        ) : (
+          <>
+            Workload network baselines recorded by Kubescape. Used by <code>nn.*</code> CEL
+            functions in rules.
+          </>
+        )}
       </Typography>
       {error && (
         <Alert severity="error" sx={{ mb: 1 }}>
           {error}
         </Alert>
       )}
-      <HeadlampTable
-        data={items}
-        columns={[
-          {
-            header: 'Name',
-            accessorFn: (p: any) =>
-              p.metadata.labels?.['kubescape.io/workload-name'] ?? p.metadata.name,
-            Cell: ({ cell, row }: any) => (
-              <HeadlampLink
-                routeName={RoutingName.NetworkNeighborhoodDetail}
-                params={{
-                  name: row.original.metadata.name,
-                  namespace: row.original.metadata.namespace,
-                }}
-              >
-                {cell.getValue()}
-              </HeadlampLink>
-            ),
-            gridTemplate: 'auto',
-          },
-          {
-            header: 'Kind',
-            accessorFn: (p: any) => p.metadata.labels?.['kubescape.io/workload-kind'],
-            gridTemplate: 'auto',
-          },
-          {
-            header: 'Namespace',
-            accessorFn: (p: any) => p.metadata.namespace,
-            gridTemplate: 'auto',
-          },
-          {
-            header: 'Containers',
-            accessorFn: (p: any) => p.spec?.containers?.length ?? 0,
-            gridTemplate: 'min-content',
-          },
-        ]}
-      />
+      {!loading && !error && items.length === 0 && (
+        <Typography variant="body2">No profiles found.</Typography>
+      )}
+      {!error && (
+        <HeadlampTable
+          data={items}
+          columns={[
+            {
+              header: 'Name',
+              accessorFn: (p: ContainerProfile) =>
+                p.metadata.labels?.['kubescape.io/workload-name'] ?? p.metadata.name,
+              Cell: ({ cell, row }: any) => (
+                <HeadlampLink
+                  routeName={
+                    behavior ? RoutingName.RuntimeDetection : RoutingName.NetworkNeighborhoodDetail
+                  }
+                  params={{
+                    name: row.original.metadata.name,
+                    namespace: row.original.metadata.namespace,
+                  }}
+                >
+                  {cell.getValue()}
+                </HeadlampLink>
+              ),
+              gridTemplate: 'auto',
+            },
+            {
+              header: 'Kind',
+              accessorFn: (p: ContainerProfile) =>
+                p.metadata.labels?.['kubescape.io/workload-kind'],
+              gridTemplate: 'auto',
+            },
+            {
+              header: 'Namespace',
+              accessorFn: (p: ContainerProfile) => p.metadata.namespace,
+              gridTemplate: 'auto',
+            },
+            {
+              header: 'Container',
+              accessorFn: (p: ContainerProfile) =>
+                p.metadata.labels?.['kubescape.io/workload-container-name'] ?? '—',
+              gridTemplate: 'auto',
+            },
+            {
+              header: 'Status',
+              accessorFn: (p: ContainerProfile) => p.metadata.annotations?.['kubescape.io/status'],
+              gridTemplate: 'auto',
+            },
+          ]}
+        />
+      )}
     </>
   );
 }

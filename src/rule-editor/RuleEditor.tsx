@@ -1,6 +1,7 @@
 import { Icon } from '@iconify/react';
 import { post, put, request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import { SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import Editor from '@monaco-editor/react';
 import { TabContext, TabList } from '@mui/lab';
 import {
@@ -39,6 +40,7 @@ import * as yaml from 'js-yaml';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TabPanel } from '../common/TabPanel';
 import { getURLSegments } from '../common/url';
+import { discoverProfileResource } from '../softwarecomposition/profileApi';
 import {
   defaultEventData,
   EventType,
@@ -48,6 +50,13 @@ import {
   RuleExpression,
 } from '../types/Rules';
 import { loadWasm } from '../wasm/initWasmModule';
+import type { BaselineKind, ProfileSource } from './profileLoader';
+import {
+  containerProfileToMockYAML,
+  getContainerProfile,
+  listContainerProfileNames,
+  listSelectableNamespaces,
+} from './profileLoader';
 
 const EVENT_TYPES = Object.keys(defaultEventData) as EventType[];
 
@@ -986,45 +995,13 @@ type RuleTestResult = {
   evalError: string;
 };
 
-const SPDX_API = 'spdx.softwarecomposition.kubescape.io/v1beta1';
-
-function apCrdToMockYAML(crd: any): string {
-  const containers: Record<string, any> = {};
-  for (const c of crd.spec?.containers ?? []) {
-    containers[c.name] = {
-      execs: (c.execs ?? []).map((e: any) => ({ path: e.path, args: e.args ?? [] })),
-      opens: (c.opens ?? []).map((o: any) => ({ path: o.path, flags: o.flags ?? [] })),
-      syscalls: c.syscalls ?? [],
-      capabilities: c.capabilities ?? [],
-    };
-  }
-  return yaml.dump({ containers });
-}
-
-function nnCrdToMockYAML(crd: any): string {
-  const containers: Record<string, any> = {};
-  for (const c of crd.spec?.containers ?? []) {
-    containers[c.name] = {
-      egress: (c.egress ?? []).map((e: any) => ({
-        ipAddress: e.ipAddress ?? '',
-        dns: Array.isArray(e.dns) ? e.dns : [],
-      })),
-      ingress: (c.ingress ?? []).map((i: any) => ({
-        ipAddress: i.ipAddress ?? '',
-        dns: Array.isArray(i.dns) ? i.dns : [],
-      })),
-    };
-  }
-  return yaml.dump({ containers });
-}
-
 type LoadMeta = { namespace: string; workload: string; containerName: string };
 
 function ClusterMockLoader({
-  crdKind,
+  baselineKind,
   onLoad,
 }: Readonly<{
-  crdKind: 'applicationprofiles' | 'networkneighborhoods';
+  baselineKind: BaselineKind;
   onLoad: (yaml: string, meta: LoadMeta) => void;
 }>) {
   const [open, setOpen] = useState(false);
@@ -1033,53 +1010,91 @@ function ClusterMockLoader({
   const [workloads, setWorkloads] = useState<string[]>([]);
   const [workload, setWorkload] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [workloadsLoaded, setWorkloadsLoaded] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const [source, setSource] = useState<ProfileSource | null>(null);
+  const discoveryRequest = useRef(0);
 
   const handleOpen = () => {
+    const requestID = ++discoveryRequest.current;
     setOpen(true);
-    request('/api/v1/namespaces')
-      .then((res: any) => setNamespaces(res.items?.map((ns: any) => ns.metadata.name) ?? []))
-      .catch(() => setNamespaces([]));
+    setError('');
+    setSource(null);
+    setRefresh(value => value + 1);
+    Promise.all([
+      listSelectableNamespaces(getAllowedNamespaces()),
+      discoverProfileResource(baselineKind === 'application' ? 'behavior' : 'network'),
+    ])
+      .then(([availableNamespaces, discoveredSource]) => {
+        if (requestID !== discoveryRequest.current) return;
+        setNamespaces(availableNamespaces);
+        setNamespace(current =>
+          availableNamespaces.includes(current)
+            ? current
+            : availableNamespaces.length === 1
+            ? availableNamespaces[0]
+            : ''
+        );
+        setSource(discoveredSource);
+      })
+      .catch((err: any) => {
+        if (requestID === discoveryRequest.current) setError(err?.message ?? String(err));
+      });
   };
 
   useEffect(() => {
-    if (!namespace) return;
     setWorkload('');
     setWorkloads([]);
-    request(`/apis/${SPDX_API}/namespaces/${namespace}/${crdKind}`)
-      .then((res: any) => setWorkloads(res.items?.map((i: any) => i.metadata.name) ?? []))
-      .catch(() => setWorkloads([]));
-  }, [namespace, crdKind]);
+    setWorkloadsLoaded(false);
+    setError('');
+    if (!namespace || !source) return;
+    let active = true;
+    listContainerProfileNames(namespace, source)
+      .then(names => {
+        if (active) {
+          setWorkloads(names);
+          setWorkloadsLoaded(true);
+        }
+      })
+      .catch((err: any) => {
+        if (active) setError(err?.message ?? String(err));
+      });
+    return () => {
+      active = false;
+    };
+  }, [namespace, source, refresh]);
 
   const emptyComment =
-    crdKind === 'networkneighborhoods'
+    baselineKind === 'network'
       ? [
-          '# No NetworkNeighborhood baseline found for this workload.',
+          '# No network baseline found for this container profile.',
           '# Network baseline is recorded by Kubescape after observing the',
           '# workload during its learning phase. The nn.* functions will',
           '# return false until baseline data is available.',
         ].join('\n')
       : [
-          '# No ApplicationProfile baseline found for this workload.',
+          '# No application baseline found for this container profile.',
           '# The profile is recorded by Kubescape during the learning phase.',
           '# The ap.* functions will return false until baseline data is available.',
         ].join('\n');
 
   const handleLoad = async () => {
-    if (!namespace || !workload) return;
+    if (!namespace || !workload || !source) return;
     setLoading(true);
+    setError('');
     try {
-      const crd = await request(`/apis/${SPDX_API}/namespaces/${namespace}/${crdKind}/${workload}`);
-      const converted =
-        crdKind === 'applicationprofiles' ? apCrdToMockYAML(crd) : nnCrdToMockYAML(crd);
+      const profile = await getContainerProfile(namespace, workload, source);
+      const converted = containerProfileToMockYAML(profile, baselineKind);
       const parsed = yaml.load(converted) as any;
       const containerName = Object.keys(parsed?.containers ?? {})[0] ?? '';
       const hasData = !!containerName;
       onLoad(hasData ? converted : emptyComment, { namespace, workload, containerName });
-    } catch {
-      onLoad(emptyComment, { namespace, workload, containerName: '' });
+      setOpen(false);
+    } catch (err: any) {
+      setError(err?.message ?? String(err));
     } finally {
       setLoading(false);
-      setOpen(false);
     }
   };
 
@@ -1097,42 +1112,74 @@ function ClusterMockLoader({
   }
 
   return (
-    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1, flexWrap: 'wrap', gap: 1 }}>
-      <TextField
-        select
-        label="Namespace"
-        value={namespace}
-        onChange={e => setNamespace(e.target.value)}
-        size="small"
-        sx={{ minWidth: 160 }}
-      >
-        {namespaces.map(ns => (
-          <MenuItem key={ns} value={ns}>
-            {ns}
-          </MenuItem>
-        ))}
-      </TextField>
-      <TextField
-        select
-        label="Workload"
-        value={workload}
-        onChange={e => setWorkload(e.target.value)}
-        size="small"
-        sx={{ minWidth: 200 }}
-        disabled={!workloads.length}
-      >
-        {workloads.map(w => (
-          <MenuItem key={w} value={w}>
-            {w}
-          </MenuItem>
-        ))}
-      </TextField>
-      <Button variant="contained" size="small" onClick={handleLoad} disabled={!workload || loading}>
-        Load
-      </Button>
-      <Button size="small" onClick={() => setOpen(false)}>
-        Cancel
-      </Button>
+    <Stack spacing={1} sx={{ mb: 1 }}>
+      {error && (
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" onClick={handleOpen}>
+              Retry
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+      )}
+      {source && namespaces.length === 0 && (
+        <Alert severity="info">No accessible namespaces found.</Alert>
+      )}
+      {workloadsLoaded && workloads.length === 0 && (
+        <Alert severity="info">No profiles found in this namespace.</Alert>
+      )}
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
+        <TextField
+          select
+          label="Namespace"
+          value={namespace}
+          onChange={e => setNamespace(e.target.value)}
+          size="small"
+          sx={{ minWidth: 160 }}
+          disabled={!source}
+        >
+          {namespaces.map(ns => (
+            <MenuItem key={ns} value={ns}>
+              {ns}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          label="Profile"
+          value={workload}
+          onChange={e => setWorkload(e.target.value)}
+          size="small"
+          sx={{ minWidth: 200 }}
+          disabled={!source || !workloads.length}
+        >
+          {workloads.map(w => (
+            <MenuItem key={w} value={w}>
+              {w}
+            </MenuItem>
+          ))}
+        </TextField>
+        <Button
+          variant="contained"
+          size="small"
+          onClick={handleLoad}
+          disabled={!source || !workload || loading}
+        >
+          Load
+        </Button>
+        <Button
+          size="small"
+          onClick={() => {
+            discoveryRequest.current++;
+            setOpen(false);
+          }}
+        >
+          Cancel
+        </Button>
+      </Stack>
     </Stack>
   );
 }
@@ -1296,7 +1343,7 @@ function PlaygroundDialog({
           </TabList>
           <TabPanel value={1}>
             <ClusterMockLoader
-              crdKind="applicationprofiles"
+              baselineKind="application"
               onLoad={(v, meta) => {
                 setProfileYAML(v);
                 profileEditorRef.current?.setValue(v);
@@ -1317,7 +1364,7 @@ function PlaygroundDialog({
           </TabPanel>
           <TabPanel value={2}>
             <ClusterMockLoader
-              crdKind="networkneighborhoods"
+              baselineKind="network"
               onLoad={(v, meta) => {
                 setNetworkYAML(v);
                 networkEditorRef.current?.setValue(v);
