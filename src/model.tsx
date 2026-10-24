@@ -84,6 +84,17 @@ export const generatedNetworkPolicyClass = makeCustomResourceClass({
   customResourceDefinition: undefined as any,
 });
 
+export const containerProfileClass = makeCustomResourceClass({
+  apiInfo: spdxGroupVersions,
+  isNamespaced: true,
+  singularName: 'containerprofile',
+  pluralName: 'containerprofiles',
+  kind: 'ContainerProfile',
+  customResourceDefinition: undefined as any,
+});
+
+// Older supported Storage releases serve the separate resources. Keep these
+// classes for installations where ContainerProfile is not yet available.
 export const networkNeighborhoodsClass = makeCustomResourceClass({
   apiInfo: spdxGroupVersions,
   isNamespaced: true,
