@@ -37,7 +37,7 @@
   "devDependencies": {
     "@kinvolk/headlamp-plugin": "^0.14.0",
     "@testing-library/dom": "10.4.2",
-    "@testing-library/react": "16.3.0"
+    "@testing-library/react": "16.3.3"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",
