@@ -5,6 +5,22 @@ import (
 	"strings"
 )
 
+// requestAttributes are the attributes of the admission request that resource rules match on
+type requestAttributes struct {
+	operation   string
+	group       string
+	version     string
+	resource    string
+	subResource string
+}
+
+func stringField(data map[string]any, key string) string {
+	value, _ := data[key].(string)
+	return value
+}
+
+// CheckMatchConstraints matches the request against the resource rules of the policy like the
+// API server does: on operation, API group, API version and resource, where '*' matches any value.
 func (evaluator *AdmissionPolicyEvaluator) CheckMatchConstraints() {
 
 	if value, ok := evaluator.object["apiVersion"]; !ok || value == nil {
@@ -13,26 +29,26 @@ func (evaluator *AdmissionPolicyEvaluator) CheckMatchConstraints() {
 	if value, ok := evaluator.object["kind"]; !ok || value == nil {
 		return
 	}
+	if evaluator.policy.Spec.MatchConstraints == nil {
+		return
+	}
 
-	kind := evaluator.object["kind"].(string)
-	apiVersion := evaluator.object["apiVersion"].(string)
-
-	group := ""
-	version := ""
-
-	if strings.Index(apiVersion, "/") > 0 {
-		group = strings.Split(apiVersion, "/")[0]
-		version = strings.Split(apiVersion, "/")[1]
-	} else {
-		version = apiVersion
+	resource, _ := evaluator.request["resource"].(map[string]any)
+	attributes := requestAttributes{
+		operation:   stringField(evaluator.request, "operation"),
+		group:       stringField(resource, "group"),
+		version:     stringField(resource, "version"),
+		resource:    stringField(resource, "resource"),
+		subResource: stringField(evaluator.request, "subResource"),
 	}
 
 	for _, resourceRule := range evaluator.policy.Spec.MatchConstraints.ResourceRules {
-		if match(resourceRule, group, version, kind) {
+		if match(resourceRule, attributes) {
 			evaluator.Results.MatchConstraints = true
 			return
 		}
 	}
+	log.Printf("Request %+v NOT matched", attributes)
 }
 
 func makePlural(kind string) string {
@@ -44,44 +60,33 @@ func makePlural(kind string) string {
 	return kind + "s"
 }
 
-func match(resourceRule NamedRuleWithOperations, group string, version string, kind string) bool {
-	groupOK := false
-	versionOK := false
-	resourceOK := false
+func match(resourceRule NamedRuleWithOperations, attributes requestAttributes) bool {
+	return matchesAny(resourceRule.Operations, attributes.operation) &&
+		matchesAny(resourceRule.APIGroups, attributes.group) &&
+		matchesAny(resourceRule.APIVersions, attributes.version) &&
+		matchesResource(resourceRule.Resources, attributes.resource, attributes.subResource)
+}
 
-	for _, apiGroup := range resourceRule.APIGroups {
-		if apiGroup == group {
-			groupOK = true
-			break
+// matchesAny reports whether one of the values is '*' or the given value
+func matchesAny[T ~string](values []T, value string) bool {
+	for _, v := range values {
+		if string(v) == "*" || string(v) == value {
+			return true
 		}
 	}
-	if !groupOK {
-		log.Printf("Group %q NOT Matched", group)
-		return false
-	}
+	return false
+}
 
-	for _, apiVersion := range resourceRule.APIVersions {
-		if apiVersion == version {
-			versionOK = true
-			break
+// matchesResource reports whether the resource and subresource match one of the patterns:
+// 'pods' matches pods, 'pods/log' its log subresource, 'pods/*' pods and all its subresources,
+// '*' all resources but no subresources, '*/scale' all scale subresources and '*/*' everything.
+func matchesResource(patterns []string, resource, subResource string) bool {
+	for _, pattern := range patterns {
+		patternResource, patternSubResource, _ := strings.Cut(pattern, "/")
+		if (patternResource == "*" || strings.EqualFold(patternResource, resource)) &&
+			(patternSubResource == "*" || patternSubResource == subResource) {
+			return true
 		}
 	}
-	if !versionOK {
-		log.Printf("Version %q NOT Matched", version)
-		return false
-	}
-
-	pluralKind := makePlural(kind)
-	for _, resource := range resourceRule.Resources {
-		if strings.EqualFold(resource, pluralKind) {
-			resourceOK = true
-			break
-		}
-	}
-	if !resourceOK {
-		log.Printf("Resource kind %q NOT Matched", pluralKind)
-		return false
-	}
-
-	return groupOK && versionOK && resourceOK
+	return false
 }
