@@ -21,7 +21,23 @@ it('maps timestamps without changing identity or findings', () => {
     reportCreatedAt: T1,
     matches: report.spec.payload.matches,
   });
-  expect(scan.matches).toBe(report.spec.payload.matches);
+});
+
+it('keeps only the fields of the findings that the pages show', () => {
+  const report = manifest();
+  const finding: any = report.spec.payload.matches![0];
+  finding.matchDetails = [{ searchedBy: { cpes: ['cpe:2.3:a:example'] } }];
+  finding.artifact.locations = [{ path: '/usr/lib' }];
+  finding.vulnerability.urls = ['https://example.test'];
+  finding.vulnerability.cvss = [{ vector: 'CVSS:3.1/AV:N', metrics: { baseScore: 9.8 } }];
+
+  const [kept]: any[] = toImageScan(report).matches;
+
+  expect(kept.matchDetails).toBeUndefined();
+  expect(kept.artifact.locations).toBeUndefined();
+  expect(kept.vulnerability.urls).toBeUndefined();
+  expect(kept.vulnerability.cvss).toEqual([{ metrics: { baseScore: 9.8 } }]);
+  expect(kept.vulnerability.id).toBe(finding.vulnerability.id);
 });
 
 it('maps legacy and empty/missing findings without manufacturing an evaluation time', () => {

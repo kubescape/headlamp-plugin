@@ -65,6 +65,9 @@ interface CVEScan {
   relevant: boolean | undefined;
 }
 
+// A VulnerabilityManifestSummary holds counts and two references, about a kilobyte
+const summaryPageSize = 500;
+
 // workloadScans are cached in global scope because it is an expensive query for the API server
 export const vulnerabilityContext: VulnerabilityContext = {
   workloadScans: [],
@@ -418,6 +421,8 @@ function initQueryTasks(
       });
       vulnerabilityContext.queryTasks.push({
         ...task,
+        // summaries are small, so they are read in larger pages than the manifests
+        pageSize: Math.max(task.pageSize, summaryPageSize),
         objectClass: vulnerabilityManifestSummaryClass,
         handleData: storeVulnerabilityManifestSummaries,
       });

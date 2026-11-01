@@ -89,7 +89,33 @@ export function toImageScan(manifest: VulnerabilityManifest): ImageScan {
     imageName: manifest.metadata.annotations['kubescape.io/image-tag'],
     creationTimestamp: manifest.metadata.creationTimestamp,
     reportCreatedAt: getVulnerabilityReportCreatedAt(manifest),
-    matches: manifest.spec.payload.matches ?? [],
+    matches: (manifest.spec.payload.matches ?? []).map(slimMatch),
+  };
+}
+
+/**
+ * The fields of a match that the pages show. The scanner also stores how each match was
+ * found and where the package is, which is most of a manifest; the cache keeps only these,
+ * so the rest can be freed.
+ */
+function slimMatch(match: VulnerabilityManifest.Match): VulnerabilityManifest.Match {
+  const { vulnerability, artifact, relatedVulnerabilities } = match;
+  return {
+    artifact: { name: artifact?.name, version: artifact?.version },
+    relatedVulnerabilities: relatedVulnerabilities?.map(({ id, description }) => ({
+      id,
+      description,
+    })),
+    vulnerability: {
+      id: vulnerability.id,
+      severity: vulnerability.severity,
+      description: vulnerability.description,
+      dataSource: vulnerability.dataSource,
+      fix: vulnerability.fix,
+      cvss: vulnerability.cvss?.map(({ metrics }) => ({
+        metrics: { baseScore: metrics?.baseScore },
+      })),
+    },
   };
 }
 
