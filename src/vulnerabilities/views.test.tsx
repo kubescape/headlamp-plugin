@@ -491,3 +491,22 @@ it('keeps workload navigation on the source cluster and uses the relevant SBOM n
     '/cluster-b/sbom/relevant-reports/relevant-123'
   );
 });
+
+it('offers a rescan only for workloads whose scan names the workload', async () => {
+  const withWlid = summary();
+  withWlid.metadata.annotations['kubescape.io/wlid'] =
+    'wlid://cluster-prod/namespace-workloads/deployment-workload';
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? withWlid : manifest()
+  );
+  const view = render(<WorkloadDetails />);
+  expect(await screen.findByRole('button', { name: 'Rescan' })).toBeTruthy();
+  view.unmount();
+
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? summary() : manifest()
+  );
+  render(<WorkloadDetails />);
+  await waitFor(() => expect(valueFor('Image last evaluated').textContent).toBe(T1));
+  expect(screen.queryByRole('button', { name: 'Rescan' })).toBeNull();
+});

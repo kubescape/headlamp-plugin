@@ -22,8 +22,10 @@ import {
 import React, { useEffect, useRef, useState } from 'react';
 import { isAllowedNamespaceUpdated } from '../common/clusterContext';
 import { KubescapeConfig, kubescapeConfigStore } from '../common/config-store';
+import { configurationScanCommand } from '../common/operatorCommands';
 import { createExceptionCheck, PermittedIconButton } from '../common/permissions';
 import { ProgressIndicator } from '../common/ProgressIndicator';
+import { ScanNowButton } from '../common/ScanNowButton';
 import {
   getItemFromSessionStorage,
   KubescapeSettings,
@@ -97,6 +99,7 @@ export default function ComplianceView(): JSX.Element {
   const [isFailedControlSwitchChecked, setIsFailedControlSwitchChecked] =
     useSessionStorage<boolean>(KubescapeSettings.FailedControls, true);
   const continueReading = useRef(true);
+  const [scanStarted, setScanStarted] = useState(false);
 
   const framework =
     frameworks.find(fw => fw.name === kubescapeConfig?.framework) ??
@@ -108,21 +111,16 @@ export default function ComplianceView(): JSX.Element {
     if (regoLoading) return;
 
     async function fetchData() {
-      initQueryTasks(clusters, setProgressMessage, kubescapeConfig);
-
-      await handleQueryTasks(configurationScanContext.queryTasks, continueReading, setLoading);
+      const workloadScans = await readConfigurationScans(
+        clusters,
+        kubescapeConfig,
+        continueReading,
+        setLoading,
+        setProgressMessage
+      );
 
       await fetchCustomFrameworks(controls, setCustomFrameworks);
-
-      // TEMPORARY: client-side exception apply — remove once operator handles this at scan time
-      const exceptions = await fetchSecurityExceptions().catch(() => ({
-        namespaced: [],
-        cluster: [],
-        namespaceLabelsByName: new Map(),
-      }));
-      applySecurityExceptionsToWorkloadScans(configurationScanContext.workloadScans, exceptions);
-
-      setWorkloadScanData([...configurationScanContext.workloadScans]);
+      setWorkloadScanData(workloadScans);
     }
 
     fetchData().catch(error => {
@@ -134,13 +132,49 @@ export default function ComplianceView(): JSX.Element {
     };
   }, [kubescapeConfig, regoLoading, controls]);
 
+  // read all scans again, after a scan that was started from this page
+  async function reloadScans() {
+    configurationScanContext.queryTasks = [];
+    configurationScanContext.workloadScans = [];
+    continueReading.current = true;
+    setWorkloadScanData(
+      await readConfigurationScans(
+        clusters,
+        kubescapeConfig,
+        continueReading,
+        setLoading,
+        setProgressMessage
+      )
+    );
+  }
+
   return (
     <>
       <h1>Compliance</h1>
       <SetupCheck features={['compliance']} />
 
       {!loading && (
-        <Stack direction="row" spacing={2}>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <ScanNowButton
+            clusters={clusters}
+            command={configurationScanCommand}
+            tooltip="Ask Kubescape to scan the configuration of all workloads now, instead of waiting for the scheduled scan"
+            onStarted={() => setScanStarted(true)}
+          />
+          {scanStarted && (
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() =>
+                reloadScans().catch(error => {
+                  console.error('Failed to reload compliance scans', error);
+                  setLoading(false);
+                })
+              }
+            >
+              Reload results
+            </Button>
+          )}
           {configurationScanContext.queryTasks.some(task => task.continuation !== undefined) && (
             <Button
               onClick={() => {
@@ -468,6 +502,35 @@ async function fetchCustomFrameworks(
   });
 
   setCustomFrameworks(customFrameworks);
+}
+
+/**
+ * Reads the configuration scans of the clusters into the cache, which other pages share, and
+ * applies the security exceptions to them.
+ *
+ * @returns A copy of the cached scans.
+ */
+export async function readConfigurationScans(
+  clusters: string[],
+  kubescapeConfig: KubescapeConfig,
+  continueReading: React.MutableRefObject<boolean>,
+  setLoading: (loading: boolean) => void,
+  setProgressMessage: React.Dispatch<React.SetStateAction<string>>
+): Promise<WorkloadConfigurationScanSummary[]> {
+  initQueryTasks(clusters, setProgressMessage, kubescapeConfig);
+  await handleQueryTasks(configurationScanContext.queryTasks, continueReading, setLoading);
+  await applySecurityExceptions();
+  return [...configurationScanContext.workloadScans];
+}
+
+// TEMPORARY: client-side exception apply — remove once operator handles this at scan time
+async function applySecurityExceptions() {
+  const exceptions = await fetchSecurityExceptions().catch(() => ({
+    namespaced: [],
+    cluster: [],
+    namespaceLabelsByName: new Map(),
+  }));
+  applySecurityExceptionsToWorkloadScans(configurationScanContext.workloadScans, exceptions);
 }
 
 function initQueryTasks(

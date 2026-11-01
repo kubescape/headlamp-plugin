@@ -10,9 +10,11 @@ import {
   ShowHideLabel,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
-import { FormControlLabel, Link, Switch } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { Button, FormControlLabel, Link, Stack, Switch } from '@mui/material';
+import { ReactNode, useEffect, useState } from 'react';
+import { vulnerabilityScanCommand } from '../common/operatorCommands';
 import { createExceptionCheck, PermittedIconButton } from '../common/permissions';
+import { ScanNowButton } from '../common/ScanNowButton';
 import makeSeverityLabel from '../common/SeverityLabel';
 import HeadlampTable from '../common/Table';
 import { getURLSegments } from '../common/url';
@@ -31,6 +33,9 @@ export default function KubescapeVulnerabilityDetails() {
   const [summary, setSummary] = useState<VulnerabilityManifestSummary | null>(null);
   const [manifestAll, setManifestAll] = useState<VulnerabilityManifest | null>(null);
   const [manifestRelevant, setManifestRelevant] = useState<VulnerabilityManifest | null>(null);
+  const [scanStarted, setScanStarted] = useState(false);
+  // changed to read the scan results again
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +53,51 @@ export default function KubescapeVulnerabilityDetails() {
     return () => {
       cancelled = true;
     };
-  }, [name, namespace, cluster]);
+  }, [name, namespace, cluster, reloadKey]);
+
+  const wlid = summary?.metadata.annotations?.['kubescape.io/wlid'];
+
+  return (
+    summary && (
+      <WorkloadVulnerabilities
+        summary={summary}
+        manifestAll={manifestAll}
+        manifestRelevant={manifestRelevant}
+        cluster={cluster}
+        scanActions={
+          wlid &&
+          cluster && (
+            <>
+              <ScanNowButton
+                clusters={[cluster]}
+                command={scanCluster => vulnerabilityScanCommand(wlid, scanCluster)}
+                label="Rescan"
+                tooltip="Ask Kubescape to scan the images of this workload for vulnerabilities now"
+                onStarted={() => setScanStarted(true)}
+              />
+              {scanStarted && (
+                <Button variant="outlined" size="small" onClick={() => setReloadKey(k => k + 1)}>
+                  Reload results
+                </Button>
+              )}
+            </>
+          )
+        }
+      />
+    )
+  );
+}
+
+function WorkloadVulnerabilities(
+  props: Readonly<{
+    summary: VulnerabilityManifestSummary;
+    manifestAll: VulnerabilityManifest | null;
+    manifestRelevant: VulnerabilityManifest | null;
+    cluster?: string;
+    scanActions: ReactNode;
+  }>
+) {
+  const { summary, manifestAll, manifestRelevant, scanActions } = props;
 
   const imageEvaluatedAt = getVulnerabilityReportCreatedAt(manifestAll);
   const relevantEvaluatedAt = getVulnerabilityReportCreatedAt(manifestRelevant);
@@ -69,64 +118,67 @@ export default function KubescapeVulnerabilityDetails() {
       : [{ name: 'Last scanned', value: <DateLabel date={scannedAt} /> }];
 
   return (
-    summary && (
-      <>
-        <SectionBox title="Vulnerabilities" backLink>
-          <NameValueTable
-            rows={[
-              {
-                name: 'Workload',
-                value: summary.metadata.labels['kubescape.io/workload-name'],
-              },
-              {
-                name: 'Namespace',
-                value: summary.metadata.labels['kubescape.io/workload-namespace'],
-              },
-              {
-                name: 'Container',
-                value: summary.metadata.labels['kubescape.io/workload-container-name'],
-              },
-              {
-                name: 'Kind',
-                value: summary.metadata.labels['kubescape.io/workload-kind'],
-              },
-              {
-                name: 'Image',
-                value: summary.metadata.annotations['kubescape.io/image-tag'],
-              },
-              ...evaluationRows,
-              {
-                name: 'Scan record created',
-                value: summary.metadata.creationTimestamp,
-              },
-              {
-                name: 'Type',
-                value: manifestAll?.spec.payload.source.type,
-              },
-              {
-                name: 'CVE',
-                value: getCVESummary(summary, true, true),
-              },
-              {
-                name: 'Relevant CVE',
-                value: getCVESummary(summary, true, true, true),
-              },
-            ]}
-          />
+    <>
+      <SectionBox title="Vulnerabilities" backLink>
+        {scanActions && (
+          <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+            {scanActions}
+          </Stack>
+        )}
+        <NameValueTable
+          rows={[
+            {
+              name: 'Workload',
+              value: summary.metadata.labels['kubescape.io/workload-name'],
+            },
+            {
+              name: 'Namespace',
+              value: summary.metadata.labels['kubescape.io/workload-namespace'],
+            },
+            {
+              name: 'Container',
+              value: summary.metadata.labels['kubescape.io/workload-container-name'],
+            },
+            {
+              name: 'Kind',
+              value: summary.metadata.labels['kubescape.io/workload-kind'],
+            },
+            {
+              name: 'Image',
+              value: summary.metadata.annotations['kubescape.io/image-tag'],
+            },
+            ...evaluationRows,
+            {
+              name: 'Scan record created',
+              value: summary.metadata.creationTimestamp,
+            },
+            {
+              name: 'Type',
+              value: manifestAll?.spec.payload.source.type,
+            },
+            {
+              name: 'CVE',
+              value: getCVESummary(summary, true, true),
+            },
+            {
+              name: 'Relevant CVE',
+              value: getCVESummary(summary, true, true, true),
+            },
+          ]}
+        />
 
-          {manifestAll && (
-            <Matches
-              manifest={manifestAll}
-              relevant={manifestRelevant}
-              workloadName={summary.metadata.labels['kubescape.io/workload-name']}
-              workloadNamespace={summary.metadata.labels['kubescape.io/workload-namespace']}
-              workloadKind={summary.metadata.labels['kubescape.io/workload-kind']}
-              imageRef={summary.metadata.annotations['kubescape.io/image-tag']}
-            />
-          )}
-        </SectionBox>
-      </>
-    )
+        {manifestAll && (
+          <Matches
+            manifest={manifestAll}
+            relevant={manifestRelevant}
+            workloadName={summary.metadata.labels['kubescape.io/workload-name']}
+            workloadNamespace={summary.metadata.labels['kubescape.io/workload-namespace']}
+            workloadKind={summary.metadata.labels['kubescape.io/workload-kind']}
+            imageRef={summary.metadata.annotations['kubescape.io/image-tag']}
+          />
+        )}
+      </SectionBox>
+    </>
   );
 }
 
