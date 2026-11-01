@@ -1,9 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 import ImageDetails from './ImageDetails';
 import ImageList from './ImageList';
 import ResourceList from './ResourceList';
+import SBOMDetail from './SBOMDetail';
 import {
   getImageScanKey,
   invalidateScanClusters,
@@ -18,6 +20,8 @@ import WorkloadDetails, { fetchVulnerabilityManifest } from './WorkloadScanDetai
 const mocks = vi.hoisted(() => ({
   request: vi.fn(),
   imageGet: vi.fn(),
+  sbomGet: vi.fn(),
+  sbomFilteredGet: vi.fn(),
   cluster: 'cluster-a',
   name: 'workload-123',
 }));
@@ -32,6 +36,8 @@ vi.mock('../index', () => ({
 vi.mock('../model', () => ({
   vulnerabilityManifestClass: { useApiGet: mocks.imageGet },
   vulnerabilityManifestSummaryClass: {},
+  sbomSyftClass: { useApiGet: mocks.sbomGet },
+  sbomSyftFilteredClass: { useApiGet: mocks.sbomFilteredGet },
 }));
 vi.mock('../common/url', () => ({ getURLSegments: () => [mocks.name, 'workloads'] }));
 vi.mock('@kinvolk/headlamp-plugin/lib/ApiProxy', () => ({ request: mocks.request }));
@@ -102,6 +108,8 @@ vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', () => ({
 beforeEach(() => {
   mocks.request.mockReset();
   mocks.imageGet.mockReset();
+  mocks.sbomGet.mockReset();
+  mocks.sbomFilteredGet.mockReset();
   mocks.cluster = 'cluster-a';
   mocks.name = 'workload-123';
 });
@@ -268,6 +276,45 @@ it('shows no relevant findings when the relevant manifest has no matches', async
   // the switch stays, although the table without rows shows no toolbar
   fireEvent.click(screen.getByRole('checkbox'));
   expect(screen.getByText('CVE-1')).toBeTruthy();
+});
+
+it.each([
+  { search: '?filtered', filtered: true },
+  { search: '', filtered: false },
+])(
+  'reads the SBOM choice from the router location, which may differ from window.location ($search)',
+  ({ search, filtered }) => {
+    render(
+      <MemoryRouter initialEntries={[`/sbom/relevant-reports/relevant-123${search}`]}>
+        <SBOMDetail />
+      </MemoryRouter>
+    );
+    expect(window.location.search).toBe('');
+    expect(mocks.sbomFilteredGet).toHaveBeenCalledTimes(filtered ? 1 : 0);
+    expect(mocks.sbomGet).toHaveBeenCalledTimes(filtered ? 0 : 1);
+  }
+);
+
+it('shows an SBOM without artifacts', async () => {
+  let receive: (item: any) => void = () => {};
+  mocks.sbomFilteredGet.mockImplementation((callback: typeof receive) => {
+    receive = callback;
+  });
+  render(
+    <MemoryRouter initialEntries={['/sbom/relevant-reports/relevant-123?filtered']}>
+      <SBOMDetail />
+    </MemoryRouter>
+  );
+  const noPackagesInUse = {
+    metadata: { annotations: { 'kubescape.io/image-tag': 'example:latest' } },
+    spec: {
+      metadata: { report: { createdAt: T1 } },
+      syft: { distro: { name: 'debian' }, artifacts: null },
+    },
+  };
+  await act(async () => receive({ jsonData: noPackagesInUse }));
+  expect(screen.getByText('Showing in use artifacts only')).toBeTruthy();
+  expect(valueFor('Components').textContent).toBe('0');
 });
 
 it('updates a mounted workload view on a new fetch and drops previous-cluster results', async () => {

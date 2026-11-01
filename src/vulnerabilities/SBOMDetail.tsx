@@ -5,13 +5,15 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { useState } from 'react';
+import { useLocation } from 'react-router';
 import { getURLSegments } from '../common/url';
 import { sbomSyftClass, sbomSyftFilteredClass } from '../model';
 import { SBOMSyft } from '../softwarecomposition/SBOMSyft';
 
 export default function SBOMDetail() {
   const [name, namespace] = getURLSegments(-1, -2);
-  const urlParams = new URLSearchParams(window.location.search);
+  // The query is read from the router, as Headlamp desktop keeps it in the URL hash
+  const urlParams = new URLSearchParams(useLocation().search);
   const filtered = urlParams.has('filtered');
 
   const [sbomSyftObject, setSbomSyftObject] = useState<KubeObject | null>(null);
