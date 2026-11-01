@@ -10,6 +10,7 @@ import {
 import { KubeObjectClass } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
 import { ClusterErrors } from '../common/ClusterErrors';
 import { clusterColumns, useItemsInClusters } from '../common/clusters';
+import { SetupCheck } from '../common/SetupCheck';
 import HeadlampTable from '../common/Table';
 import { RoutingName } from '../index';
 import { generatedNetworkPolicyClass, knownServersClass, listQuery } from '../model';
@@ -20,6 +21,7 @@ export default function KubescapeNetworkPolicies() {
   return (
     <>
       <h1>Generated Network Policies</h1>
+      <SetupCheck features={['networkPolicies']} />
       <HeadlampTabs
         tabs={[
           {

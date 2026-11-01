@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
+import { SetupCheck } from '../common/SetupCheck';
 import { ContextBadge, MetadataFields, sanitizeName } from './shared';
 
 export interface GuidedClusterComplianceExceptionFormProps {
@@ -64,6 +65,7 @@ export function GuidedClusterComplianceExceptionForm(
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Exclude Control Cluster-wide</DialogTitle>
       <DialogContent>
+        <SetupCheck features={['exceptions']} />
         <Stack spacing={2} sx={{ mt: 1 }}>
           <MetadataFields
             name={name}

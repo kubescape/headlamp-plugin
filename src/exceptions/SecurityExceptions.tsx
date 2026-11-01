@@ -6,6 +6,7 @@ import { Button } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
 import { AccessCheck, PermittedIconButton } from '../common/permissions';
+import { SetupCheck } from '../common/SetupCheck';
 import Table from '../common/Table';
 import { RoutingName } from '../index';
 import { clusterSecurityExceptionClass, securityExceptionClass } from '../model';
@@ -104,6 +105,7 @@ export function SecurityExceptions() {
         ],
       }}
     >
+      <SetupCheck features={['exceptions']} />
       <Table
         data={rows}
         columns={[

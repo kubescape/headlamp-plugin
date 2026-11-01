@@ -23,6 +23,7 @@ import {
   setItemInSessionStorage,
   useSessionStorage,
 } from '../common/sessionStorage';
+import { SetupCheck } from '../common/SetupCheck';
 import makeSeverityLabel from '../common/SeverityLabel';
 import HeadlampTable from '../common/Table';
 import { GuidedClusterVulnerabilityExceptionForm } from '../exceptions/GuidedClusterVulnerabilityExceptionForm';
@@ -96,6 +97,7 @@ export default function KubescapeVulnerabilities() {
   return (
     <>
       <h1>Vulnerabilities</h1>
+      <SetupCheck features={['vulnerabilities']} />
       {error && <ErrorMessage error={error} />}
       {!error && !loading && (
         <Stack direction="row" spacing={2}>

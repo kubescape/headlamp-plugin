@@ -15,6 +15,7 @@ import { ClusterErrors } from '../common/ClusterErrors';
 import { clusterColumns, rejectedClusters } from '../common/clusters';
 import { getAlertmanagerUrl } from '../common/config-store';
 import { PermittedIconButton } from '../common/permissions';
+import { SetupCheck } from '../common/SetupCheck';
 import HeadlampTable from '../common/Table';
 import { TabPanel } from '../common/TabPanel';
 import { RoutingName, useHLSelectedClusters } from '../index';
@@ -46,6 +47,7 @@ export function RuntimeDetection() {
 
   return (
     <SectionBox title="Runtime Detection">
+      <SetupCheck features={['runtime']} />
       <TabContext value={tabValue}>
         <TabList onChange={(_: any, v: string) => setTabValue(v)} sx={{ mb: 1 }}>
           <Tab label="Alerts" value="alerts" />

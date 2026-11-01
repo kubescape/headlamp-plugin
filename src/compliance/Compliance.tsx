@@ -30,6 +30,7 @@ import {
   setItemInSessionStorage,
   useSessionStorage,
 } from '../common/sessionStorage';
+import { SetupCheck } from '../common/SetupCheck';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import Table from '../common/Table';
 import {
@@ -136,6 +137,7 @@ export default function ComplianceView(): JSX.Element {
   return (
     <>
       <h1>Compliance</h1>
+      <SetupCheck features={['compliance']} />
 
       {!loading && (
         <Stack direction="row" spacing={2}>

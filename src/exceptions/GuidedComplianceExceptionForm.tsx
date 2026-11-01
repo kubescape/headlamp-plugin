@@ -18,6 +18,7 @@ import {
 import { FormControlLabel } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
+import { SetupCheck } from '../common/SetupCheck';
 import { ContextBadge, MetadataFields, sanitizeName } from './shared';
 
 export interface GuidedComplianceFormProps {
@@ -123,6 +124,7 @@ export function GuidedComplianceExceptionForm(props: Readonly<GuidedComplianceFo
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Create Posture Exception</DialogTitle>
       <DialogContent>
+        <SetupCheck features={['exceptions']} />
         <Stack spacing={2} sx={{ mt: 1 }}>
           <MetadataFields
             name={name}

@@ -40,6 +40,8 @@ vi.mock('../common/config-store', () => ({ getAlertmanagerUrl: () => '' }));
 vi.mock('@kinvolk/headlamp-plugin/lib', () => ({
   Router: { createRouteURL: (route: string) => `/${route}` },
 }));
+// The setup check has its own tests
+vi.mock('../common/SetupCheck', () => ({ SetupCheck: () => null }));
 vi.mock('@kinvolk/headlamp-plugin/lib/ApiProxy', () => ({
   request: mocks.request,
   remove: mocks.remove,
