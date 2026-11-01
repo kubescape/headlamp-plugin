@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   saveToFile: vi.fn(),
 }));
 vi.mock('../common/filedialog', () => ({ saveToFile: mocks.saveToFile }));
+vi.mock('../common/clusterContext', () => ({ getAllowedNamespaces: () => [] }));
 vi.mock('../index', () => ({
   RoutingName: {
     ImageVulnerabilityDetails: 'image',
@@ -726,6 +727,59 @@ it('filters image findings by the linked severity', async () => {
   await act(async () => receive({ metadata: report.metadata, jsonData: report }));
   expect(screen.getByText('CVE-2')).toBeTruthy();
   expect(screen.queryByText('CVE-1')).toBeNull();
+});
+
+it('lists the workloads that run the image, with when it was last scanned', async () => {
+  let receive: (item: any) => void = () => {};
+  mocks.imageGet.mockImplementation((callback: typeof receive) => {
+    receive = callback;
+  });
+  mocks.request.mockImplementation(async (url: string) => ({
+    items: url.includes('vulnerabilitymanifestsummaries?labelSelector=')
+      ? [
+          {
+            metadata: {
+              name: 'deployment-ci-ci',
+              namespace: 'ci',
+              labels: {
+                'kubescape.io/workload-kind': 'deployment',
+                'kubescape.io/workload-name': 'ci',
+                'kubescape.io/workload-namespace': 'ci',
+                'kubescape.io/workload-container-name': 'server',
+              },
+              annotations: { 'kubescape.io/timestamp': '1793384272' },
+            },
+          },
+        ]
+      : [],
+  }));
+  render(<ImageDetails />);
+  const report = manifest(null);
+  report.metadata.labels = { 'kubescape.io/image-id': 'docker-io-ci-sha256-e62c' };
+  await act(async () => receive({ metadata: report.metadata, jsonData: report }));
+
+  const workload = await screen.findByText('ci', { selector: 'a' });
+  expect(workload.getAttribute('href')).toBe('/cluster-a/deployment/ci/ci');
+  expect(screen.getByText('Findings', { selector: 'a' }).getAttribute('href')).toBe(
+    '/cluster-a/workload/ci/deployment-ci-ci'
+  );
+  expect(screen.getByText('server')).toBeTruthy();
+  expect(mocks.request.mock.calls.map(([url]) => decodeURIComponent(url))).toContainEqual(
+    expect.stringContaining('labelSelector=kubescape.io/image-id=docker-io-ci-sha256-e62c')
+  );
+  expect(valueFor('Last scanned').textContent).toBe('2026-10-30T18:17:52.000Z');
+});
+
+it('links the image of a workload to its page and to the tags in its registry', async () => {
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? summary() : manifest()
+  );
+  render(<WorkloadDetails />);
+  const image = await screen.findByText('example:latest', { selector: 'a' });
+  expect(image.getAttribute('href')).toBe('/cluster-a/image/reports/image-123');
+  expect(screen.getByRole('link', { name: /Docker Hub/ }).getAttribute('href')).toBe(
+    'https://hub.docker.com/_/example/tags'
+  );
 });
 
 it('offers a rescan only for workloads whose scan names the workload', async () => {

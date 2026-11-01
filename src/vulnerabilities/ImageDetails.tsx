@@ -3,14 +3,16 @@
 */
 import {
   DateLabel,
+  Link as HeadlampLink,
   NameValueTable,
   SectionBox,
   ShowHideLabel,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
-import { Chip, Link, Stack } from '@mui/material';
-import { useMemo, useState } from 'react';
+import { Alert, Chip, Link, Stack, Typography } from '@mui/material';
+import { useEffect, useMemo, useState } from 'react';
+import { CompactTable } from '../common/CompactTable';
 import makeSeverityLabel from '../common/SeverityLabel';
 import HeadlampTable from '../common/Table';
 import { getURLSegments, useURLSearchParam } from '../common/url';
@@ -23,9 +25,12 @@ import {
   isSuppressing,
   summarizeWorkloadExceptions,
 } from '../exceptions/vulnerabilityExceptions';
+import { RoutingName } from '../index';
 import { vulnerabilityManifestClass } from '../model';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import { AcceptRiskButton, ExceptionChip, useSecurityExceptions } from './exceptionChips';
+import { ImageReference } from './ImageReference';
+import { fetchImageWorkloads, ImageWorkload, latestScan } from './imageWorkloads';
 import { getVulnerabilityReportCreatedAt } from './reportTimestamp';
 
 export default function ImageVulnerabilityDetails() {
@@ -36,6 +41,25 @@ export default function ImageVulnerabilityDetails() {
   vulnerabilityManifestClass.useApiGet(setManifestVulnerability, name, namespace, undefined, {
     cluster: cluster || undefined,
   });
+
+  // the workloads that run the image, whose summaries carry its image-id label
+  const imageId = manifestVulnerability?.metadata.labels?.['kubescape.io/image-id'];
+  const [workloads, setWorkloads] = useState<ImageWorkload[] | null>(null);
+  const [workloadsError, setWorkloadsError] = useState('');
+  useEffect(() => {
+    if (!imageId) return;
+    let active = true;
+    fetchImageWorkloads(imageId, cluster)
+      .then(found => {
+        if (active) setWorkloads(found);
+      })
+      .catch(err => {
+        if (active) setWorkloadsError(err?.message ?? String(err));
+      });
+    return () => {
+      active = false;
+    };
+  }, [imageId, cluster]);
 
   // the exceptions for the image in the whole cluster; those of a workload do not cover it
   // wherever it runs
@@ -60,6 +84,8 @@ export default function ImageVulnerabilityDetails() {
 
   if (manifestVulnerability) {
     const evaluatedAt = getVulnerabilityReportCreatedAt(manifestVulnerability.jsonData);
+    // recent kubevuln versions only record when they scanned, on the summaries of the workloads
+    const scannedAt = latestScan(workloads ?? []);
     return (
       <>
         <SectionBox title="Image Vulnerabilities" backLink>
@@ -76,20 +102,40 @@ export default function ImageVulnerabilityDetails() {
             rows={[
               {
                 name: 'Image',
-                value: manifestVulnerability.metadata.annotations
-                  ? manifestVulnerability.metadata.annotations['kubescape.io/image-tag']
-                  : '',
+                value: <ImageReference image={image} />,
               },
-              {
-                name: 'Last evaluated',
-                value: evaluatedAt ? <DateLabel date={evaluatedAt} /> : 'Unknown',
-              },
+              evaluatedAt || !scannedAt
+                ? {
+                    name: 'Last evaluated',
+                    value: evaluatedAt ? <DateLabel date={evaluatedAt} /> : 'Unknown',
+                  }
+                : { name: 'Last scanned', value: <DateLabel date={scannedAt} /> },
               {
                 name: 'Scan record created',
                 value: manifestVulnerability.metadata.creationTimestamp,
               },
             ]}
           />
+        </SectionBox>
+
+        <SectionBox title="Workloads">
+          {workloadsError ? (
+            <Alert severity="error">
+              Unable to read the workloads that run the image: {workloadsError}
+            </Alert>
+          ) : !imageId ? (
+            <Typography variant="body2">
+              Kubescape did not record which workloads run this image.
+            </Typography>
+          ) : workloads === null ? (
+            <Typography variant="body2" color="text.secondary">
+              Reading workloads…
+            </Typography>
+          ) : workloads.length === 0 ? (
+            <Typography variant="body2">No workload runs this image anymore.</Typography>
+          ) : (
+            <ImageWorkloads workloads={workloads} cluster={cluster} />
+          )}
         </SectionBox>
 
         <Matches
@@ -111,6 +157,46 @@ export default function ImageVulnerabilityDetails() {
       </>
     );
   }
+}
+
+function ImageWorkloads(props: Readonly<{ workloads: ImageWorkload[]; cluster: string }>) {
+  const { workloads, cluster } = props;
+  return (
+    <CompactTable
+      rows={workloads}
+      rowKey={workload => `${workload.summaryNamespace}/${workload.summaryName}`}
+      columns={[
+        {
+          header: 'Workload',
+          // Headlamp names the routes of its resource pages after their kind
+          cell: workload => (
+            <HeadlampLink
+              routeName={workload.kind}
+              params={{ namespace: workload.namespace, name: workload.name }}
+              activeCluster={cluster}
+            >
+              {workload.name}
+            </HeadlampLink>
+          ),
+        },
+        { header: 'Kind', cell: workload => workload.kind },
+        { header: 'Namespace', cell: workload => workload.namespace },
+        { header: 'Container', cell: workload => workload.container },
+        {
+          header: 'Vulnerabilities',
+          cell: workload => (
+            <HeadlampLink
+              routeName={RoutingName.KubescapeVulnerabilityDetails}
+              params={{ namespace: workload.summaryNamespace, name: workload.summaryName }}
+              activeCluster={cluster}
+            >
+              Findings
+            </HeadlampLink>
+          ),
+        },
+      ]}
+    />
+  );
 }
 
 function Matches(

@@ -33,6 +33,7 @@ import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManif
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
 import { getCVESummary } from './CVESummary';
 import { AcceptRiskButton, ExceptionChip, useSecurityExceptions } from './exceptionChips';
+import { ImageReference } from './ImageReference';
 import { getScanTime, getVulnerabilityReportCreatedAt } from './reportTimestamp';
 import { getManifestNamespace } from './scanData';
 
@@ -212,7 +213,20 @@ function WorkloadVulnerabilities(
             },
             {
               name: 'Image',
-              value: summary.metadata.annotations['kubescape.io/image-tag'],
+              value: (
+                <ImageReference
+                  image={summary.metadata.annotations['kubescape.io/image-tag']}
+                  report={
+                    manifestAll
+                      ? {
+                          name: manifestAll.metadata.name,
+                          namespace: manifestAll.metadata.namespace,
+                          cluster,
+                        }
+                      : undefined
+                  }
+                />
+              ),
             },
             ...evaluationRows,
             {
