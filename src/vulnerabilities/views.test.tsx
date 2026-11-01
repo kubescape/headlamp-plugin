@@ -371,6 +371,21 @@ it('retains legacy workload findings and shows Unknown for both evaluation times
   expect(screen.getByText('CVE-1')).toBeTruthy();
 });
 
+it('shows when kubevuln scanned, where its reports have no evaluation time', async () => {
+  const s = summary();
+  s.metadata.annotations = { ...s.metadata.annotations, 'kubescape.io/timestamp': '1793384272' };
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? s : manifest(null)
+  );
+  render(<WorkloadDetails />);
+
+  await waitFor(() =>
+    expect(valueFor('Last scanned').textContent).toBe('2026-10-30T18:17:52.000Z')
+  );
+  expect(screen.queryByText('Image last evaluated')).toBeNull();
+  expect(screen.queryByText('Relevant findings last evaluated')).toBeNull();
+});
+
 it('skips empty references and missing reference containers without fetching reports', async () => {
   const s = summary();
   s.spec.vulnerabilitiesRef.all!.name = '';

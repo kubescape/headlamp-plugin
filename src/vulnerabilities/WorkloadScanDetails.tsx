@@ -20,7 +20,7 @@ import { GuidedVulnerabilityExceptionForm } from '../exceptions/GuidedVulnerabil
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
 import { getCVESummary } from './CVESummary';
-import { getVulnerabilityReportCreatedAt } from './reportTimestamp';
+import { getScanTime, getVulnerabilityReportCreatedAt } from './reportTimestamp';
 import { getManifestNamespace } from './scanData';
 
 export default function KubescapeVulnerabilityDetails() {
@@ -51,6 +51,21 @@ export default function KubescapeVulnerabilityDetails() {
 
   const imageEvaluatedAt = getVulnerabilityReportCreatedAt(manifestAll);
   const relevantEvaluatedAt = getVulnerabilityReportCreatedAt(manifestRelevant);
+  // recent kubevuln versions only record when they scanned, on the summary
+  const scannedAt = getScanTime(summary);
+  const evaluationRows =
+    imageEvaluatedAt || relevantEvaluatedAt || !scannedAt
+      ? [
+          {
+            name: 'Image last evaluated',
+            value: imageEvaluatedAt ? <DateLabel date={imageEvaluatedAt} /> : 'Unknown',
+          },
+          {
+            name: 'Relevant findings last evaluated',
+            value: relevantEvaluatedAt ? <DateLabel date={relevantEvaluatedAt} /> : 'Unknown',
+          },
+        ]
+      : [{ name: 'Last scanned', value: <DateLabel date={scannedAt} /> }];
 
   return (
     summary && (
@@ -78,14 +93,7 @@ export default function KubescapeVulnerabilityDetails() {
                 name: 'Image',
                 value: summary.metadata.annotations['kubescape.io/image-tag'],
               },
-              {
-                name: 'Image last evaluated',
-                value: imageEvaluatedAt ? <DateLabel date={imageEvaluatedAt} /> : 'Unknown',
-              },
-              {
-                name: 'Relevant findings last evaluated',
-                value: relevantEvaluatedAt ? <DateLabel date={relevantEvaluatedAt} /> : 'Unknown',
-              },
+              ...evaluationRows,
               {
                 name: 'Scan record created',
                 value: summary.metadata.creationTimestamp,

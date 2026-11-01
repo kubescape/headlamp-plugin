@@ -19,6 +19,17 @@ export default function ImageListView(props: Readonly<{ workloadScans: WorkloadS
 
   const imageScans = getImageScans(workloadScans);
 
+  // recent kubevuln versions only record when they scanned the workloads that run an image
+  const scannedAt = new Map<string, string>();
+  for (const workloadScan of workloadScans) {
+    if (!workloadScan.imageScan || !workloadScan.scannedAt) continue;
+    const key = getImageScanKey(workloadScan.imageScan);
+    const latest = scannedAt.get(key);
+    if (!latest || workloadScan.scannedAt > latest) scannedAt.set(key, workloadScan.scannedAt);
+  }
+  const evaluatedAt = (imageScan: ImageScan) =>
+    imageScan.reportCreatedAt ?? scannedAt.get(getImageScanKey(imageScan));
+
   return (
     <>
       <h5>{imageScans.length} image scans</h5>
@@ -64,7 +75,7 @@ export default function ImageListView(props: Readonly<{ workloadScans: WorkloadS
             {
               id: 'Last evaluated',
               header: 'Last evaluated',
-              accessorFn: (imageScan: ImageScan) => imageScan.reportCreatedAt,
+              accessorFn: evaluatedAt,
               sortingFn: 'basic',
               sortUndefined: 'last',
               sortDescFirst: false,

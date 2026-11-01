@@ -1,7 +1,7 @@
 import type { QueryTask } from '../query';
 import type { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import type { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
-import { getVulnerabilityReportCreatedAt } from './reportTimestamp';
+import { getScanTime, getVulnerabilityReportCreatedAt } from './reportTimestamp';
 
 export interface ImageScan {
   manifestName: string;
@@ -22,6 +22,8 @@ export interface WorkloadScan {
   cluster: string;
   imageScan: ImageScan | undefined;
   relevant: ImageScan | undefined;
+  // when kubevuln last scanned the container
+  scannedAt?: string;
 }
 
 export function getImageScanKey(image: Pick<ImageScan, 'cluster' | 'namespace' | 'manifestName'>) {
@@ -113,6 +115,7 @@ export function toWorkloadScan(
     kind: summary.metadata.labels['kubescape.io/workload-kind'],
     imageScan: findImageScan(images, cluster, summary.spec.vulnerabilitiesRef?.all),
     relevant: findImageScan(images, cluster, summary.spec.vulnerabilitiesRef?.relevant),
+    scannedAt: getScanTime(summary),
   };
 }
 
