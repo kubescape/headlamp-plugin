@@ -1,14 +1,29 @@
 /* 
   Show fix suggestion for a workload. 
 */
+import { Icon } from '@iconify/react';
 import { K8s } from '@kinvolk/headlamp-plugin/lib';
-import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
+import { put, request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import { NameValueTable, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { DiffEditor } from '@monaco-editor/react';
-import { Link } from '@mui/material';
+import {
+  Alert,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Link,
+  Stack,
+} from '@mui/material';
 import * as yaml from 'js-yaml';
 import { cloneDeep } from 'lodash';
+import { useSnackbar } from 'notistack';
 import { useEffect, useState } from 'react';
+import { saveToFile } from '../common/filedialog';
+import { configurationScanCommand } from '../common/operatorCommands';
+import { AccessCheck, Permitted } from '../common/permissions';
+import { ScanNowButton } from '../common/ScanNowButton';
 import { useEditorTheme } from '../common/theme';
 import { getURLSegments } from '../common/url';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
@@ -161,27 +176,22 @@ function Fix(
   const { control, kind, name, namespace, cluster, rulePathPrefix } = props;
   const editorTheme = useEditorTheme();
   const [resource, setResource] = useState<any>(null);
+  // @ts-ignore
+  const kubeObjectClass = K8s.ResourceClasses[kind];
+  const group: string = kubeObjectClass?.apiEndpoint.apiInfo[0].group ?? '';
+  const version: string = kubeObjectClass?.apiEndpoint.apiInfo[0].version ?? '';
+  // the core API group has no group in the path
+  const path = `${group ? `/apis/${group}` : '/api'}/${version}/${
+    namespace ? `namespaces/${namespace}/` : ''
+  }${kubeObjectClass?.pluralName}/${name}`;
 
   useEffect(() => {
-    // @ts-ignore
-    const kubeObjectClass = K8s.ResourceClasses[kind];
     if (!kubeObjectClass) {
       console.log('Fix view is not supported yet for:' + kind);
       return;
     }
-
-    console.log('CLUSTER', cluster);
-    request(
-      `/apis/${kubeObjectClass.apiEndpoint.apiInfo[0].group}/${
-        kubeObjectClass.apiEndpoint.apiInfo[0].version
-      }/${namespace ? 'namespaces/' : ''}${namespace}/${kubeObjectClass.pluralName}/${name}`,
-      {
-        cluster: cluster,
-      }
-    ).then((result: any) => {
-      setResource(result);
-    });
-  }, []);
+    request(path, { cluster }).then((result: any) => setResource(result));
+  }, [path, cluster]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!resource || !control?.rules) {
     return <></>;
@@ -202,16 +212,132 @@ function Fix(
   const lines = fixedYAML.match(/\n/g)?.length ?? 10;
 
   return (
-    <DiffEditor
-      theme={editorTheme}
-      language="yaml"
-      original={original}
-      modified={fixedYAML}
-      height={lines * 30}
-      options={{
-        renderSideBySide: true,
-      }}
-    />
+    <>
+      <FixActions
+        kind={kind}
+        name={name}
+        namespace={namespace}
+        cluster={cluster}
+        path={path}
+        updateCheck={{
+          group,
+          resource: kubeObjectClass.pluralName,
+          verb: 'update',
+          namespace: namespace || undefined,
+          name,
+        }}
+        fixedYAML={fixedYAML}
+        unchanged={fixedYAML === original}
+      />
+      <DiffEditor
+        theme={editorTheme}
+        language="yaml"
+        original={original}
+        modified={fixedYAML}
+        height={lines * 30}
+        options={{
+          renderSideBySide: true,
+        }}
+      />
+    </>
+  );
+}
+
+// Download the fixed resource, or replace the resource in the cluster with it
+function FixActions(
+  props: Readonly<{
+    kind: string;
+    name: string;
+    namespace: string;
+    cluster: string;
+    path: string;
+    updateCheck: AccessCheck;
+    fixedYAML: string;
+    unchanged: boolean;
+  }>
+) {
+  const { kind, name, namespace, cluster, path, updateCheck, fixedYAML, unchanged } = props;
+  const { enqueueSnackbar } = useSnackbar();
+  const [confirming, setConfirming] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [applied, setApplied] = useState(false);
+  const [error, setError] = useState('');
+  const fullName = namespace ? `${namespace}/${name}` : name;
+
+  const apply = async () => {
+    setApplying(true);
+    setError('');
+    try {
+      // the resource version makes the update fail when the resource changed meanwhile
+      await put(path, yaml.load(fixedYAML) as any, true, { cluster });
+      setConfirming(false);
+      setApplied(true);
+      enqueueSnackbar(`Fix applied to ${kind} ${fullName}`, { variant: 'success' });
+    } catch (err: any) {
+      setError(
+        err?.status === 409
+          ? `The ${kind} changed since this page was opened. Reload the page to see the current fix.`
+          : err?.message ?? String(err)
+      );
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  return (
+    <>
+      <Stack direction="row" spacing={1} sx={{ my: 1 }} alignItems="center">
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<Icon icon="mdi:download" />}
+          onClick={() => saveToFile(fixedYAML, `${name}-fixed.yaml`, enqueueSnackbar)}
+        >
+          Download fixed YAML
+        </Button>
+        <Permitted check={updateCheck} cluster={cluster}>
+          {allowed => (
+            <Button
+              size="small"
+              variant="outlined"
+              color="warning"
+              disabled={!allowed || unchanged || applied}
+              startIcon={<Icon icon="mdi:wrench-check-outline" />}
+              onClick={() => setConfirming(true)}
+            >
+              {applied ? 'Fix applied' : 'Apply fix'}
+            </Button>
+          )}
+        </Permitted>
+        {applied && (
+          <ScanNowButton
+            clusters={[cluster]}
+            command={configurationScanCommand}
+            tooltip="Ask Kubescape to scan again, so the compliance results show the fix"
+          />
+        )}
+      </Stack>
+
+      <Dialog open={confirming} onClose={() => setConfirming(false)}>
+        <DialogTitle>
+          Apply fix to {kind} {fullName}
+        </DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 1 }}>
+            This replaces the {kind} in cluster {cluster} with the fixed version shown on this page.
+            Kubernetes then rolls out the change, which restarts the pods of a workload. Check that
+            the fix suits the workload before you apply it.
+          </Alert>
+          {error && <Alert severity="error">{error}</Alert>}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirming(false)}>Cancel</Button>
+          <Button variant="contained" color="warning" disabled={applying} onClick={apply}>
+            Apply
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 }
 
@@ -243,8 +369,22 @@ export function fixResource(
   return yaml.dump(resource);
 }
 
-function evaluateRule(resource: any, path: string, fixPathValue: string) {
+/**
+ * The value of a fix path, which Kubescape gives as text, as the type the field has: "false"
+ * is a boolean and "1000" a number, while "RuntimeDefault" stays text.
+ */
+export function parseFixValue(fixPathValue: string): unknown {
+  try {
+    const value = yaml.load(fixPathValue, { schema: yaml.JSON_SCHEMA });
+    return value === undefined ? fixPathValue : value;
+  } catch {
+    return fixPathValue;
+  }
+}
+
+function evaluateRule(resource: any, path: string, fixPathText: string) {
   const parts = path.split('.');
+  const fixPathValue = parseFixValue(fixPathText);
 
   let element: any = resource;
   for (const part of parts) {
