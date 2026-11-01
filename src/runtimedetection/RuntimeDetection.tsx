@@ -333,6 +333,7 @@ function RulesTab() {
   const clusters = useHLSelectedClusters();
   const [rulesCRDs] = rulesClass.useList({ clusters }) as any;
   const history = useHistory();
+  const [error, setError] = useState('');
 
   const items =
     rulesCRDs?.map((crd: any) => ({
@@ -341,6 +342,18 @@ function RulesTab() {
       cluster: crd.cluster,
       ruleCount: crd.jsonData.spec?.rules?.length ?? 0,
     })) ?? [];
+
+  // The list is watched, so a successful delete removes the row without a reload.
+  const handleDelete = async (namespace: string, crdName: string, cluster?: string) => {
+    try {
+      await remove(
+        `/apis/kubescape.io/v1/namespaces/${namespace}/rules/${crdName}`,
+        cluster ? { cluster } : undefined
+      );
+    } catch (err: any) {
+      setError(err?.message ?? String(err));
+    }
+  };
 
   return (
     <>
@@ -355,6 +368,11 @@ function RulesTab() {
           </IconButton>
         </Tooltip>
       </Stack>
+      {error && (
+        <Alert severity="error" sx={{ mb: 1 }}>
+          {error}
+        </Alert>
+      )}
       <HeadlampTable
         data={items}
         columns={[
@@ -382,6 +400,30 @@ function RulesTab() {
           {
             header: 'Rules',
             accessorKey: 'ruleCount',
+            gridTemplate: 'min-content',
+          },
+          {
+            header: '',
+            accessorFn: (item: any) => item.crdName,
+            Cell: ({ row }: any) => (
+              <PermittedIconButton
+                check={{
+                  group: 'kubescape.io',
+                  resource: 'rules',
+                  verb: 'delete',
+                  namespace: row.original.namespace,
+                  name: row.original.crdName,
+                }}
+                cluster={row.original.cluster}
+                title="Delete"
+                ariaLabel={`Delete ${row.original.crdName}`}
+                onClick={() =>
+                  handleDelete(row.original.namespace, row.original.crdName, row.original.cluster)
+                }
+              >
+                <Icon icon="mdi:delete-outline" />
+              </PermittedIconButton>
+            ),
             gridTemplate: 'min-content',
           },
         ]}

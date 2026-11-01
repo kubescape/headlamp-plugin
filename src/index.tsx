@@ -43,7 +43,6 @@ namespace RoutingPath {
   export const KubescapeNetworkPolicyDiagram = '/kubescape/networkpolicies/:namespace/:name';
   export const KubescapeSBOMDetails = '/kubescape/sbom/:namespace/:name';
   export const VAP = '/kubescape/vap';
-  export const RuleList = '/kubescape/rules';
   export const RuleNew = '/kubescape/rule/new';
   export const RuleEdit = '/kubescape/rule/:namespace/:name';
   export const ApplicationProfiles = '/kubescape/applicationprofiles';
@@ -77,7 +76,6 @@ export namespace RoutingName {
   export const RuntimeDetection = 'Runtime Detection';
   export const NetworkNeighborhoodDetail = 'Network Neighborhood Detail';
   export const VAP = 'Validation Admission Policies';
-  export const RuleList = 'Rule List';
   export const RuleNew = 'New Rule';
   export const RuleEdit = 'Edit Rule';
   export const RuleBindingNew = 'New Rule Binding';
@@ -326,19 +324,10 @@ registerRoute({
 });
 
 import { RuleEdit, RuleNew } from './rule-editor/RuleEditor';
-import { RuleList } from './rule-editor/RuleList';
-
-registerRoute({
-  path: RoutingPath.RuleList,
-  sidebar: 'rule-editor',
-  component: () => <RuleList />,
-  exact: true,
-  name: RoutingName.RuleList,
-});
 
 registerRoute({
   path: RoutingPath.RuleNew,
-  sidebar: 'rule-editor',
+  sidebar: 'runtime-detection',
   component: () => <RuleNew />,
   exact: true,
   name: RoutingName.RuleNew,
@@ -346,7 +335,7 @@ registerRoute({
 
 registerRoute({
   path: RoutingPath.RuleEdit,
-  sidebar: 'rule-editor',
+  sidebar: 'runtime-detection',
   component: () => <RuleEdit />,
   exact: true,
   name: RoutingName.RuleEdit,
