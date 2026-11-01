@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   discoverProfileResource: vi.fn(),
   listQuery: vi.fn(),
   request: vi.fn(),
+  remove: vi.fn(),
+  clusters: ['cluster-a'],
 }));
 
 vi.mock('../index', () => ({
@@ -22,6 +24,7 @@ vi.mock('../index', () => ({
     RuleBindingNew: 'New Rule Binding',
     RuleBindingEdit: 'Edit Rule Binding',
   },
+  useHLSelectedClusters: () => mocks.clusters,
 }));
 vi.mock('../model', () => ({
   containerProfileClass: mocks.containerProfileClass,
@@ -39,7 +42,7 @@ vi.mock('@kinvolk/headlamp-plugin/lib', () => ({
 }));
 vi.mock('@kinvolk/headlamp-plugin/lib/ApiProxy', () => ({
   request: mocks.request,
-  remove: vi.fn(),
+  remove: mocks.remove,
 }));
 vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', () => ({
   SectionBox: ({ title, children }: { title: string; children: ReactNode }) => (
@@ -100,6 +103,8 @@ beforeEach(() => {
   mocks.listQuery.mockReset();
   mocks.request.mockReset();
   mocks.request.mockResolvedValue({ items: [] });
+  mocks.remove.mockReset();
+  mocks.clusters = ['cluster-a'];
 });
 afterEach(cleanup);
 
@@ -243,4 +248,26 @@ it('accepts an empty ContainerProfile list without showing an API error', async 
   expect(
     screen.getByTestId('table-Name-Kind-Namespace-Container-Status').querySelectorAll('tbody tr')
   ).toHaveLength(0);
+});
+
+it('lists and deletes the rule bindings of each selected cluster', async () => {
+  mocks.clusters = ['cluster-a', 'cluster-b'];
+  mocks.request.mockImplementation(async (url: string, { cluster }: { cluster: string }) =>
+    url === '/apis/kubescape.io/v1/runtimerulealertbindings'
+      ? { items: [{ metadata: { name: `binding-${cluster}` }, spec: { rules: [] } }] }
+      : { items: [] }
+  );
+
+  renderRuntimeDetection();
+  fireEvent.click(screen.getByRole('tab', { name: 'Rule Bindings' }));
+
+  expect(await screen.findByText('binding-cluster-b')).toBeTruthy();
+  expect(screen.getByText('binding-cluster-a')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Delete binding-cluster-b' }));
+  await waitFor(() =>
+    expect(mocks.remove).toHaveBeenCalledWith(
+      '/apis/kubescape.io/v1/runtimerulealertbindings/binding-cluster-b',
+      { cluster: 'cluster-b' }
+    )
+  );
 });

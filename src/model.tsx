@@ -5,6 +5,7 @@ import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { makeCustomResourceClass } from '@kinvolk/headlamp-plugin/lib/k8s/crd';
 import { KubeObjectClass } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
+import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 
 const spdxGroup = 'spdx.softwarecomposition.kubescape.io';
 const spdxVersion = 'v1beta1';
@@ -180,25 +181,43 @@ export const clusterSecurityExceptionClass = makeCustomResourceClass({
   customResourceDefinition: undefined as any,
 });
 
-export async function listQuery(objectClass: KubeObjectClass): Promise<any> {
-  const namespaces: string[] = getAllowedNamespaces();
+/**
+ * Lists all objects of the given class in one cluster, restricted to the allowed
+ * namespaces of that cluster when those are configured.
+ *
+ * @param objectClass - The class of objects to list.
+ * @param cluster - The cluster to query, the current cluster by default.
+ */
+export async function listQuery(
+  objectClass: KubeObjectClass,
+  cluster: string | null = getCluster()
+): Promise<any> {
+  const namespaces: string[] = getAllowedNamespaces(cluster);
   const group = objectClass.apiEndpoint.apiInfo[0].group;
   const version = objectClass.apiEndpoint.apiInfo[0].version;
   const pluralName = objectClass.pluralName;
+  const requestOptions = cluster ? { cluster } : {};
 
+  let items: any[];
   if (namespaces?.length > 0) {
     const listOfLists: any[] = await Promise.all(
       namespaces.map(namespace =>
-        request(`/apis/${group}/${version}/namespaces/${namespace}/${pluralName}`)
+        request(`/apis/${group}/${version}/namespaces/${namespace}/${pluralName}`, requestOptions)
       )
     );
-
-    return listOfLists.flatMap(list => list.items);
+    items = listOfLists.flatMap(list => list.items);
   } else {
-    const overviewList = await request(`/apis/${group}/${version}/${pluralName}`);
-    return overviewList.items;
+    const overviewList = await request(`/apis/${group}/${version}/${pluralName}`, requestOptions);
+    items = overviewList.items;
   }
+  for (const item of items) {
+    item.metadata.cluster = cluster ?? '';
+  }
+  return items;
 }
+
+export type ClusterError = { cluster: string; message: string };
+
 export function fetchObject(
   name: string,
   namespace: string,

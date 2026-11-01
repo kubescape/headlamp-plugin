@@ -11,13 +11,16 @@ import { TabContext, TabList } from '@mui/lab';
 import { Alert, Chip, IconButton, Stack, Tab, Tooltip, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
+import { ClusterErrors } from '../common/ClusterErrors';
+import { clusterColumns, rejectedClusters } from '../common/clusters';
 import { getAlertmanagerUrl } from '../common/config-store';
 import { PermittedIconButton } from '../common/permissions';
 import HeadlampTable from '../common/Table';
 import { TabPanel } from '../common/TabPanel';
-import { RoutingName } from '../index';
+import { RoutingName, useHLSelectedClusters } from '../index';
 import {
   applicationProfileClass,
+  ClusterError,
   containerProfileClass,
   listQuery,
   networkNeighborhoodsClass,
@@ -325,13 +328,15 @@ function ContainerProfilesTab({ view }: Readonly<{ view: 'behavior' | 'network' 
 // ── Rules ─────────────────────────────────────────────────────────────────────
 
 function RulesTab() {
-  const [rulesCRDs] = rulesClass.useList() as any;
+  const clusters = useHLSelectedClusters();
+  const [rulesCRDs] = rulesClass.useList({ clusters }) as any;
   const history = useHistory();
 
   const items =
     rulesCRDs?.map((crd: any) => ({
       crdName: crd.jsonData.metadata.name,
       namespace: crd.jsonData.metadata.namespace,
+      cluster: crd.cluster,
       ruleCount: crd.jsonData.spec?.rules?.length ?? 0,
     })) ?? [];
 
@@ -358,6 +363,7 @@ function RulesTab() {
             Cell: ({ cell, row }: any) => (
               <HeadlampLink
                 routeName={RoutingName.RuleEdit}
+                activeCluster={row.original.cluster}
                 params={{ namespace: row.original.namespace, name: row.original.crdName }}
               >
                 {cell.getValue()}
@@ -370,6 +376,7 @@ function RulesTab() {
             accessorKey: 'namespace',
             gridTemplate: 'auto',
           },
+          ...clusterColumns<any>(clusters, item => item.cluster),
           {
             header: 'Rules',
             accessorKey: 'ruleCount',
@@ -410,21 +417,31 @@ const RULE_BINDING_API = '/apis/kubescape.io/v1/runtimerulealertbindings';
 
 function RuleBindingsTab() {
   const history = useHistory();
+  const clusters = useHLSelectedClusters();
+  const clustersKey = clusters.join(',');
   const [items, setItems] = useState<any[]>([]);
+  const [errors, setErrors] = useState<ClusterError[]>([]);
   const [error, setError] = useState('');
 
   const load = () =>
-    request(RULE_BINDING_API)
-      .then((res: any) => setItems(res.items ?? []))
-      .catch((err: any) => setError(err?.message ?? String(err)));
+    Promise.allSettled(
+      clusters.map(cluster =>
+        request(RULE_BINDING_API, { cluster }).then((res: any) =>
+          (res.items ?? []).map((item: any) => ({ ...item, cluster }))
+        )
+      )
+    ).then(results => {
+      setItems(results.flatMap(result => (result.status === 'fulfilled' ? result.value : [])));
+      setErrors(rejectedClusters(clusters, results));
+    });
 
   useEffect(() => {
     load();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [clustersKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleDelete = async (name: string) => {
+  const handleDelete = async (name: string, cluster: string) => {
     try {
-      await remove(`${RULE_BINDING_API}/${name}`);
+      await remove(`${RULE_BINDING_API}/${name}`, { cluster });
       load();
     } catch (err: any) {
       setError(err?.message ?? String(err));
@@ -451,6 +468,7 @@ function RuleBindingsTab() {
           {error}
         </Alert>
       )}
+      <ClusterErrors errors={errors} what="the rule bindings" />
       <HeadlampTable
         data={items}
         columns={[
@@ -461,6 +479,7 @@ function RuleBindingsTab() {
             Cell: ({ cell, row }: any) => (
               <HeadlampLink
                 routeName={RoutingName.RuleBindingEdit}
+                activeCluster={row.original.cluster}
                 params={{ name: row.original.metadata.name }}
               >
                 {cell.getValue()}
@@ -468,6 +487,7 @@ function RuleBindingsTab() {
             ),
             gridTemplate: 'auto',
           },
+          ...clusterColumns<any>(clusters, item => item.cluster),
           {
             header: 'Namespace Selector',
             accessorFn: (b: any) => formatSelector(b.spec?.namespaceSelector),
@@ -498,7 +518,7 @@ function RuleBindingsTab() {
           {
             header: '',
             accessorFn: (b: any) => b.metadata.name,
-            Cell: ({ cell }: any) => (
+            Cell: ({ cell, row }: any) => (
               <PermittedIconButton
                 check={{
                   group: 'kubescape.io',
@@ -506,9 +526,10 @@ function RuleBindingsTab() {
                   verb: 'delete',
                   name: cell.getValue(),
                 }}
+                cluster={row.original.cluster}
                 title="Delete"
                 ariaLabel={`Delete ${cell.getValue()}`}
-                onClick={() => handleDelete(cell.getValue())}
+                onClick={() => handleDelete(cell.getValue(), row.original.cluster)}
               >
                 <Icon icon="mdi:delete-outline" />
               </PermittedIconButton>
