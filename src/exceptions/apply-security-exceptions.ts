@@ -2,7 +2,7 @@
 // Remove once the kubescape operator writes exceptedByPolicy flags into stored scan CRDs at scan time.
 
 import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
-import { Control } from '../rego';
+import { invalidateControlStats } from '../compliance/workload-scanning';
 import {
   ClusterSecurityException,
   SecurityException,
@@ -135,12 +135,14 @@ export function applySecurityExceptionsToWorkloadScans(
     );
 
     // Control-level exceptions
-    Object.entries(w.spec.controls).forEach(([, value]) => {
-      value.exceptedByPolicy = matched.some(ex =>
-        ex.spec.posture?.some(p => p.controlID === value.controlID)
-      );
+    const exceptedControls = new Set(
+      matched.flatMap(ex => (ex.spec.posture ?? []).map(p => p.controlID))
+    );
+    Object.values(w.spec.controls).forEach(value => {
+      value.exceptedByPolicy = exceptedControls.has(value.controlID);
     });
   }
+  invalidateControlStats();
 }
 
 export function countExcludedResources(workloadScanData: WorkloadConfigurationScanSummary[]) {
@@ -157,16 +159,4 @@ export function countExcludedControls(workloadScanData: WorkloadConfigurationSca
     );
 }
 
-export function countExcludedWorkloadsForControl(
-  workloadScanData: WorkloadConfigurationScanSummary[],
-  control: Control
-) {
-  let excluded = 0;
-  workloadScanData.forEach(w => {
-    Object.values(w.spec.controls).forEach(scan => {
-      if (scan.controlID === control.controlID && (w.exceptedByPolicy || scan.exceptedByPolicy))
-        excluded++;
-    });
-  });
-  return excluded;
-}
+export { countExcludedWorkloadsForControl } from '../compliance/workload-scanning';
