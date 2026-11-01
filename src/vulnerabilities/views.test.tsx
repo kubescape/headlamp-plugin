@@ -49,8 +49,10 @@ vi.mock('../common/url', () => ({
 vi.mock('@kinvolk/headlamp-plugin/lib/ApiProxy', () => ({ request: mocks.request }));
 vi.mock('@kinvolk/headlamp-plugin/lib/Utils', () => ({ getCluster: () => mocks.cluster }));
 vi.mock('../exceptions/GuidedVulnerabilityExceptionForm', () => ({
-  GuidedVulnerabilityExceptionForm: ({ cveId }: { cveId: string }) => (
-    <div>Exception for {cveId}</div>
+  GuidedVulnerabilityExceptionForm: ({ cveIds, acceptRisk }: any) => (
+    <div>
+      {acceptRisk ? 'Accept risk of' : 'Exception for'} {cveIds.join(', ')}
+    </div>
   ),
 }));
 vi.mock('../exceptions/GuidedClusterVulnerabilityExceptionForm', () => ({
@@ -291,9 +293,155 @@ it('exports the findings that are shown as CSV', async () => {
   const [content, fileName] = mocks.saveToFile.mock.calls[0];
   expect(fileName).toBe('kubescape-workloads-workload-cves.csv');
   expect(content.split('\r\n')).toEqual([
-    'Severity,CVE,CVSS,Artifact,Version,Relevant,Fix,Fix in version,Description',
-    'High,CVE-1,8,package,1.0,Yes,fixed,2.0,test finding',
+    'Severity,CVE,CVSS,Artifact,Version,Relevant,Fix,Fix in version,Exception,Description',
+    'High,CVE-1,8,package,1.0,Yes,fixed,2.0,,test finding',
     '',
+  ]);
+});
+
+// A SecurityException that accepts the risk of CVEs of the workload of the summary fixture
+function acceptance(entries: { id: string; expiredOnFix?: boolean }[]) {
+  return {
+    kind: 'SecurityException',
+    metadata: { name: 'accept-it', namespace: 'workloads' },
+    spec: {
+      author: 'alice',
+      match: { resources: [{ kind: 'Deployment', name: 'workload' }] },
+      vulnerabilities: entries.map(({ id, expiredOnFix }) => ({
+        vulnerability: { id },
+        status: 'affected',
+        response: ['can_not_fix'],
+        actionStatement: 'No fix upstream',
+        expiredOnFix,
+      })),
+    },
+  };
+}
+
+it('marks the findings that exceptions cover and lists those that kubevuln hid', async () => {
+  const all = manifest();
+  all.spec.payload.matches!.push(match('CVE-2'));
+  all.spec.payload.ignoredMatches = [
+    {
+      ...match('CVE-3'),
+      appliedIgnoreRules: [
+        {
+          vulnerability: 'CVE-3',
+          'fix-state': 'not_affected',
+          sourceKind: 'ClusterSecurityException',
+          sourceName: 'clustersecurityexception//old',
+        },
+      ],
+    },
+  ];
+  mocks.request.mockImplementation(async (url: string) => {
+    if (url.endsWith('/clustersecurityexceptions') || url === '/api/v1/namespaces') {
+      return { items: [] };
+    }
+    if (url.endsWith('/securityexceptions')) {
+      // CVE-1 has a fix, which ends its exception
+      return { items: [acceptance([{ id: 'CVE-1', expiredOnFix: true }, { id: 'CVE-2' }])] };
+    }
+    return url.includes('summaries/') ? summary() : url.endsWith('/image-123') ? all : manifest(T2);
+  });
+  render(<WorkloadDetails />);
+  await waitFor(() => expect(screen.getByText('CVE-1')).toBeTruthy());
+  // all findings, also those that are not relevant
+  fireEvent.click(screen.getByRole('checkbox'));
+  await waitFor(() => expect(screen.getByText('Accepted')).toBeTruthy());
+  expect(screen.getByText('Not affected')).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+  expect(mocks.saveToFile.mock.calls[0][0].split('\r\n').slice(1, 4)).toEqual([
+    'High,CVE-1,8,package,1.0,Yes,fixed,2.0,,test finding',
+    'High,CVE-2,8,package,1.0,No,fixed,2.0,Accepted: accept-it,test finding',
+    'High,CVE-3,8,package,1.0,No,fixed,2.0,Not affected: old,test finding',
+  ]);
+});
+
+it('counts the accepted CVEs of a resource and accepts the risk of the others', async () => {
+  mocks.request.mockImplementation(async (url: string, options: { cluster?: string }) =>
+    url.endsWith('/securityexceptions') && options.cluster === 'cluster-a'
+      ? { items: [acceptance([{ id: 'CVE-2' }])] }
+      : { items: [] }
+  );
+  const image = toImageScan(manifest());
+  image.matches = [match('CVE-1'), match('CVE-2')];
+  render(
+    <ResourceList
+      workloadScans={[toWorkloadScan(summary(), new Map([[getImageScanKey(image), image]]))]}
+    />
+  );
+  expect(await screen.findByText('1 accepted')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Accept the risk of the open CVE' }));
+  expect(screen.getByText('Accept risk of CVE-1')).toBeTruthy();
+});
+
+it('accepts the risk of the open CVEs of a workload from its page', async () => {
+  const all = manifest();
+  all.spec.payload.matches!.push(match('CVE-2'), match('CVE-3'));
+  mocks.request.mockImplementation(async (url: string) => {
+    if (url.endsWith('/clustersecurityexceptions') || url === '/api/v1/namespaces') {
+      return { items: [] };
+    }
+    if (url.endsWith('/securityexceptions')) return { items: [acceptance([{ id: 'CVE-2' }])] };
+    return url.includes('summaries/') ? summary() : url.endsWith('/image-123') ? all : manifest(T2);
+  });
+  render(<WorkloadDetails />);
+
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Accept the risk of the 2 open CVEs' })
+  );
+  expect(screen.getByText('Accept risk of CVE-1, CVE-3')).toBeTruthy();
+});
+
+it('accepts the risk of the open CVEs of an image in the whole cluster from its page', async () => {
+  let receive: (item: any) => void = () => {};
+  mocks.imageGet.mockImplementation((callback: typeof receive) => {
+    receive = callback;
+  });
+  const imageException = (name: string, match: object) => ({
+    kind: 'ClusterSecurityException',
+    metadata: { name },
+    spec: {
+      match,
+      vulnerabilities: [
+        {
+          vulnerability: { id: 'CVE-2' },
+          status: 'affected',
+          response: ['will_not_fix'],
+          actionStatement: 'Replaced next quarter',
+        },
+      ],
+    },
+  });
+  mocks.request.mockImplementation(async (url: string) =>
+    url.endsWith('/clustersecurityexceptions')
+      ? {
+          items: [
+            imageException('example-everywhere', { images: ['example:*'] }),
+            // limited to a workload, so not for the image wherever it runs
+            imageException('example-in-one-workload', {
+              images: ['example:latest'],
+              resources: [{ kind: 'Deployment', name: 'workload' }],
+            }),
+          ],
+        }
+      : { items: [] }
+  );
+  render(<ImageDetails />);
+  const report = manifest();
+  report.spec.payload.matches = [match('CVE-1'), match('CVE-2')];
+  await act(async () => receive({ metadata: report.metadata, jsonData: report }));
+
+  expect(await screen.findByText('Accepted')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Accept the risk of the open CVE' }));
+  expect(screen.getByText('Accept risk of CVE-1')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+  expect(mocks.saveToFile.mock.calls[0][0].split('\r\n').slice(0, 3)).toEqual([
+    'Image,Severity,CVE,CVSS,Artifact,Version,Fix,Fix in version,Exception,Description',
+    'example:latest,High,CVE-1,8,package,1.0,fixed,2.0,,test finding',
+    'example:latest,High,CVE-2,8,package,1.0,fixed,2.0,Accepted: example-everywhere,test finding',
   ]);
 });
 
@@ -361,9 +509,10 @@ it('updates a mounted workload view on a new fetch and drops previous-cluster re
   view.rerender(<WorkloadDetails />);
   await waitFor(() => expect(valueFor('Image last evaluated').textContent).toBe(T2));
   expect(valueFor('Scan record created').textContent).toBe(T0);
-  expect(mocks.request.mock.calls.slice(3).every(call => call[1].cluster === 'cluster-b')).toBe(
-    true
+  const scanCalls = mocks.request.mock.calls.filter(call =>
+    call[0].includes('softwarecomposition')
   );
+  expect(scanCalls.slice(3).every(call => call[1].cluster === 'cluster-b')).toBe(true);
 });
 
 it('keeps colliding image records separate and associates only their own workloads and links', () => {

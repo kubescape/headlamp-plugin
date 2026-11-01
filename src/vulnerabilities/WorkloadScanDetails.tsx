@@ -11,18 +11,28 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { Button, Chip, FormControlLabel, Link, Stack, Switch } from '@mui/material';
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { vulnerabilityScanCommand } from '../common/operatorCommands';
-import { createExceptionCheck, PermittedIconButton } from '../common/permissions';
+import { createExceptionCheck, Permitted, PermittedIconButton } from '../common/permissions';
 import { ScanNowButton } from '../common/ScanNowButton';
 import makeSeverityLabel from '../common/SeverityLabel';
 import HeadlampTable from '../common/Table';
 import { getURLSegments, useURLSearchParam } from '../common/url';
 import { getKubescapeNamespace } from '../custom-objects/api-queries';
 import { GuidedVulnerabilityExceptionForm } from '../exceptions/GuidedVulnerabilityExceptionForm';
+import {
+  CveException,
+  exceptionStateLabels,
+  findingException,
+  ignoredMatchException,
+  isSuppressing,
+  ScannedWorkload,
+  workloadCveExceptions,
+} from '../exceptions/vulnerabilityExceptions';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
 import { getCVESummary } from './CVESummary';
+import { AcceptRiskButton, ExceptionChip, useSecurityExceptions } from './exceptionChips';
 import { getScanTime, getVulnerabilityReportCreatedAt } from './reportTimestamp';
 import { getManifestNamespace } from './scanData';
 
@@ -88,6 +98,9 @@ export default function KubescapeVulnerabilityDetails() {
   );
 }
 
+// A finding with the exception that covers it; hidden when kubevuln no longer counts it
+type Finding = VulnerabilityManifest.Match & { exception?: CveException; hidden?: boolean };
+
 function WorkloadVulnerabilities(
   props: Readonly<{
     summary: VulnerabilityManifestSummary;
@@ -97,7 +110,53 @@ function WorkloadVulnerabilities(
     scanActions: ReactNode;
   }>
 ) {
-  const { summary, manifestAll, manifestRelevant, scanActions } = props;
+  const { summary, manifestAll, manifestRelevant, cluster, scanActions } = props;
+  const workload = useMemo<ScannedWorkload>(
+    () => ({
+      kind: summary.metadata.labels['kubescape.io/workload-kind'],
+      name: summary.metadata.labels['kubescape.io/workload-name'],
+      namespace: summary.metadata.labels['kubescape.io/workload-namespace'],
+      image: summary.metadata.annotations['kubescape.io/image-tag'],
+    }),
+    [summary]
+  );
+  const { exceptions, reload } = useSecurityExceptions([cluster ?? ''], [workload.kind]);
+  const exceptionData = exceptions.get(cluster ?? '');
+  const [accepting, setAccepting] = useState(false);
+
+  // the findings, with those that an exception hid from the report
+  const findings = useMemo(() => {
+    if (!manifestAll) return [];
+    const covered = exceptionData
+      ? workloadCveExceptions(exceptionData, workload)
+      : new Map<string, CveException>();
+    return [
+      ...(manifestAll.spec.payload.matches ?? []).map(
+        (match): Finding => ({ ...match, exception: findingException(covered, match) })
+      ),
+      ...(manifestAll.spec.payload.ignoredMatches ?? []).map(
+        (match): Finding => ({
+          ...match,
+          hidden: true,
+          exception: findingException(covered, match) ?? ignoredMatchException(match),
+        })
+      ),
+    ];
+  }, [manifestAll, exceptionData, workload]);
+  // the CVEs that kubevuln counts, which no exception hides
+  const openCves = useMemo(
+    () => [
+      ...new Set(
+        findings
+          .filter(
+            finding =>
+              !finding.hidden && !(finding.exception && isSuppressing(finding.exception.state))
+          )
+          .map(finding => finding.vulnerability.id)
+      ),
+    ],
+    [findings]
+  );
 
   const imageEvaluatedAt = getVulnerabilityReportCreatedAt(manifestAll);
   const relevantEvaluatedAt = getVulnerabilityReportCreatedAt(manifestRelevant);
@@ -120,9 +179,17 @@ function WorkloadVulnerabilities(
   return (
     <>
       <SectionBox title="Vulnerabilities" backLink>
-        {scanActions && (
+        {(scanActions || openCves.length > 0) && (
           <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
             {scanActions}
+            {openCves.length > 0 && (
+              <AcceptRiskButton
+                cveIds={openCves}
+                namespace={workload.namespace}
+                cluster={cluster}
+                onClick={() => setAccepting(true)}
+              />
+            )}
           </Stack>
         )}
         <NameValueTable
@@ -169,43 +236,84 @@ function WorkloadVulnerabilities(
 
         {manifestAll && (
           <Matches
-            manifest={manifestAll}
+            findings={findings}
             relevant={manifestRelevant}
-            workloadName={summary.metadata.labels['kubescape.io/workload-name']}
-            workloadNamespace={summary.metadata.labels['kubescape.io/workload-namespace']}
-            workloadKind={summary.metadata.labels['kubescape.io/workload-kind']}
-            imageRef={summary.metadata.annotations['kubescape.io/image-tag']}
+            workloadName={workload.name}
+            workloadNamespace={workload.namespace}
+            workloadKind={workload.kind}
+            imageRef={workload.image}
+            cluster={cluster}
+            onExceptionCreated={reload}
           />
         )}
       </SectionBox>
+
+      {accepting && (
+        <GuidedVulnerabilityExceptionForm
+          acceptRisk
+          cveIds={openCves}
+          imageRef={workload.image}
+          workloadName={workload.name}
+          workloadNamespace={workload.namespace}
+          workloadKind={workload.kind}
+          cluster={cluster}
+          onClose={() => setAccepting(false)}
+          onCreated={reload}
+        />
+      )}
     </>
   );
 }
 
+function findingId(finding: Finding) {
+  return JSON.stringify([
+    finding.vulnerability.id,
+    finding.artifact.name,
+    finding.artifact.version,
+    !!finding.hidden,
+  ]);
+}
+
 function Matches(
   props: Readonly<{
-    manifest: VulnerabilityManifest;
+    findings: Finding[];
     relevant: VulnerabilityManifest | null;
     workloadName: string;
     workloadNamespace: string;
     workloadKind: string;
     imageRef?: string;
+    cluster?: string;
+    onExceptionCreated: () => void;
   }>
 ) {
-  const { manifest, relevant, workloadName, workloadNamespace, workloadKind, imageRef } = props;
+  const {
+    findings,
+    relevant,
+    workloadName,
+    workloadNamespace,
+    workloadKind,
+    imageRef,
+    cluster,
+    onExceptionCreated: reload,
+  } = props;
 
   // Severity links count all findings, so they open with the Relevant CVE switch off
   const [severity, clearSeverity] = useURLSearchParam('severity');
-  const results = (manifest.spec.payload.matches ?? []).filter(
-    match => !severity || match.vulnerability.severity === severity
-  );
+  const results = findings.filter(match => !severity || match.vulnerability.severity === severity);
   const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useState(!severity);
   const [selectedCve, setSelectedCve] = useState<string | null>(null);
+  const [acceptedCves, setAcceptedCves] = useState<string[] | null>(null);
+  const clearSelection = useRef<() => void>(() => {});
 
   // Without a relevant manifest all findings are shown. A relevant manifest without matches
   // means that none of the findings is relevant.
   const relevantIds = relevant
-    ? new Set((relevant.spec.payload.matches ?? []).map(m => m.vulnerability.id))
+    ? new Set(
+        [
+          ...(relevant.spec.payload.matches ?? []),
+          ...(relevant.spec.payload.ignoredMatches ?? []),
+        ].map(m => m.vulnerability.id)
+      )
     : undefined;
   const isRelevant = (match: VulnerabilityManifest.Match) =>
     !relevantIds ? 'Unknown' : relevantIds.has(match.vulnerability.id) ? 'Yes' : 'No';
@@ -217,6 +325,8 @@ function Matches(
     Array.isArray(match.vulnerability.fix?.versions)
       ? match.vulnerability.fix.versions.join(', ')
       : '';
+  const exceptionLabel = (finding: Finding) =>
+    finding.exception ? exceptionStateLabels[finding.exception.state] : '';
 
   return (
     <SectionBox title="Findings">
@@ -247,6 +357,7 @@ function Matches(
             'Relevant',
             'Fix',
             'Fix in version',
+            'Exception',
             'Description',
           ],
           rows: () =>
@@ -259,6 +370,7 @@ function Matches(
               isRelevant(match),
               match.vulnerability.fix?.state,
               fixVersions(match),
+              match.exception && `${exceptionLabel(match)}: ${match.exception.name}`,
               match.vulnerability.description,
             ]),
         }}
@@ -318,6 +430,23 @@ function Matches(
             gridTemplate: 'auto',
           },
           {
+            id: 'Exception',
+            header: 'Exception',
+            accessorFn: exceptionLabel,
+            Cell: ({ row }: any) => {
+              const { exception, hidden } = row.original as Finding;
+              if (!exception) return null;
+              let note: string | undefined;
+              if (hidden) note = 'Kubescape no longer counts this finding.';
+              else if (isSuppressing(exception.state)) {
+                note =
+                  'Kubescape stops counting this finding at its next scan, when the riskAcceptance capability is enabled.';
+              }
+              return <ExceptionChip exception={exception} cluster={cluster} note={note} />;
+            },
+            gridTemplate: 'auto',
+          },
+          {
             header: 'Description',
             accessorKey: 'vulnerability.description',
             Cell: ({ cell }: any) => <ShowHideLabel>{cell.getValue()}</ShowHideLabel>,
@@ -346,16 +475,58 @@ function Matches(
             },
           ],
         }}
+        enableRowSelection
+        getRowId={findingId}
+        renderRowSelectionToolbar={({ table }) => {
+          const selected = [
+            ...new Set(table.getSelectedRowModel().rows.map(row => row.original.vulnerability.id)),
+          ];
+          clearSelection.current = () => table.resetRowSelection();
+          return (
+            <Permitted check={createExceptionCheck(workloadNamespace)} cluster={cluster}>
+              {allowed => (
+                <Button
+                  variant="contained"
+                  size="small"
+                  disabled={!allowed}
+                  startIcon={<Icon icon="mdi:shield-check-outline" />}
+                  onClick={() => setAcceptedCves(selected)}
+                >
+                  Accept the risk of {selected.length} {selected.length === 1 ? 'CVE' : 'CVEs'}
+                </Button>
+              )}
+            </Permitted>
+          );
+        }}
       />
 
-      {selectedCve && (
+      {acceptedCves && (
         <GuidedVulnerabilityExceptionForm
-          cveId={selectedCve}
+          acceptRisk
+          cveIds={acceptedCves}
           imageRef={imageRef}
           workloadName={workloadName}
           workloadNamespace={workloadNamespace}
           workloadKind={workloadKind}
+          cluster={cluster}
+          onClose={() => setAcceptedCves(null)}
+          onCreated={() => {
+            clearSelection.current();
+            reload();
+          }}
+        />
+      )}
+
+      {selectedCve && (
+        <GuidedVulnerabilityExceptionForm
+          cveIds={[selectedCve]}
+          imageRef={imageRef}
+          workloadName={workloadName}
+          workloadNamespace={workloadNamespace}
+          workloadKind={workloadKind}
+          cluster={cluster}
           onClose={() => setSelectedCve(null)}
+          onCreated={reload}
         />
       )}
     </SectionBox>

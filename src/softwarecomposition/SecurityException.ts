@@ -31,7 +31,16 @@ export interface PostureException {
   action: 'ignore' | 'alert_only';
 }
 
-export type VulnerabilityStatus = 'not_affected' | 'fixed' | 'under_investigation';
+// VEX statuses. affected with an action statement and a can_not_fix or will_not_fix response
+// accepts the risk: kubevuln moves the finding to the ignored matches of the report.
+export type VulnerabilityStatus = 'not_affected' | 'affected' | 'fixed' | 'under_investigation';
+
+export type VulnerabilityResponse =
+  | 'can_not_fix'
+  | 'will_not_fix'
+  | 'update'
+  | 'rollback'
+  | 'workaround_available';
 
 export type VulnerabilityJustification =
   | 'component_not_present'
@@ -50,6 +59,10 @@ export interface VulnerabilityException {
   status: VulnerabilityStatus;
   justification?: VulnerabilityJustification;
   impactStatement?: string;
+  // for affected: what is done about it, and the response
+  actionStatement?: string;
+  response?: VulnerabilityResponse[];
+  expiresAt?: string;
   expiredOnFix?: boolean;
   // the packages of the image the entry is limited to
   subcomponents?: unknown[];

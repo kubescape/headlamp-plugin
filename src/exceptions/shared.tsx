@@ -14,6 +14,7 @@ import {
 import { useCurrentUser } from '../common/currentUser';
 import {
   VulnerabilityJustification,
+  VulnerabilityResponse,
   VulnerabilityStatus,
 } from '../softwarecomposition/SecurityException';
 
@@ -189,6 +190,14 @@ export function VulnerabilityStatusSelect({
             </Typography>
           </Box>
         </MenuItem>
+        <MenuItem value="affected">
+          <Box>
+            <Typography variant="body2">affected</Typography>
+            <Typography variant="caption" color="text.secondary">
+              The CVE applies; with can't fix or won't fix the risk is accepted
+            </Typography>
+          </Box>
+        </MenuItem>
         <MenuItem value="not_affected">
           <Box>
             <Typography variant="body2">not_affected</Typography>
@@ -210,6 +219,14 @@ export function VulnerabilityStatusSelect({
   );
 }
 
+export const RESPONSE_OPTIONS: { value: VulnerabilityResponse; label: string }[] = [
+  { value: 'can_not_fix', label: "Can't fix: no fix or upgrade is possible" },
+  { value: 'will_not_fix', label: "Won't fix: the risk is accepted as it is" },
+  { value: 'update', label: 'Update: an upgrade is planned' },
+  { value: 'rollback', label: 'Rollback: going back to an unaffected version' },
+  { value: 'workaround_available', label: 'Workaround available' },
+];
+
 export function VulnExceptionFields(
   props: Readonly<{
     status: VulnerabilityStatus;
@@ -220,6 +237,11 @@ export function VulnExceptionFields(
     onImpactStatementChange: (v: string) => void;
     expiredOnFix: boolean;
     onExpiredOnFixChange: (v: boolean) => void;
+    // for affected
+    response?: VulnerabilityResponse;
+    onResponseChange?: (v: VulnerabilityResponse) => void;
+    actionStatement?: string;
+    onActionStatementChange?: (v: string) => void;
   }>
 ) {
   const {
@@ -231,10 +253,48 @@ export function VulnExceptionFields(
     onImpactStatementChange,
     expiredOnFix,
     onExpiredOnFixChange,
+    response,
+    onResponseChange,
+    actionStatement,
+    onActionStatementChange,
   } = props;
   return (
     <>
       <VulnerabilityStatusSelect value={status} onChange={onStatusChange} />
+
+      {status === 'affected' && onResponseChange && (
+        <>
+          <FormControl fullWidth>
+            <InputLabel>Response</InputLabel>
+            <Select
+              value={response ?? ''}
+              label="Response"
+              onChange={e => onResponseChange(e.target.value as VulnerabilityResponse)}
+            >
+              {RESPONSE_OPTIONS.map(option => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            label="Action statement"
+            required
+            fullWidth
+            multiline
+            value={actionStatement ?? ''}
+            onChange={e => onActionStatementChange?.(e.target.value)}
+            helperText="What is done about it, such as a mitigation, or why it cannot be fixed."
+          />
+          {response && response !== 'can_not_fix' && response !== 'will_not_fix' && (
+            <Typography variant="caption" color="text.secondary">
+              The finding stays in the scan results until it is fixed; only can't fix and won't fix
+              accept the risk.
+            </Typography>
+          )}
+        </>
+      )}
 
       {status === 'not_affected' && (
         <FormControl fullWidth>
@@ -254,12 +314,14 @@ export function VulnExceptionFields(
         </FormControl>
       )}
 
-      <TextField
-        label="Impact statement"
-        fullWidth
-        value={impactStatement}
-        onChange={e => onImpactStatementChange(e.target.value)}
-      />
+      {status !== 'affected' && (
+        <TextField
+          label="Impact statement"
+          fullWidth
+          value={impactStatement}
+          onChange={e => onImpactStatementChange(e.target.value)}
+        />
+      )}
 
       <FormControlLabel
         control={

@@ -145,7 +145,7 @@ function Workloads(props: Readonly<{ cve: string; workloads: WorkloadScan[] }>) 
       />
       {exceptionFormWorkload && (
         <GuidedVulnerabilityExceptionForm
-          cveId={cve}
+          cveIds={[cve]}
           imageRef={exceptionFormWorkload.imageScan?.imageName}
           workloadName={exceptionFormWorkload.name}
           workloadNamespace={exceptionFormWorkload.namespace}

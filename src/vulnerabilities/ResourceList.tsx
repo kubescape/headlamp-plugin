@@ -1,15 +1,21 @@
 /*
   Show workload configuration scans. This view is part of the main Vulnerabilities page.
 */
-import {
-  Link,
-  SectionBox,
-  TableColumn,
-} from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { Icon } from '@iconify/react';
+import { Link, SectionBox, TableColumn } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { useMemo, useState } from 'react';
 import { makeNamespaceLink } from '../common/Namespace';
-import { SeverityCountStack } from '../common/SeverityCountBox';
+import { createExceptionCheck, PermittedIconButton } from '../common/permissions';
+import { severityColors, SeverityCountStack } from '../common/SeverityCountBox';
 import HeadlampTable from '../common/Table';
+import { GuidedVulnerabilityExceptionForm } from '../exceptions/GuidedVulnerabilityExceptionForm';
+import {
+  summarizeWorkloadExceptions,
+  workloadCveExceptions,
+  WorkloadExceptions,
+} from '../exceptions/vulnerabilityExceptions';
 import { RoutingName, useHLSelectedClusters } from '../index';
+import { AcceptedChip, useSecurityExceptions } from './exceptionChips';
 import { WorkloadScan } from './Vulnerabilities';
 
 export default function WorkloadScanListView(
@@ -19,12 +25,44 @@ export default function WorkloadScanListView(
 ) {
   const { workloadScans } = props;
   const clusters = useHLSelectedClusters();
+  const kinds = useMemo(() => (workloadScans ?? []).map(w => w.kind), [workloadScans]);
+  const { exceptions, reload } = useSecurityExceptions(clusters, kinds);
+  const [accepting, setAccepting] = useState<{ workloadScan: WorkloadScan; cveIds: string[] }>();
+
+  // what the exceptions say about the CVEs of each workload
+  const exceptionSummaries = useMemo(() => {
+    const summaries = new Map<WorkloadScan, WorkloadExceptions>();
+    for (const workloadScan of workloadScans ?? []) {
+      const data = exceptions.get(workloadScan.cluster);
+      const imageScan = workloadScan.imageScan;
+      if (!data || !imageScan) continue;
+      const covered = workloadCveExceptions(data, {
+        kind: workloadScan.kind,
+        name: workloadScan.name,
+        namespace: workloadScan.namespace,
+        image: imageScan.imageName,
+      });
+      if (covered.size === 0) continue;
+      summaries.set(
+        workloadScan,
+        summarizeWorkloadExceptions(covered, imageScan.matches, imageScan.ignoredMatches)
+      );
+    }
+    return summaries;
+  }, [workloadScans, exceptions]);
 
   if (!workloadScans) {
     return <></>;
   }
 
   const filteredWorkloadScans = workloadScans.filter(w => w.name && w.namespace);
+  const acceptedCount = (workloadScan: WorkloadScan) =>
+    exceptionSummaries.get(workloadScan)?.accepted.size ?? 0;
+  // the CVEs that no exception covers yet
+  const openCves = (workloadScan: WorkloadScan) =>
+    exceptionSummaries.get(workloadScan)?.open ?? [
+      ...new Set(workloadScan.imageScan?.matches.map(match => match.vulnerability.id)),
+    ];
 
   return (
     <>
@@ -40,11 +78,9 @@ export default function WorkloadScanListView(
               'Namespace',
               'Cluster',
               'Image',
-              'Critical',
-              'High',
-              'Medium',
-              'Low',
+              ...Object.keys(severityColors),
               'Relevant',
+              'Accepted',
             ],
             rows: () =>
               filteredWorkloadScans.map(w => [
@@ -54,8 +90,9 @@ export default function WorkloadScanListView(
                 w.namespace,
                 w.cluster,
                 w.imageScan?.imageName,
-                ...['Critical', 'High', 'Medium', 'Low'].map(severity => countScans(w, severity)),
+                ...Object.keys(severityColors).map(severity => countScans(w, severity)),
                 relevantSummary(w),
+                acceptedCount(w),
               ]),
           }}
           data={filteredWorkloadScans}
@@ -118,6 +155,18 @@ export default function WorkloadScanListView(
               gridTemplate: 'min-content',
             },
             {
+              id: 'Accepted',
+              header: 'Accepted',
+              accessorFn: acceptedCount,
+              Cell: ({ row }: any) => {
+                const summary = exceptionSummaries.get(row.original);
+                return summary ? (
+                  <AcceptedChip summary={summary} cluster={row.original.cluster} />
+                ) : null;
+              },
+              gridTemplate: 'min-content',
+            },
+            {
               header: 'SBOM',
               accessorFn: (workloadScan: WorkloadScan) => {
                 if (workloadScan.imageScan?.manifestName) {
@@ -140,6 +189,30 @@ export default function WorkloadScanListView(
               },
               gridTemplate: 'min-content',
             },
+            {
+              header: '',
+              accessorFn: () => '',
+              // rendered for the rows on the page only
+              Cell: ({ row }: any) => {
+                const workloadScan: WorkloadScan = row.original;
+                const cveIds = openCves(workloadScan);
+                return (
+                  cveIds.length > 0 && (
+                    <PermittedIconButton
+                      check={createExceptionCheck(workloadScan.namespace)}
+                      cluster={workloadScan.cluster}
+                      title={`Accept the risk of the ${
+                        cveIds.length === 1 ? 'open CVE' : `${cveIds.length} open CVEs`
+                      }`}
+                      onClick={() => setAccepting({ workloadScan, cveIds })}
+                    >
+                      <Icon icon="mdi:shield-check-outline" />
+                    </PermittedIconButton>
+                  )
+                );
+              },
+              gridTemplate: 'min-content',
+            },
           ]}
           initialState={{
             sorting: [
@@ -152,6 +225,20 @@ export default function WorkloadScanListView(
           reflectInURL="resources"
         />
       </SectionBox>
+
+      {accepting && (
+        <GuidedVulnerabilityExceptionForm
+          acceptRisk
+          cveIds={accepting.cveIds}
+          imageRef={accepting.workloadScan.imageScan?.imageName}
+          workloadName={accepting.workloadScan.name}
+          workloadNamespace={accepting.workloadScan.namespace}
+          workloadKind={accepting.workloadScan.kind}
+          cluster={accepting.workloadScan.cluster}
+          onClose={() => setAccepting(undefined)}
+          onCreated={reload}
+        />
+      )}
     </>
   );
 }

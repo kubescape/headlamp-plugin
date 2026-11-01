@@ -11,6 +11,8 @@ export interface ImageScan {
   creationTimestamp: string;
   reportCreatedAt?: string;
   matches: VulnerabilityManifest.Match[];
+  // the findings that kubevuln hid because of a security exception
+  ignoredMatches?: VulnerabilityManifest.IgnoredMatch[];
 }
 
 export interface WorkloadScan {
@@ -90,6 +92,10 @@ export function toImageScan(manifest: VulnerabilityManifest): ImageScan {
     creationTimestamp: manifest.metadata.creationTimestamp,
     reportCreatedAt: getVulnerabilityReportCreatedAt(manifest),
     matches: (manifest.spec.payload.matches ?? []).map(slimMatch),
+    ignoredMatches: manifest.spec.payload.ignoredMatches?.map(match => ({
+      ...slimMatch(match),
+      appliedIgnoreRules: match.appliedIgnoreRules,
+    })),
   };
 }
 

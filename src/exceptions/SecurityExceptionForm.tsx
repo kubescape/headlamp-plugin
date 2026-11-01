@@ -27,6 +27,7 @@ import {
   SecurityException,
   VulnerabilityException,
   VulnerabilityJustification,
+  VulnerabilityResponse,
   VulnerabilityStatus,
 } from '../softwarecomposition/SecurityException';
 import { recordChangeByCurrentUser } from './history';
@@ -34,6 +35,7 @@ import {
   JUSTIFICATION_OPTIONS,
   MetadataFields,
   RESOURCE_KINDS,
+  RESPONSE_OPTIONS,
   sanitizeName,
   SectionTitle,
 } from './shared';
@@ -76,10 +78,23 @@ interface VulnRow {
   status: VulnerabilityStatus;
   justification: VulnerabilityJustification | '';
   impactStatement: string;
+  // for affected
+  actionStatement: string;
+  response: VulnerabilityResponse[];
   expiredOnFix: boolean;
   // the entry as it was, whose other fields, such as aliases and an expiry, are kept
   original?: VulnerabilityException;
 }
+
+const newVulnRow = (cveId: string): VulnRow => ({
+  cveId,
+  status: 'under_investigation',
+  justification: '',
+  impactStatement: '',
+  actionStatement: '',
+  response: [],
+  expiredOnFix: false,
+});
 
 export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps>) {
   const {
@@ -154,20 +169,11 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
       status: v.status,
       justification: v.justification ?? '',
       impactStatement: v.impactStatement ?? '',
+      actionStatement: v.actionStatement ?? '',
+      response: v.response ?? [],
       expiredOnFix: v.expiredOnFix ?? false,
       original: v,
-    })) ??
-      (isFromVuln && cveId
-        ? [
-            {
-              cveId,
-              status: 'under_investigation' as const,
-              justification: '',
-              impactStatement: '',
-              expiredOnFix: false,
-            },
-          ]
-        : [])
+    })) ?? (isFromVuln && cveId ? [newVulnRow(cveId)] : [])
   );
 
   function buildScopeSummary(): string {
@@ -213,6 +219,17 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
       );
       return;
     }
+    const missingAction = vulnEntries.find(
+      v =>
+        v.cveId && v.status === 'affected' && (!v.actionStatement.trim() || v.response.length === 0)
+    );
+    if (missingAction) {
+      enqueueSnackbar(
+        `A response and an action statement are required for "${missingAction.cveId}" when status is affected`,
+        { variant: 'error' }
+      );
+      return;
+    }
 
     const validResources = resources.filter(r => r.kind);
     const validNsSelector = namespaceSelectorRows.filter(r => r.key);
@@ -254,6 +271,8 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
           // the fields that the form shows are set again
           delete kept.justification;
           delete kept.impactStatement;
+          delete kept.actionStatement;
+          delete kept.response;
           delete kept.expiredOnFix;
           return {
             ...kept,
@@ -261,8 +280,14 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
             vulnerability:
               kept.vulnerability?.id === v.cveId ? kept.vulnerability : { id: v.cveId },
             status: v.status,
-            ...(v.justification && { justification: v.justification }),
-            ...(v.impactStatement && { impactStatement: v.impactStatement }),
+            ...(v.status === 'not_affected' &&
+              v.justification && { justification: v.justification }),
+            ...(v.status !== 'affected' &&
+              v.impactStatement && { impactStatement: v.impactStatement }),
+            ...(v.status === 'affected' && {
+              actionStatement: v.actionStatement.trim(),
+              response: v.response,
+            }),
             ...(v.expiredOnFix && { expiredOnFix: v.expiredOnFix }),
           };
         }) as VulnerabilityException[],
@@ -588,10 +613,50 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
                       }}
                     >
                       <MenuItem value="not_affected">not_affected</MenuItem>
+                      <MenuItem value="affected">affected</MenuItem>
                       <MenuItem value="fixed">fixed</MenuItem>
                       <MenuItem value="under_investigation">under_investigation</MenuItem>
                     </Select>
                   </FormControl>
+                  {v.status === 'affected' && (
+                    <>
+                      <FormControl sx={{ minWidth: 240 }}>
+                        <InputLabel>Response</InputLabel>
+                        <Select
+                          multiple
+                          value={v.response}
+                          label="Response"
+                          onChange={e => {
+                            const value = e.target.value;
+                            const updated = [...vulnEntries];
+                            updated[i] = {
+                              ...v,
+                              response: (typeof value === 'string'
+                                ? value.split(',')
+                                : value) as VulnerabilityResponse[],
+                            };
+                            setVulnEntries(updated);
+                          }}
+                        >
+                          {RESPONSE_OPTIONS.map(option => (
+                            <MenuItem key={option.value} value={option.value}>
+                              {option.label}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <TextField
+                        label="Action statement"
+                        required
+                        value={v.actionStatement}
+                        onChange={e => {
+                          const updated = [...vulnEntries];
+                          updated[i] = { ...v, actionStatement: e.target.value };
+                          setVulnEntries(updated);
+                        }}
+                      />
+                    </>
+                  )}
                   {v.status === 'not_affected' && (
                     <FormControl sx={{ minWidth: 240 }}>
                       <InputLabel>Justification</InputLabel>
@@ -616,15 +681,17 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
                       </Select>
                     </FormControl>
                   )}
-                  <TextField
-                    label="Impact statement"
-                    value={v.impactStatement}
-                    onChange={e => {
-                      const updated = [...vulnEntries];
-                      updated[i] = { ...v, impactStatement: e.target.value };
-                      setVulnEntries(updated);
-                    }}
-                  />
+                  {v.status !== 'affected' && (
+                    <TextField
+                      label="Impact statement"
+                      value={v.impactStatement}
+                      onChange={e => {
+                        const updated = [...vulnEntries];
+                        updated[i] = { ...v, impactStatement: e.target.value };
+                        setVulnEntries(updated);
+                      }}
+                    />
+                  )}
                   <FormControlLabel
                     control={
                       <Switch
@@ -647,18 +714,7 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
               ))}
               <Button
                 startIcon={<Icon icon="mdi:plus" />}
-                onClick={() =>
-                  setVulnEntries([
-                    ...vulnEntries,
-                    {
-                      cveId: '',
-                      status: 'under_investigation',
-                      justification: '',
-                      impactStatement: '',
-                      expiredOnFix: false,
-                    },
-                  ])
-                }
+                onClick={() => setVulnEntries([...vulnEntries, newVulnRow('')])}
                 size="small"
               >
                 Add vulnerability entry
@@ -681,17 +737,7 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
           {!isFromVuln && vulnEntries.length === 0 && (
             <Button
               startIcon={<Icon icon="mdi:plus" />}
-              onClick={() =>
-                setVulnEntries([
-                  {
-                    cveId: '',
-                    status: 'under_investigation',
-                    justification: '',
-                    impactStatement: '',
-                    expiredOnFix: false,
-                  },
-                ])
-              }
+              onClick={() => setVulnEntries([newVulnRow('')])}
               size="small"
             >
               Add vulnerability entry
