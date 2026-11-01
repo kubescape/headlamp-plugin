@@ -5,6 +5,7 @@ import {
   // @ts-ignore
   registerDetailsViewSectionsProcessor,
   registerPluginSettings,
+  registerResourceTableColumnsProcessor,
   registerRoute,
   registerSidebarEntry,
 } from '@kinvolk/headlamp-plugin/lib';
@@ -455,6 +456,13 @@ registerDetailsViewSectionsProcessor(addKubescapeWorkloadSection);
 import addKubescapeNamespaceSection from './sections/NamespaceSection';
 
 registerDetailsViewSectionsProcessor(addKubescapeNamespaceSection);
+
+// Columns in the Headlamp lists of workloads and pods, on Headlamp versions that support them
+import { addKubescapeColumns } from './sections/tableColumns';
+
+if (typeof registerResourceTableColumnsProcessor === 'function') {
+  registerResourceTableColumnsProcessor(addKubescapeColumns);
+}
 
 // Notifications for critical runtime alerts and expiring exceptions
 import { startNotifications } from './common/notifications';

@@ -8,6 +8,8 @@ export type KubescapeConfig = {
   activeFrameworks: string[];
   pageSize: number;
   alertmanagerUrl: string | undefined;
+  // Kubescape columns in the Headlamp workload and pod lists, on unless false
+  tableColumns?: boolean;
   // Headlamp notifications for critical runtime alerts and expiring exceptions, on unless false
   notifications?: boolean;
   // Prometheus service with the metrics of the Kubescape exporter, as namespace/service:port

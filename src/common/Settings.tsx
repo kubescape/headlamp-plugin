@@ -178,6 +178,15 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
         <FormControlLabel
           control={
             <Switch
+              checked={kubescapeData?.tableColumns !== false}
+              onChange={(_, checked) => onDataChange?.({ ...data, tableColumns: checked })}
+            />
+          }
+          label="Show CVEs and failed controls in the Headlamp lists of workloads and pods"
+        />
+        <FormControlLabel
+          control={
+            <Switch
               checked={kubescapeData?.notifications !== false}
               onChange={(_, checked) => onDataChange?.({ ...data, notifications: checked })}
             />
