@@ -122,7 +122,7 @@ function KnownServerList() {
     async function fetchData() {
       const cluster = getCluster();
       if (cluster) {
-        await paginatedListQuery(cluster, knownServersClass, 0, 50).then((result: any) => {
+        await paginatedListQuery(cluster, knownServersClass, '', 50).then((result: any) => {
           setKnownServers(result.items);
         });
       }

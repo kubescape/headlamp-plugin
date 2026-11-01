@@ -454,17 +454,19 @@ function initQueryTasks(
   kubescapeConfig: KubescapeConfig
 ) {
   // remove queryTask and data from clusters that are no more selected or where allowed namespaces are changed
-  for (const queryTask of configurationScanContext.queryTasks) {
-    if (clusters.indexOf(queryTask.cluster) === -1 || isAllowedNamespaceUpdated(queryTask)) {
-      configurationScanContext.queryTasks.splice(
-        configurationScanContext.queryTasks.indexOf(queryTask),
-        1
-      );
-      configurationScanContext.workloadScans = configurationScanContext.workloadScans.filter(
-        scan => scan.metadata.cluster !== queryTask.cluster
-      );
-    }
-  }
+  const invalidated = new Set(
+    configurationScanContext.queryTasks
+      .filter(
+        queryTask => !clusters.includes(queryTask.cluster) || isAllowedNamespaceUpdated(queryTask)
+      )
+      .map(queryTask => queryTask.cluster)
+  );
+  configurationScanContext.queryTasks = configurationScanContext.queryTasks.filter(
+    queryTask => !invalidated.has(queryTask.cluster)
+  );
+  configurationScanContext.workloadScans = configurationScanContext.workloadScans.filter(
+    scan => !invalidated.has(scan.metadata.cluster)
+  );
 
   // add queryTask for new selected clusters
   for (const cluster of clusters) {
@@ -474,7 +476,7 @@ function initQueryTasks(
       configurationScanContext.queryTasks.push({
         cluster: cluster,
         allowedNamespaces: getAllowedNamespaces(cluster),
-        continuation: 0,
+        continuation: '',
         objectClass: workloadConfigurationScanSummaryClass,
         pageSize: kubescapeConfig?.pageSize || 50,
         handleData: (queryTask: QueryTask, items: any[]) => {

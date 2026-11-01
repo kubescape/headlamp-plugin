@@ -110,13 +110,15 @@ export default function KubescapeVulnerabilities() {
           {vulnerabilityContext.queryTasks.some(q => q.continuation !== undefined) && (
             <Button
               onClick={() => {
-                setTimeout(() => {
+                // show the scans that were read in addition to the ones already shown
+                setTimeout(async () => {
                   continueReading.current = true;
-                  handleListPaginationTasks(
+                  await handleListPaginationTasks(
                     vulnerabilityContext.queryTasks,
                     continueReading,
                     setLoading
                   );
+                  setWorkloadScanData([...vulnerabilityContext.workloadScans]);
                 });
               }}
               variant="contained"
@@ -406,7 +408,7 @@ function initQueryTasks(
       const task = {
         cluster: cluster,
         allowedNamespaces: getAllowedNamespaces(cluster),
-        continuation: 0,
+        continuation: '',
         pageSize: kubescapeConfig?.pageSize || 50,
       };
       vulnerabilityContext.queryTasks.push({
