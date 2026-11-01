@@ -1,14 +1,11 @@
 import { Icon } from '@iconify/react';
 import { remove } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
-import {
-  Link as HeadlampLink,
-  SectionBox,
-  Table,
-} from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { Link as HeadlampLink, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { Button, IconButton, Tooltip } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
+import Table from '../common/Table';
 import { RoutingName } from '../index';
 import { clusterSecurityExceptionClass, securityExceptionClass } from '../model';
 import {

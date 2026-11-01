@@ -6,13 +6,13 @@ import {
   Link as HeadlampLink,
   NameValueTable,
   SectionBox,
-  Table,
   TableColumn,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { FormControlLabel, IconButton, Link, Switch, Tooltip } from '@mui/material';
 import { useState } from 'react';
 import { makeNamespaceLink } from '../common/Namespace';
 import { KubescapeSettings, useSessionStorage } from '../common/sessionStorage';
+import Table from '../common/Table';
 import { getLastURLSegment } from '../common/url';
 import { GuidedComplianceExceptionForm } from '../exceptions/GuidedComplianceExceptionForm';
 import { RoutingName, useHLSelectedClusters } from '../index';

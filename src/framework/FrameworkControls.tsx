@@ -1,7 +1,8 @@
-import { NameValueTable, SectionBox, Table } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { NameValueTable, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, Collapse, Link, Tooltip } from '@mui/material';
 import { useState } from 'react';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
+import Table from '../common/Table';
 import { getURLSegments } from '../common/url';
 import { complianceSeverity } from '../compliance/Compliance';
 import { Control, useRegoData } from '../rego';

@@ -1,14 +1,11 @@
 import { Icon } from '@iconify/react';
 import { K8s, Router } from '@kinvolk/headlamp-plugin/lib';
 import { remove } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
-import {
-  Link,
-  Table as HeadlampTable,
-  TableColumn,
-} from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { Link, TableColumn } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useHistory } from 'react-router-dom';
+import HeadlampTable from '../common/Table';
 import { getKubescapeNamespace } from '../custom-objects/api-queries';
 import { RoutingName } from '../index';
 import { customObjectLabel } from '../model';

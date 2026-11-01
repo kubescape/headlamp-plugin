@@ -6,10 +6,10 @@ import {
   Link as HeadlampLink,
   NameValueTable,
   SectionBox,
-  Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { IconButton, Link, Tooltip } from '@mui/material';
 import { useState } from 'react';
+import HeadlampTable from '../common/Table';
 import { getURLSegments } from '../common/url';
 import { GuidedVulnerabilityExceptionForm } from '../exceptions/GuidedVulnerabilityExceptionForm';
 import { RoutingName } from '../index';

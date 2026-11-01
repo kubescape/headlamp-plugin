@@ -6,7 +6,6 @@ import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import {
   Link as HeadlampLink,
   SectionBox,
-  Table,
   Tabs as HeadlampTabs,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
@@ -31,7 +30,7 @@ import {
   useSessionStorage,
 } from '../common/sessionStorage';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
-import { getKubescapeNamespace } from '../custom-objects/api-queries';
+import Table from '../common/Table';
 import {
   applySecurityExceptionsToWorkloadScans,
   countExcludedControls,
@@ -255,6 +254,32 @@ function ConfigurationScanningListView(
   return (
     <SectionBox>
       <Table
+        csvExport={{
+          fileName: 'kubescape-controls.csv',
+          header: [
+            'ID',
+            'Control name',
+            'Severity',
+            'Category',
+            'Compliance %',
+            'Failed resources',
+            'Accepted resources',
+            'Excluded resources',
+            'Remediation',
+          ],
+          rows: () =>
+            controls.map(control => [
+              control.controlID,
+              control.name,
+              complianceSeverity(control.baseScore),
+              control.category?.subCategory?.name ?? control.category?.name,
+              Math.trunc(controlComplianceScore(workloadScanData, control)),
+              countScans(workloadScanData, control, 'failed'),
+              countScans(workloadScanData, control, 'passed'),
+              countExcludedWorkloadsForControl(workloadScanData, control),
+              control.remediation,
+            ]),
+        }}
         data={controls}
         columns={[
           {

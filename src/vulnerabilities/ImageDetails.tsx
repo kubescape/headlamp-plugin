@@ -6,13 +6,13 @@ import {
   NameValueTable,
   SectionBox,
   ShowHideLabel,
-  Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { Link } from '@mui/material';
 import { useState } from 'react';
 import makeSeverityLabel from '../common/SeverityLabel';
+import HeadlampTable from '../common/Table';
 import { getURLSegments } from '../common/url';
 import { vulnerabilityManifestClass } from '../model';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
@@ -61,9 +61,48 @@ function Matches(props: { manifestVulnerability: VulnerabilityManifest }) {
   const { manifestVulnerability } = props;
   const results = manifestVulnerability.spec.payload.matches ?? [];
 
+  const fixVersions = (match: VulnerabilityManifest.Match) =>
+    Array.isArray(match.vulnerability.fix?.versions)
+      ? match.vulnerability.fix.versions.join(', ')
+      : '';
+  const description = (match: VulnerabilityManifest.Match) =>
+    match.vulnerability.description ??
+    match.relatedVulnerabilities?.find(related => related.id === match.vulnerability.id)
+      ?.description ??
+    '';
+  const imageName =
+    manifestVulnerability.metadata.annotations?.['kubescape.io/image-tag'] ??
+    manifestVulnerability.metadata.name;
+
   return (
     <SectionBox title="Findings">
       <HeadlampTable
+        csvExport={{
+          fileName: `kubescape-${manifestVulnerability.metadata.name}-cves.csv`,
+          header: [
+            'Image',
+            'Severity',
+            'CVE',
+            'CVSS',
+            'Artifact',
+            'Version',
+            'Fix',
+            'Fix in version',
+            'Description',
+          ],
+          rows: () =>
+            results.map(match => [
+              imageName,
+              match.vulnerability.severity,
+              match.vulnerability.id,
+              match.vulnerability.cvss?.[0]?.metrics.baseScore,
+              match.artifact.name,
+              match.artifact.version,
+              match.vulnerability.fix?.state,
+              fixVersions(match),
+              description(match),
+            ]),
+        }}
         data={results}
         columns={[
           {
@@ -108,25 +147,12 @@ function Matches(props: { manifestVulnerability: VulnerabilityManifest }) {
           },
           {
             header: 'Fix in version',
-            accessorFn: (item: VulnerabilityManifest.Match) =>
-              item.vulnerability.fix?.versions && Array.isArray(item.vulnerability.fix?.versions)
-                ? item.vulnerability.fix.versions.join(', ')
-                : '',
+            accessorFn: fixVersions,
             gridTemplate: 'auto',
           },
           {
             header: 'Description',
-            accessorFn: (item: VulnerabilityManifest.Match) => {
-              let relatedDescription: string = '';
-              if (item.relatedVulnerabilities) {
-                for (const related of item.relatedVulnerabilities) {
-                  if (related.id === item.vulnerability.id) {
-                    relatedDescription = related.description;
-                  }
-                }
-              }
-              return item.vulnerability.description ?? relatedDescription;
-            },
+            accessorFn: description,
             Cell: ({ cell }: any) => <ShowHideLabel>{cell.getValue()}</ShowHideLabel>,
           },
         ]}

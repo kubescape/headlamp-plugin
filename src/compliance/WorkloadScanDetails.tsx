@@ -6,11 +6,11 @@ import {
   Link as HeadlampLink,
   NameValueTable,
   SectionBox,
-  Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { IconButton, Link, Tooltip } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
+import HeadlampTable from '../common/Table';
 import { getURLSegments } from '../common/url';
 import { GuidedComplianceExceptionForm } from '../exceptions/GuidedComplianceExceptionForm';
 import { RoutingName } from '../index';

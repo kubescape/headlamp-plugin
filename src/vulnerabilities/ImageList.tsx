@@ -5,9 +5,9 @@ import {
   DateLabel,
   Link as HeadlampLink,
   SectionBox,
-  Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, Stack, Tooltip } from '@mui/material';
+import HeadlampTable from '../common/Table';
 import { RoutingName } from '../index';
 import { getImageScanKey, getImageScans, ImageScan, WorkloadScan } from './scanData';
 
@@ -35,6 +35,29 @@ export default function ImageListView(props: Readonly<{ workloadScans: WorkloadS
       <h5>{imageScans.length} image scans</h5>
       <SectionBox>
         <HeadlampTable
+          csvExport={{
+            fileName: 'kubescape-images.csv',
+            header: [
+              'Image',
+              'Cluster',
+              'Workloads',
+              'Last evaluated',
+              'Critical',
+              'High',
+              'Medium',
+              'Low',
+              'Total',
+            ],
+            rows: () =>
+              imageScans.map(imageScan => [
+                imageScan.imageName,
+                imageScan.cluster,
+                imageWorkloads(workloadScans, imageScan).join('; '),
+                evaluatedAt(imageScan),
+                ...countImageScans(imageScan),
+                imageScan.matches.length,
+              ]),
+          }}
           data={imageScans}
           columns={[
             {
@@ -58,18 +81,11 @@ export default function ImageListView(props: Readonly<{ workloadScans: WorkloadS
             },
             {
               header: 'Workload',
-              accessorFn: (imageScan: ImageScan) => {
-                const workloads = workloadScans
-                  .filter(
-                    scan =>
-                      scan.imageScan &&
-                      getImageScanKey(scan.imageScan) === getImageScanKey(imageScan)
-                  )
-                  .map(scan => `${scan.name}/${scan.container}`);
-
-                const uniqueWorkloads = [...new Set(workloads)];
-                return <div style={{ whiteSpace: 'pre-line' }}>{uniqueWorkloads.join('\n')}</div>;
-              },
+              accessorFn: (imageScan: ImageScan) => (
+                <div style={{ whiteSpace: 'pre-line' }}>
+                  {imageWorkloads(workloadScans, imageScan).join('\n')}
+                </div>
+              ),
               gridTemplate: 'auto',
             },
             {
@@ -162,6 +178,16 @@ function resultStack(imageScan: ImageScan) {
       {box('yellow', 'Low')}
     </Stack>
   );
+}
+
+// The workload containers that run the image, as "workload/container"
+function imageWorkloads(workloadScans: WorkloadScan[], imageScan: ImageScan): string[] {
+  const workloads = workloadScans
+    .filter(
+      scan => scan.imageScan && getImageScanKey(scan.imageScan) === getImageScanKey(imageScan)
+    )
+    .map(scan => `${scan.name}/${scan.container}`);
+  return [...new Set(workloads)];
 }
 
 function countImageScans(imageScan: ImageScan) {

@@ -4,11 +4,11 @@
 import {
   Link,
   SectionBox,
-  Table as HeadlampTable,
   TableColumn,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, Stack, Tooltip } from '@mui/material';
 import { makeNamespaceLink } from '../common/Namespace';
+import HeadlampTable from '../common/Table';
 import { RoutingName, useHLSelectedClusters } from '../index';
 import { WorkloadScan } from './Vulnerabilities';
 
@@ -31,6 +31,33 @@ export default function WorkloadScanListView(
       <h5>{filteredWorkloadScans.length} resources</h5>
       <SectionBox>
         <HeadlampTable
+          csvExport={{
+            fileName: 'kubescape-vulnerable-resources.csv',
+            header: [
+              'Name',
+              'Container',
+              'Kind',
+              'Namespace',
+              'Cluster',
+              'Image',
+              'Critical',
+              'High',
+              'Medium',
+              'Low',
+              'Relevant',
+            ],
+            rows: () =>
+              filteredWorkloadScans.map(w => [
+                w.name,
+                w.container,
+                w.kind,
+                w.namespace,
+                w.cluster,
+                w.imageScan?.imageName,
+                ...['Critical', 'High', 'Medium', 'Low'].map(severity => countScans(w, severity)),
+                relevantSummary(w),
+              ]),
+          }}
           data={filteredWorkloadScans}
           columns={[
             {
@@ -87,24 +114,7 @@ export default function WorkloadScanListView(
             },
             {
               header: 'Relevant',
-              accessorFn: (workloadScan: WorkloadScan) => {
-                if (!workloadScan.imageScan) return 'Unknown';
-
-                if (workloadScan.relevant) {
-                  let count = 0;
-                  for (const match of workloadScan.imageScan.matches) {
-                    if (
-                      workloadScan.relevant.matches.some(
-                        r => r.vulnerability.id === match.vulnerability.id
-                      )
-                    ) {
-                      count++;
-                    }
-                  }
-                  return `${count} of ${workloadScan.imageScan.matches.length}`;
-                }
-                return `? of ${workloadScan.imageScan.matches.length}`;
-              },
+              accessorFn: relevantSummary,
               gridTemplate: 'min-content',
             },
             {
@@ -144,6 +154,20 @@ export default function WorkloadScanListView(
       </SectionBox>
     </>
   );
+}
+
+// Number of relevant findings of the total, e.g. "3 of 40"
+function relevantSummary(workloadScan: WorkloadScan): string {
+  if (!workloadScan.imageScan) return 'Unknown';
+
+  const total = workloadScan.imageScan.matches.length;
+  if (!workloadScan.relevant) return `? of ${total}`;
+
+  const relevantIds = new Set(workloadScan.relevant.matches.map(r => r.vulnerability.id));
+  const count = workloadScan.imageScan.matches.filter(match =>
+    relevantIds.has(match.vulnerability.id)
+  ).length;
+  return `${count} of ${total}`;
 }
 
 function countScans(workloadScan: WorkloadScan, severity: string): number {

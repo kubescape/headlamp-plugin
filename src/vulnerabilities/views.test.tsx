@@ -24,7 +24,9 @@ const mocks = vi.hoisted(() => ({
   sbomFilteredGet: vi.fn(),
   cluster: 'cluster-a',
   name: 'workload-123',
+  saveToFile: vi.fn(),
 }));
+vi.mock('../common/filedialog', () => ({ saveToFile: mocks.saveToFile }));
 vi.mock('../index', () => ({
   RoutingName: {
     ImageVulnerabilityDetails: 'image',
@@ -106,6 +108,7 @@ vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', () => ({
 }));
 
 beforeEach(() => {
+  mocks.saveToFile.mockReset();
   mocks.request.mockReset();
   mocks.imageGet.mockReset();
   mocks.sbomGet.mockReset();
@@ -259,8 +262,29 @@ it('shows independent workload dates and preserves relevancy filtering and excep
   expect(screen.queryByText('CVE-2')).toBeNull();
   fireEvent.click(screen.getByRole('checkbox'));
   expect(screen.getByText('CVE-2')).toBeTruthy();
-  fireEvent.click(screen.getAllByRole('button')[0]);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Create Vulnerability Exception' })[0]);
   expect(screen.getByText('Exception for CVE-1')).toBeTruthy();
+});
+
+it('exports the findings that are shown as CSV', async () => {
+  const all = manifest();
+  all.spec.payload.matches!.push(match('CVE-2'));
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? summary() : url.endsWith('/image-123') ? all : manifest(T2)
+  );
+  render(<WorkloadDetails />);
+  await waitFor(() => expect(screen.getByText('CVE-1')).toBeTruthy());
+
+  fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+
+  // the relevant findings, as the Relevant CVE switch is on
+  const [content, fileName] = mocks.saveToFile.mock.calls[0];
+  expect(fileName).toBe('kubescape-workloads-workload-cves.csv');
+  expect(content.split('\r\n')).toEqual([
+    'Severity,CVE,CVSS,Artifact,Version,Relevant,Fix,Fix in version,Description',
+    'High,CVE-1,8,package,1.0,Yes,fixed,2.0,test finding',
+    '',
+  ]);
 });
 
 it('shows no relevant findings when the relevant manifest has no matches', async () => {

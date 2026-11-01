@@ -4,10 +4,10 @@
 import {
   Link as HeadlampLink,
   SectionBox,
-  Table,
   TableColumn,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { useMemo } from 'react';
+import Table from '../common/Table';
 import { RoutingName, useHLSelectedClusters } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 

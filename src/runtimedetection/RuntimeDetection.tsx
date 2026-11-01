@@ -5,7 +5,6 @@ import {
   Link as HeadlampLink,
   SectionBox,
   ShowHideLabel,
-  Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { localeDate } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { TabContext, TabList } from '@mui/lab';
@@ -13,6 +12,7 @@ import { Alert, Chip, IconButton, Stack, Tab, Tooltip, Typography } from '@mui/m
 import { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import { getAlertmanagerUrl } from '../common/config-store';
+import HeadlampTable from '../common/Table';
 import { TabPanel } from '../common/TabPanel';
 import { RoutingName } from '../index';
 import {

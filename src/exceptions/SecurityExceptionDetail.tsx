@@ -1,7 +1,8 @@
-import { NameValueTable, SectionBox, Table } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { NameValueTable, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { Chip } from '@mui/material';
 import { useState } from 'react';
+import Table from '../common/Table';
 import { getURLSegments } from '../common/url';
 import { clusterSecurityExceptionClass, securityExceptionClass } from '../model';
 import { VulnerabilityException } from '../softwarecomposition/SecurityException';

@@ -5,11 +5,11 @@ import './style.css';
 import {
   Link as HeadlampLink,
   SectionBox,
-  Table as HeadlampTable,
   Tabs as HeadlampTabs,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { useEffect, useState } from 'react';
+import HeadlampTable from '../common/Table';
 import { RoutingName } from '../index';
 import { generatedNetworkPolicyClass, knownServersClass, listQuery } from '../model';
 import { paginatedListQuery } from '../query';

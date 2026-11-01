@@ -7,7 +7,6 @@ import {
   Link as HeadlampLink,
   SectionBox,
   ShowHideLabel,
-  Table as HeadlampTable,
   Tabs as HeadlampTabs,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
@@ -33,6 +32,7 @@ import {
   useSessionStorage,
 } from '../common/sessionStorage';
 import makeSeverityLabel from '../common/SeverityLabel';
+import HeadlampTable from '../common/Table';
 import { GuidedClusterVulnerabilityExceptionForm } from '../exceptions/GuidedClusterVulnerabilityExceptionForm';
 import { RoutingName, useHLSelectedClusters } from '../index';
 import { vulnerabilityManifestClass, vulnerabilityManifestSummaryClass } from '../model';
@@ -190,24 +190,54 @@ function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
       <h5>
         {workloadScans.length} workload scans, {cveListFiltered.length} CVE issues
       </h5>
-      <FormControlLabel
-        checked={isRelevantCVESwitchChecked}
-        control={<Switch color="primary" />}
-        label={'Relevant'}
-        onChange={(event: any, checked: boolean) => {
-          setIsRelevantCVESwitchChecked(checked);
-        }}
-      />
-      <FormControlLabel
-        checked={isFixedCVESwitchChecked}
-        control={<Switch color="primary" />}
-        label={'Fixed'}
-        onChange={(event: any, checked: boolean) => {
-          setIsFixedCVESwitchChecked(checked);
-        }}
-      />
       <SectionBox>
         <HeadlampTable
+          toolbarStart={
+            <>
+              <FormControlLabel
+                checked={isRelevantCVESwitchChecked}
+                control={<Switch color="primary" />}
+                label={'Relevant'}
+                onChange={(event: any, checked: boolean) => {
+                  setIsRelevantCVESwitchChecked(checked);
+                }}
+              />
+              <FormControlLabel
+                checked={isFixedCVESwitchChecked}
+                control={<Switch color="primary" />}
+                label={'Fixed'}
+                onChange={(event: any, checked: boolean) => {
+                  setIsFixedCVESwitchChecked(checked);
+                }}
+              />
+            </>
+          }
+          csvExport={{
+            fileName: 'kubescape-cves.csv',
+            header: [
+              'CVE',
+              'Severity',
+              'CVSS',
+              'Components',
+              'Relevant',
+              'Fixed',
+              'Images',
+              'Workloads',
+              'Description',
+            ],
+            rows: () =>
+              cveListFiltered.map(cve => [
+                cve.CVE,
+                cve.severity,
+                cve.baseScore,
+                Array.from(cve.artifacts).join('; '),
+                cve.relevant === undefined ? 'Unknown' : cve.relevant ? 'Yes' : 'No',
+                cve.fixed ? 'Yes' : 'No',
+                Array.from(cve.images).join('; '),
+                Array.from(cve.workloads).join('; '),
+                cve.description,
+              ]),
+          }}
           data={cveListFiltered}
           columns={[
             {
@@ -239,10 +269,10 @@ function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
             },
             {
               header: 'Component',
-              accessorFn: (item: CVEScan) => (
-                <div style={{ whiteSpace: 'pre-line' }}>
-                  {Array.from(item.artifacts).join('\n')}
-                </div>
+              // text, so the table can search and sort it
+              accessorFn: (item: CVEScan) => Array.from(item.artifacts).join('\n'),
+              Cell: ({ cell }: any) => (
+                <div style={{ whiteSpace: 'pre-line' }}>{cell.getValue()}</div>
               ),
               gridTemplate: 'auto',
             },

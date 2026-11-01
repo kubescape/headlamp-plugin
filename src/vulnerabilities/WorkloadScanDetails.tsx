@@ -8,12 +8,12 @@ import {
   NameValueTable,
   SectionBox,
   ShowHideLabel,
-  Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { FormControlLabel, IconButton, Link, Switch, Tooltip } from '@mui/material';
 import { useEffect, useState } from 'react';
 import makeSeverityLabel from '../common/SeverityLabel';
+import HeadlampTable from '../common/Table';
 import { getURLSegments } from '../common/url';
 import { getKubescapeNamespace } from '../custom-objects/api-queries';
 import { GuidedVulnerabilityExceptionForm } from '../exceptions/GuidedVulnerabilityExceptionForm';
@@ -155,18 +155,50 @@ function Matches(
     isRelevantCVESwitchChecked && relevantIds
       ? results.filter(r => relevantIds.has(r.vulnerability.id))
       : results;
+  const fixVersions = (match: VulnerabilityManifest.Match) =>
+    Array.isArray(match.vulnerability.fix?.versions)
+      ? match.vulnerability.fix.versions.join(', ')
+      : '';
 
   return (
     <SectionBox title="Findings">
-      <FormControlLabel
-        checked={isRelevantCVESwitchChecked}
-        control={<Switch color="primary" />}
-        label={'Relevant CVE'}
-        onChange={(event: any, checked: boolean) => {
-          setIsRelevantCVESwitchChecked(checked);
-        }}
-      />
       <HeadlampTable
+        toolbarStart={
+          <FormControlLabel
+            checked={isRelevantCVESwitchChecked}
+            control={<Switch color="primary" />}
+            label={'Relevant CVE'}
+            onChange={(event: any, checked: boolean) => {
+              setIsRelevantCVESwitchChecked(checked);
+            }}
+          />
+        }
+        csvExport={{
+          fileName: `kubescape-${workloadNamespace}-${workloadName}-cves.csv`,
+          header: [
+            'Severity',
+            'CVE',
+            'CVSS',
+            'Artifact',
+            'Version',
+            'Relevant',
+            'Fix',
+            'Fix in version',
+            'Description',
+          ],
+          rows: () =>
+            shown.map(match => [
+              match.vulnerability.severity,
+              match.vulnerability.id,
+              match.vulnerability.cvss?.[0]?.metrics.baseScore,
+              match.artifact.name,
+              match.artifact.version,
+              isRelevant(match),
+              match.vulnerability.fix?.state,
+              fixVersions(match),
+              match.vulnerability.description,
+            ]),
+        }}
         data={shown}
         emptyMessage={
           shown.length === 0 && results.length > 0
@@ -219,10 +251,7 @@ function Matches(
           },
           {
             header: 'Fix in version',
-            accessorFn: (item: VulnerabilityManifest.Match) =>
-              item.vulnerability.fix?.versions && Array.isArray(item.vulnerability.fix?.versions)
-                ? item.vulnerability.fix.versions.join(', ')
-                : '',
+            accessorFn: fixVersions,
             gridTemplate: 'auto',
           },
           {
