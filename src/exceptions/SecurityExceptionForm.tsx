@@ -77,6 +77,8 @@ interface VulnRow {
   justification: VulnerabilityJustification | '';
   impactStatement: string;
   expiredOnFix: boolean;
+  // the entry as it was, whose other fields, such as aliases and an expiry, are kept
+  original?: VulnerabilityException;
 }
 
 export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps>) {
@@ -153,6 +155,7 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
       justification: v.justification ?? '',
       impactStatement: v.impactStatement ?? '',
       expiredOnFix: v.expiredOnFix ?? false,
+      original: v,
     })) ??
       (isFromVuln && cveId
         ? [
@@ -246,13 +249,23 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
         })) as PostureException[],
       }),
       ...(validVulns.length > 0 && {
-        vulnerabilities: validVulns.map(v => ({
-          vulnerability: { id: v.cveId },
-          status: v.status,
-          ...(v.justification && { justification: v.justification }),
-          ...(v.impactStatement && { impactStatement: v.impactStatement }),
-          ...(v.expiredOnFix && { expiredOnFix: v.expiredOnFix }),
-        })) as VulnerabilityException[],
+        vulnerabilities: validVulns.map(v => {
+          const kept: Partial<VulnerabilityException> = { ...v.original };
+          // the fields that the form shows are set again
+          delete kept.justification;
+          delete kept.impactStatement;
+          delete kept.expiredOnFix;
+          return {
+            ...kept,
+            // the aliases are those of the CVE the entry had
+            vulnerability:
+              kept.vulnerability?.id === v.cveId ? kept.vulnerability : { id: v.cveId },
+            status: v.status,
+            ...(v.justification && { justification: v.justification }),
+            ...(v.impactStatement && { impactStatement: v.impactStatement }),
+            ...(v.expiredOnFix && { expiredOnFix: v.expiredOnFix }),
+          };
+        }) as VulnerabilityException[],
       }),
     };
 

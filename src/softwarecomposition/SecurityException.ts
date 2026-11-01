@@ -51,6 +51,8 @@ export interface VulnerabilityException {
   justification?: VulnerabilityJustification;
   impactStatement?: string;
   expiredOnFix?: boolean;
+  // the packages of the image the entry is limited to
+  subcomponents?: unknown[];
 }
 
 export interface SecurityExceptionSpec {
