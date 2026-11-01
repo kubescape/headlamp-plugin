@@ -44,6 +44,7 @@ import {
   VulnerabilityContext,
   WorkloadScan,
 } from './scanData';
+import UpgradeListView from './UpgradeList';
 
 export type { ImageScan, WorkloadScan } from './scanData';
 
@@ -140,6 +141,10 @@ export default function KubescapeVulnerabilities() {
             {
               label: 'Images',
               component: <ImageListView workloadScans={workloadScanData} />,
+            },
+            {
+              label: 'Upgrades',
+              component: <UpgradeListView workloadScans={workloadScanData} />,
             },
           ]}
           ariaLabel="Navigation Tabs"
