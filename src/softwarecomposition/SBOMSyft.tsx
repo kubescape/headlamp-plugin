@@ -13,9 +13,12 @@ export interface SBOMSyft {
 }
 
 export namespace SBOMSyft {
+  // The Syft JSON document; the export keeps the fields that are not declared here
   export interface Syft {
     artifacts: Artifact[] | null; // null when there are no packages, e.g. none in use
     distro: Distro;
+    source?: { id?: string; name?: string; version?: string };
+    descriptor?: { name?: string; version?: string };
   }
 
   export interface Artifact {
@@ -27,6 +30,8 @@ export namespace SBOMSyft {
     purl: string;
     type: string;
     version: string;
+    // a string in older Syft schemas
+    cpes?: Array<string | { cpe: string; source?: string }>;
   }
 
   export interface License {

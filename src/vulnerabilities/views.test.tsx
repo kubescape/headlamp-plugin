@@ -14,7 +14,7 @@ import {
   VulnerabilityContext,
   WorkloadScan,
 } from './scanData';
-import { manifest, match, summary, T0, T1, T2 } from './testFixtures';
+import { manifest, match, sbom, summary, T0, T1, T2 } from './testFixtures';
 import WorkloadDetails, { fetchVulnerabilityManifest } from './WorkloadScanDetails';
 
 const mocks = vi.hoisted(() => ({
@@ -497,6 +497,33 @@ it('shows an SBOM without artifacts', async () => {
   await act(async () => receive({ jsonData: noPackagesInUse }));
   expect(screen.getByText('Showing in use artifacts only')).toBeTruthy();
   expect(valueFor('Components').textContent).toBe('0');
+});
+
+it('downloads the SBOM as Syft JSON, CycloneDX and a CSV of its packages', async () => {
+  let receive: (item: any) => void = () => {};
+  mocks.sbomGet.mockImplementation((callback: typeof receive) => {
+    receive = callback;
+  });
+  render(
+    <MemoryRouter initialEntries={['/sbom/kubescape/docker.io-velero-velero-v1.18.1-b55b90']}>
+      <SBOMDetail />
+    </MemoryRouter>
+  );
+  await act(async () => receive({ jsonData: sbom() }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Download Syft JSON' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Download CycloneDX' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+
+  const [syft, cycloneDx, csv] = mocks.saveToFile.mock.calls;
+  expect(syft[1]).toBe('docker.io-velero-velero-v1.18.1-b55b90.syft.json');
+  expect(JSON.parse(syft[0]).artifacts).toHaveLength(2);
+  expect(cycloneDx[1]).toBe('docker.io-velero-velero-v1.18.1-b55b90.cdx.json');
+  expect(JSON.parse(cycloneDx[0]).bomFormat).toBe('CycloneDX');
+  expect(csv[1]).toBe('docker.io-velero-velero-v1.18.1-b55b90-packages.csv');
+  expect(csv[0]).toContain(
+    'pkg:golang/golang.org/x/net@v0.38.0,golang.org/x/net,v0.38.0,go-module,'
+  );
 });
 
 it('updates a mounted workload view on a new fetch and drops previous-cluster results', async () => {

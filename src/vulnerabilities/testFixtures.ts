@@ -1,3 +1,4 @@
+import type { SBOMSyft } from '../softwarecomposition/SBOMSyft';
 import type { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import type { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
 
@@ -67,6 +68,60 @@ export function summary(): VulnerabilityManifestSummary {
           namespace: 'relevant-reports',
         },
       },
+    },
+  };
+}
+
+export function sbom(): SBOMSyft {
+  return {
+    metadata: {
+      name: 'docker.io-velero-velero-v1.18.1-b55b90',
+      namespace: 'kubescape',
+      annotations: { 'kubescape.io/image-tag': 'docker.io/velero/velero:v1.18.1' },
+      labels: {},
+    } as any,
+    spec: {
+      metadata: { report: { createdAt: '2026-10-27T13:52:26Z' } },
+      syft: {
+        source: { id: 'docker.io/velero/velero@1145b55b90' },
+        descriptor: { name: 'syft', version: 'v1.42.3' },
+        distro: {
+          id: 'ubuntu',
+          name: 'Ubuntu',
+          prettyName: 'Ubuntu 22.04.5 LTS',
+          version: '22.04',
+          versionID: '22.04',
+        },
+        artifacts: [
+          {
+            id: 'aaa8',
+            name: 'base-files',
+            version: '12ubuntu4.7',
+            type: 'deb',
+            purl: 'pkg:deb/ubuntu/base-files@12ubuntu4.7',
+            foundBy: '',
+            language: '',
+            licenses: [
+              { value: 'GPL', spdxExpression: '', urls: [] },
+              { value: 'GPL', spdxExpression: '', urls: [] },
+            ],
+            cpes: [{ cpe: 'cpe:2.3:a:base-files:base-files:12ubuntu4.7:*:*:*:*:*:*:*' }],
+          },
+          {
+            id: 'bbb9',
+            name: 'golang.org/x/net',
+            version: 'v0.38.0',
+            type: 'go-module',
+            purl: 'pkg:golang/golang.org/x/net@v0.38.0',
+            foundBy: '',
+            language: 'go',
+            licenses: [],
+            cpes: ['cpe:2.3:a:golang:net:v0.38.0:*:*:*:*:*:*:*'],
+          },
+        ],
+        // a field of Syft that the plugin does not declare, which the export keeps
+        files: [{ id: 'f1', location: { path: '/etc/os-release' } }],
+      } as any,
     },
   };
 }
