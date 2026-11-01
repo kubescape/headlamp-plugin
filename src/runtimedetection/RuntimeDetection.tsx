@@ -12,6 +12,7 @@ import { Alert, Chip, IconButton, Stack, Tab, Tooltip, Typography } from '@mui/m
 import { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import { getAlertmanagerUrl } from '../common/config-store';
+import { PermittedIconButton } from '../common/permissions';
 import HeadlampTable from '../common/Table';
 import { TabPanel } from '../common/TabPanel';
 import { RoutingName } from '../index';
@@ -437,11 +438,13 @@ function RuleBindingsTab() {
           <code>RuntimeRuleAlertBinding</code> objects bind runtime rules to workloads by namespace
           and pod selectors.
         </Typography>
-        <Tooltip title="Add rule binding">
-          <IconButton onClick={() => history.push(createRouteURL(RoutingName.RuleBindingNew))}>
-            <Icon icon="mdi:add-circle" />
-          </IconButton>
-        </Tooltip>
+        <PermittedIconButton
+          check={{ group: 'kubescape.io', resource: 'runtimerulealertbindings', verb: 'create' }}
+          title="Add rule binding"
+          onClick={() => history.push(createRouteURL(RoutingName.RuleBindingNew))}
+        >
+          <Icon icon="mdi:add-circle" />
+        </PermittedIconButton>
       </Stack>
       {error && (
         <Alert severity="error" sx={{ mb: 1 }}>
@@ -496,9 +499,19 @@ function RuleBindingsTab() {
             header: '',
             accessorFn: (b: any) => b.metadata.name,
             Cell: ({ cell }: any) => (
-              <IconButton size="small" onClick={() => handleDelete(cell.getValue())}>
+              <PermittedIconButton
+                check={{
+                  group: 'kubescape.io',
+                  resource: 'runtimerulealertbindings',
+                  verb: 'delete',
+                  name: cell.getValue(),
+                }}
+                title="Delete"
+                ariaLabel={`Delete ${cell.getValue()}`}
+                onClick={() => handleDelete(cell.getValue())}
+              >
                 <Icon icon="mdi:delete-outline" />
-              </IconButton>
+              </PermittedIconButton>
             ),
             gridTemplate: 'min-content',
           },

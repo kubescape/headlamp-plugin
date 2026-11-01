@@ -22,6 +22,7 @@ import {
 import React, { useEffect, useRef, useState } from 'react';
 import { isAllowedNamespaceUpdated } from '../common/clusterContext';
 import { KubescapeConfig, kubescapeConfigStore } from '../common/config-store';
+import { createExceptionCheck, PermittedIconButton } from '../common/permissions';
 import { ProgressIndicator } from '../common/ProgressIndicator';
 import {
   getItemFromSessionStorage,
@@ -350,11 +351,13 @@ function ConfigurationScanningListView(
           {
             header: '',
             accessorFn: (control: Control) => (
-              <Tooltip title="Exclude control cluster-wide">
-                <IconButton size="small" onClick={() => setSelectedControl(control.controlID)}>
-                  <Icon icon="mdi:shield-plus-outline" />
-                </IconButton>
-              </Tooltip>
+              <PermittedIconButton
+                check={createExceptionCheck()}
+                title="Exclude control cluster-wide"
+                onClick={() => setSelectedControl(control.controlID)}
+              >
+                <Icon icon="mdi:shield-plus-outline" />
+              </PermittedIconButton>
             ),
             gridTemplate: 'min-content',
           },

@@ -2,9 +2,10 @@ import { Icon } from '@iconify/react';
 import { remove } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import { Link as HeadlampLink, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
-import { Button, IconButton, Tooltip } from '@mui/material';
+import { Button } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
+import { AccessCheck, PermittedIconButton } from '../common/permissions';
 import Table from '../common/Table';
 import { RoutingName } from '../index';
 import { clusterSecurityExceptionClass, securityExceptionClass } from '../model';
@@ -24,6 +25,19 @@ interface Row {
   creationTimestamp: string;
   isCluster: boolean;
   obj: KubeObject;
+}
+
+// Changing or deleting the exception of the row
+function exceptionCheck(row: Row, verb: 'update' | 'delete'): AccessCheck {
+  return row.isCluster
+    ? { group: 'kubescape.io', resource: 'clustersecurityexceptions', verb, name: row.name }
+    : {
+        group: 'kubescape.io',
+        resource: 'securityexceptions',
+        verb,
+        namespace: row.namespace,
+        name: row.name,
+      };
 }
 
 function toRow(obj: KubeObject, isCluster: boolean): Row {
@@ -159,16 +173,20 @@ export function SecurityExceptions() {
             header: '',
             accessorFn: (row: Row) => (
               <>
-                <Tooltip title="Edit">
-                  <IconButton size="small" onClick={() => setEditObj(row.obj)}>
-                    <Icon icon="mdi:pencil" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Delete">
-                  <IconButton size="small" onClick={() => handleDelete(row)}>
-                    <Icon icon="mdi:delete" />
-                  </IconButton>
-                </Tooltip>
+                <PermittedIconButton
+                  check={exceptionCheck(row, 'update')}
+                  title="Edit"
+                  onClick={() => setEditObj(row.obj)}
+                >
+                  <Icon icon="mdi:pencil" />
+                </PermittedIconButton>
+                <PermittedIconButton
+                  check={exceptionCheck(row, 'delete')}
+                  title="Delete"
+                  onClick={() => handleDelete(row)}
+                >
+                  <Icon icon="mdi:delete" />
+                </PermittedIconButton>
               </>
             ),
             gridTemplate: 'auto',

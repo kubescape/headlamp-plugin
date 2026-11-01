@@ -10,8 +10,9 @@ import {
   ShowHideLabel,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
-import { FormControlLabel, IconButton, Link, Switch, Tooltip } from '@mui/material';
+import { FormControlLabel, Link, Switch } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { createExceptionCheck, PermittedIconButton } from '../common/permissions';
 import makeSeverityLabel from '../common/SeverityLabel';
 import HeadlampTable from '../common/Table';
 import { getURLSegments } from '../common/url';
@@ -261,12 +262,16 @@ function Matches(
           },
           {
             header: '',
-            accessorFn: (item: VulnerabilityManifest.Match) => (
-              <Tooltip title="Create Vulnerability Exception">
-                <IconButton size="small" onClick={() => setSelectedCve(item.vulnerability.id)}>
-                  <Icon icon="mdi:shield-plus-outline" />
-                </IconButton>
-              </Tooltip>
+            accessorFn: () => '',
+            // rendered for the rows on the page only
+            Cell: ({ row }: any) => (
+              <PermittedIconButton
+                check={createExceptionCheck(workloadNamespace)}
+                title="Create Vulnerability Exception"
+                onClick={() => setSelectedCve(row.original.vulnerability.id)}
+              >
+                <Icon icon="mdi:shield-plus-outline" />
+              </PermittedIconButton>
             ),
             gridTemplate: 'min-content',
           },

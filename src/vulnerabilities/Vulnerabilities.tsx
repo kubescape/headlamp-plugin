@@ -10,20 +10,12 @@ import {
   Tabs as HeadlampTabs,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
-import {
-  Box,
-  Button,
-  FormControlLabel,
-  IconButton,
-  Stack,
-  Switch,
-  Tooltip,
-  Typography,
-} from '@mui/material';
+import { Box, Button, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { isAllowedNamespaceUpdated } from '../common/clusterContext';
 import { KubescapeConfig, kubescapeConfigStore } from '../common/config-store';
 import { ErrorMessage } from '../common/ErrorMessage';
+import { createExceptionCheck, PermittedIconButton } from '../common/permissions';
 import { ProgressIndicator } from '../common/ProgressIndicator';
 import {
   getItemFromSessionStorage,
@@ -315,12 +307,16 @@ function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
             },
             {
               header: '',
-              accessorFn: (item: CVEScan) => (
-                <Tooltip title="Exclude CVE cluster-wide">
-                  <IconButton size="small" onClick={() => setSelectedCve(item.CVE)}>
-                    <Icon icon="mdi:shield-plus-outline" />
-                  </IconButton>
-                </Tooltip>
+              accessorFn: () => '',
+              // rendered for the rows on the page only, not for every CVE
+              Cell: ({ row }: any) => (
+                <PermittedIconButton
+                  check={createExceptionCheck()}
+                  title="Exclude CVE cluster-wide"
+                  onClick={() => setSelectedCve(row.original.CVE)}
+                >
+                  <Icon icon="mdi:shield-plus-outline" />
+                </PermittedIconButton>
               ),
               gridTemplate: 'min-content',
             },
