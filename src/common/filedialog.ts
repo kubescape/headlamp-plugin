@@ -5,6 +5,24 @@ declare global {
   }
 }
 
+/**
+ * Whether the plugin runs in the Headlamp desktop app. Electron lets a page pick a file to
+ * save to, but not write to it, which left empty files behind.
+ */
+function isDesktopApp(): boolean {
+  return /\belectron\//i.test(navigator.userAgent);
+}
+
+// Saves the file through the download of the browser, or the save dialog of the desktop app
+function download(blob: Blob, fileName: string) {
+  const a = document.createElement('a');
+  a.href = window.URL.createObjectURL(blob);
+  a.download = fileName;
+  a.click();
+  // the download needs the URL a moment longer than the click
+  window.setTimeout(() => window.URL.revokeObjectURL(a.href), 1000);
+}
+
 export const saveToFile = async (
   content: string,
   defaultFileName: string,
@@ -12,38 +30,35 @@ export const saveToFile = async (
 ) => {
   const blob = new Blob([content], { type: 'text/plain' });
 
-  const createSaveFilePicker = async (): Promise<FileSystemFileHandle> => {
-    const fileHandle = await window.showSaveFilePicker({
-      suggestedName: defaultFileName,
-    });
-
-    return fileHandle;
-  };
-
-  let fileName = defaultFileName;
-  if (window.showSaveFilePicker) {
+  if (window.showSaveFilePicker && !isDesktopApp()) {
+    let fileHandle: FileSystemFileHandle;
     try {
-      const fileHandle = await createSaveFilePicker();
-      fileName = fileHandle.name;
-      const writable = await fileHandle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-    } catch (error) {
+      fileHandle = await window.showSaveFilePicker({ suggestedName: defaultFileName });
+    } catch (error: any) {
+      // the user closed the dialog
+      if (error?.name === 'AbortError') return null;
       console.error('Error selecting a file:', error);
+      download(blob, defaultFileName);
       return null;
     }
-  } else {
-    // For browsers that don't support window.showSaveFilePicker
-    const a = document.createElement('a');
-    a.href = window.URL.createObjectURL(blob);
-    a.download = defaultFileName;
 
-    // Trigger the download
-    a.click();
-
-    // Clean up
-    window.URL.revokeObjectURL(a.href);
+    try {
+      const writable = await (fileHandle as any).createWritable();
+      await writable.write(blob);
+      await writable.close();
+      enqueueSnackbar(`${fileHandle.name} saved successfully`, { variant: 'success' });
+    } catch (error: any) {
+      console.error('Error writing the file:', error);
+      enqueueSnackbar(
+        `Unable to write ${fileHandle.name}: ${error?.message ?? error}. Downloading it instead.`,
+        { variant: 'warning' }
+      );
+      download(blob, defaultFileName);
+    }
+    return null;
   }
 
-  enqueueSnackbar(`${fileName} saved successfully`, { variant: 'success' });
+  download(blob, defaultFileName);
+  enqueueSnackbar(`Downloading ${defaultFileName}`, { variant: 'success' });
+  return null;
 };
