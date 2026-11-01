@@ -2,6 +2,7 @@
   Registration of menu and routes in headlamp. 
 */
 import {
+  registerAppBarAction,
   // @ts-ignore
   registerDetailsViewSectionsProcessor,
   registerPluginSettings,
@@ -474,3 +475,8 @@ import { PLUGIN_NAME } from './common/config-store';
 import { KubescapeSettings } from './common/Settings';
 
 registerPluginSettings(PLUGIN_NAME, KubescapeSettings, true);
+
+// Headlamp's own search only finds Kubernetes objects and pages, so the plugin adds its own
+import { KubescapeSearchButton } from './search/KubescapeSearch';
+
+registerAppBarAction({ id: 'kubescape-search', action: <KubescapeSearchButton /> });
