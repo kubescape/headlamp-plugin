@@ -8,6 +8,8 @@ export type KubescapeConfig = {
   activeFrameworks: string[];
   pageSize: number;
   alertmanagerUrl: string | undefined;
+  // Prometheus service with the metrics of the Kubescape exporter, as namespace/service:port
+  prometheusUrl?: string;
   // the newest version of images, looked up at public services, on unless false
   imageVersions?: boolean;
   // the end of life of the release line of images, on unless false
@@ -47,4 +49,12 @@ export function getAlertmanagerUrl(): string | undefined {
 export function getPageSize(): number {
   const config = kubescapeConfigStore.get();
   return config?.pageSize || 50;
+}
+
+/** The API server proxy path of the configured Prometheus service. */
+export function getPrometheusUrl(): string | undefined {
+  const address = kubescapeConfigStore.get()?.prometheusUrl;
+  if (!address || !isValidAlertmanagerAddress(address)) return undefined;
+  const [namespace, serviceAndPort] = address.split('/');
+  return `/api/v1/namespaces/${namespace}/services/${serviceAndPort}/proxy`;
 }

@@ -26,6 +26,7 @@ import { getImageScanKey, WorkloadScan } from '../vulnerabilities/scanData';
 import { countBySeverity, getImageUpgrades, ImageUpgrade } from '../vulnerabilities/upgrades';
 import { readVulnerabilityScans } from '../vulnerabilities/Vulnerabilities';
 import { countCves, ExceptionExpiry, expiringExceptions, frameworkScores } from './summaries';
+import { TrendsSection } from './Trends';
 
 // Index of the Upgrades tab on the Vulnerabilities page
 const upgradesTabIndex = 3;
@@ -39,6 +40,7 @@ export default function KubescapeOverview() {
       />
       <ComplianceSummary />
       <VulnerabilitySummary />
+      <TrendsSection />
       <RuntimeAlertSummary />
       <ExceptionSummary />
     </>

@@ -11,6 +11,7 @@ import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import React from 'react';
+import { detectPrometheus } from '../overview/prometheus';
 import { detectAlertmanager } from '../runtimedetection/alertmanager';
 import { isValidAlertmanagerAddress, KubescapeConfig } from './config-store';
 
@@ -43,6 +44,19 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
   // Alertmanager addresses found in the selected cluster, null before looking
   const [detected, setDetected] = React.useState<string[] | null>(null);
   const [detecting, setDetecting] = React.useState(false);
+  const prometheusAddress = kubescapeData?.prometheusUrl ?? '';
+  const prometheusAddressError =
+    !!prometheusAddress && !isValidAlertmanagerAddress(prometheusAddress);
+  // Prometheus addresses found in the selected cluster, null before looking
+  const [detectedPrometheus, setDetectedPrometheus] = React.useState<string[] | null>(null);
+
+  const handleDetectPrometheus = async () => {
+    const addresses = await detectPrometheus(selectedCluster).catch(() => []);
+    setDetectedPrometheus(addresses);
+    if (!prometheusAddress && addresses.length > 0 && onDataChange) {
+      onDataChange({ ...data, prometheusUrl: addresses[0] });
+    }
+  };
 
   React.useEffect(() => {
     if (kubescapeData?.alertmanagerUrl !== undefined)
@@ -266,6 +280,52 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
           >
             {testMessage}
           </Alert>
+        )}
+      </Box>
+
+      <Box display="flex" flexDirection="column" mt={3}>
+        <Box display="flex" gap={2} alignItems="flex-start">
+          <TextField
+            label="Prometheus Service Address"
+            value={prometheusAddress}
+            error={prometheusAddressError}
+            helperText={
+              prometheusAddressError
+                ? 'Invalid format. Use: namespace/service-name:port'
+                : 'Prometheus with the metrics of the Kubescape exporter, for the trends on the Overview page. Format: namespace/service-name:port'
+            }
+            onChange={e => onDataChange?.({ ...data, prometheusUrl: e.target.value })}
+            fullWidth
+          />
+          <Button
+            variant="outlined"
+            disabled={!selectedCluster}
+            onClick={handleDetectPrometheus}
+            sx={{ mt: 1, minWidth: '100px' }}
+          >
+            Detect
+          </Button>
+        </Box>
+        {detectedPrometheus && detectedPrometheus.length === 0 && (
+          <Typography variant="body2" color="text.secondary">
+            No Prometheus service found in cluster {selectedCluster}.
+          </Typography>
+        )}
+        {detectedPrometheus && detectedPrometheus.length > 0 && (
+          <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+            <Typography variant="body2" color="text.secondary">
+              Found in {selectedCluster}:
+            </Typography>
+            {detectedPrometheus.map(address => (
+              <Chip
+                key={address}
+                label={address}
+                size="small"
+                color={address === prometheusAddress ? 'primary' : 'default'}
+                onClick={() => onDataChange?.({ ...data, prometheusUrl: address })}
+              />
+            ))}
+          </Box>
         )}
       </Box>
     </Box>
