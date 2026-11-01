@@ -1,8 +1,7 @@
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { vi } from 'vitest';
 import { ApplicationProfileDetail } from './ApplicationProfileDetail';
-import { NetworkNeighborhoodDetail } from './NetworkNeighborhoodDetail';
 
 const mocks = vi.hoisted(() => ({
   containerProfileGet: vi.fn(),
@@ -40,6 +39,26 @@ vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', () => ({
         </div>
       ))}
     </dl>
+  ),
+  // like Headlamp's tabs, every tab is mounted
+  Tabs: ({ tabs, onTabChanged }: any) => (
+    <div>
+      {tabs.map((tab: any, index: number) => (
+        <button key={tab.label} role="tab" onClick={() => onTabChanged?.(index)}>
+          {tab.label}
+        </button>
+      ))}
+      {tabs.map((tab: any) => (
+        <section key={tab.label} aria-label={tab.label}>
+          {tab.component}
+        </section>
+      ))}
+    </div>
+  ),
+}));
+vi.mock('../networkpolicies/Diagram', () => ({
+  WorkloadNetworkGraph: ({ kind, name, namespace }: any) => (
+    <div data-testid="network-graph">{`${kind} ${namespace}/${name}`}</div>
   ),
 }));
 vi.mock('@monaco-editor/react', () => ({
@@ -110,15 +129,6 @@ const legacyApplicationProfile = {
   },
 };
 
-const legacyNetworkNeighborhood = {
-  kind: 'NetworkNeighborhood',
-  metadata,
-  spec: {
-    containers: [{ name: 'web', egress: [{ dns: 'legacy.example.test' }] }],
-    initContainers: [{ name: 'setup', ingress: [{ dns: 'legacy-init.example.test' }] }],
-  },
-};
-
 beforeEach(() => {
   mocks.discoverProfileResource.mockReset();
   mocks.discoverProfileResource.mockResolvedValue({ plural: 'containerprofiles', modern: true });
@@ -128,13 +138,16 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-async function renderProfile(
-  Component: typeof ApplicationProfileDetail,
-  profile: typeof learnedProfile | typeof authoredProfile,
-  view: 'behavior' | 'network'
-) {
-  render(<Component />);
-  await waitFor(() => expect(mocks.discoverProfileResource).toHaveBeenCalledWith(view));
+function tabYaml(label: string) {
+  return (
+    within(screen.getByRole('region', { name: label })).getByTestId('profile-yaml').textContent ??
+    ''
+  );
+}
+
+async function renderProfile(profile: typeof learnedProfile | typeof authoredProfile) {
+  render(<ApplicationProfileDetail />);
+  await waitFor(() => expect(mocks.discoverProfileResource).toHaveBeenCalledWith('behavior'));
   await waitFor(() =>
     expect(mocks.containerProfileGet).toHaveBeenCalledWith(
       expect.any(Function),
@@ -147,14 +160,14 @@ async function renderProfile(
   expect(mocks.networkNeighborhoodGet).not.toHaveBeenCalled();
   const receive = mocks.containerProfileGet.mock.calls[0][0];
   act(() => receive({ jsonData: profile, metadata: profile.metadata }));
-  return screen.getAllByTestId('profile-yaml')[0].textContent ?? '';
 }
 
-it('reads a learned ContainerProfile through the existing application profile URL and shows only behavior', async () => {
-  const yaml = await renderProfile(ApplicationProfileDetail, learnedProfile, 'behavior');
+it('shows the behaviour of a learned ContainerProfile without its network peers', async () => {
+  await renderProfile(learnedProfile);
 
   expect(screen.getByRole('heading', { name: 'Application Profile' })).toBeTruthy();
   expect(screen.getByText('web-app')).toBeTruthy();
+  const yaml = tabYaml('Behaviour');
   expect(yaml).toContain('/bin/learned-web');
   expect(yaml).toContain('/etc/learned.conf');
   expect(yaml).toContain('amd64');
@@ -165,8 +178,9 @@ it('reads a learned ContainerProfile through the existing application profile UR
 });
 
 it('includes authored container and init container behavior without network fields', async () => {
-  const yaml = await renderProfile(ApplicationProfileDetail, authoredProfile, 'behavior');
+  await renderProfile(authoredProfile);
 
+  const yaml = tabYaml('Behaviour');
   expect(yaml).toContain('web');
   expect(yaml).toContain('/bin/authored-web');
   expect(yaml).toContain('authored-seccomp');
@@ -180,22 +194,23 @@ it('includes authored container and init container behavior without network fiel
   expect(yaml).not.toContain('debug.example.test');
 });
 
-it('reads a learned ContainerProfile through the existing network URL and shows only network peers', async () => {
-  const yaml = await renderProfile(NetworkNeighborhoodDetail, learnedProfile, 'network');
+it('shows the network peers of a learned ContainerProfile on a tab of their own', async () => {
+  await renderProfile(learnedProfile);
 
-  expect(screen.getByRole('heading', { name: 'Network Neighborhood' })).toBeTruthy();
-  expect(screen.getByText('web-app')).toBeTruthy();
+  const yaml = tabYaml('Network');
   expect(yaml).toContain('client.example.test');
   expect(yaml).toContain('server.example.test');
   expect(yaml).not.toContain('/bin/learned-web');
   expect(yaml).not.toContain('/etc/learned.conf');
   expect(yaml).not.toContain('learned-seccomp');
   expect(yaml).not.toContain('learned-call');
+  expect(tabYaml('Full YAML')).toContain('kind: ContainerProfile');
 });
 
 it('includes authored container and init container network peers without behavior fields', async () => {
-  const yaml = await renderProfile(NetworkNeighborhoodDetail, authoredProfile, 'network');
+  await renderProfile(authoredProfile);
 
+  const yaml = tabYaml('Network');
   expect(yaml).toContain('web');
   expect(yaml).toContain('authored.example.test');
   expect(yaml).toContain('setup');
@@ -207,6 +222,15 @@ it('includes authored container and init container network peers without behavio
   expect(yaml).not.toContain('authored-call');
   expect(yaml).not.toContain('/etc/authored.conf');
   expect(yaml).not.toContain('/bin/authored-debug');
+});
+
+it('draws the network graph of the workload only when its tab is open', async () => {
+  await renderProfile(learnedProfile);
+
+  // a graph laid out on a hidden tab would have no size
+  expect(screen.queryByTestId('network-graph')).toBeNull();
+  fireEvent.click(screen.getByRole('tab', { name: 'Network graph' }));
+  expect(screen.getByTestId('network-graph').textContent).toBe('Deployment workloads/web-app');
 });
 
 it('reports a failed ContainerProfile GET at an existing detail URL', async () => {
@@ -246,47 +270,22 @@ it('keeps the behavior detail usable against an older ApplicationProfile API', a
   act(() => receive({ jsonData: legacyApplicationProfile, metadata }));
 
   expect(screen.getByRole('heading', { name: 'Application Profile' })).toBeTruthy();
-  const yaml = screen.getAllByTestId('profile-yaml')[0].textContent ?? '';
+  const yaml = tabYaml('Behaviour');
   expect(yaml).toContain('kind: ApplicationProfile');
   expect(yaml).toContain('/bin/legacy-web');
   expect(yaml).toContain('/etc/legacy.conf');
-});
-
-it('keeps the network detail usable against an older NetworkNeighborhood API', async () => {
-  mocks.discoverProfileResource.mockResolvedValue({
-    plural: 'networkneighborhoods',
-    modern: false,
-  });
-
-  render(<NetworkNeighborhoodDetail />);
-
-  await waitFor(() => expect(mocks.discoverProfileResource).toHaveBeenCalledWith('network'));
-  await waitFor(() =>
-    expect(mocks.networkNeighborhoodGet).toHaveBeenCalledWith(
-      expect.any(Function),
-      'deployment-web-app',
-      'workloads',
-      expect.any(Function)
-    )
-  );
-  expect(mocks.containerProfileGet).not.toHaveBeenCalled();
-  const receive = mocks.networkNeighborhoodGet.mock.calls[0][0];
-  act(() => receive({ jsonData: legacyNetworkNeighborhood, metadata }));
-
-  expect(screen.getByRole('heading', { name: 'Network Neighborhood' })).toBeTruthy();
-  const yaml = screen.getAllByTestId('profile-yaml')[0].textContent ?? '';
-  expect(yaml).toContain('kind: NetworkNeighborhood');
-  expect(yaml).toContain('legacy.example.test');
-  expect(yaml).toContain('legacy-init.example.test');
+  // an ApplicationProfile has no network peers, but the workload still has a graph
+  expect(screen.queryByRole('tab', { name: 'Network' })).toBeNull();
+  expect(screen.getByRole('tab', { name: 'Network graph' })).toBeTruthy();
 });
 
 it('shows a discovery failure instead of guessing a detail API', async () => {
   mocks.discoverProfileResource.mockRejectedValue(new Error('Discovery forbidden'));
 
-  render(<NetworkNeighborhoodDetail />);
+  render(<ApplicationProfileDetail />);
 
   expect((await screen.findByRole('alert')).textContent).toContain('Discovery forbidden');
   expect(mocks.containerProfileGet).not.toHaveBeenCalled();
-  expect(mocks.networkNeighborhoodGet).not.toHaveBeenCalled();
+  expect(mocks.applicationProfileGet).not.toHaveBeenCalled();
   expect(screen.queryByTestId('profile-yaml')).toBeNull();
 });

@@ -8,7 +8,6 @@ import { SeccompProfileDetail } from './SeccompProfiles';
 const mocks = vi.hoisted(() => ({
   containerProfileClass: { pluralName: 'containerprofiles' },
   applicationProfileClass: { pluralName: 'applicationprofiles' },
-  networkNeighborhoodsClass: { pluralName: 'networkneighborhoods' },
   discoverProfileResource: vi.fn(),
   listQuery: vi.fn(),
   fetchObject: vi.fn(),
@@ -25,7 +24,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../index', () => ({
   RoutingName: {
     RuntimeDetection: 'Runtime Detection',
-    NetworkNeighborhoodDetail: 'Network Neighborhood Detail',
     RuleNew: 'New Rule',
     RuleEdit: 'Edit Rule',
     RuleBindingNew: 'New Rule Binding',
@@ -37,7 +35,6 @@ vi.mock('../index', () => ({
 vi.mock('../model', () => ({
   containerProfileClass: mocks.containerProfileClass,
   applicationProfileClass: mocks.applicationProfileClass,
-  networkNeighborhoodsClass: mocks.networkNeighborhoodsClass,
   listQuery: mocks.listQuery,
   fetchObject: mocks.fetchObject,
   seccompProfileClass: mocks.seccompProfileClass,
@@ -172,15 +169,11 @@ function renderRuntimeDetection() {
   );
 }
 
-function openProfileTab(view: 'behavior' | 'network') {
-  fireEvent.click(
-    screen.getByRole('tab', {
-      name: view === 'behavior' ? 'Application Profiles' : 'Network Neighborhoods',
-    })
-  );
+function openProfileTab() {
+  fireEvent.click(screen.getByRole('tab', { name: 'Application Profiles' }));
 }
 
-it('lists one ContainerProfile in both behavior and network views while preserving deep links and status', async () => {
+it('lists the ContainerProfiles with links to their pages and their status', async () => {
   mocks.listQuery.mockImplementation(async resourceClass => {
     if (resourceClass !== mocks.containerProfileClass) {
       throw new Error(`Unsupported resource ${resourceClass.pluralName}`);
@@ -192,66 +185,36 @@ it('lists one ContainerProfile in both behavior and network views while preservi
 
   expect(mocks.discoverProfileResource).not.toHaveBeenCalled();
   expect(mocks.listQuery).not.toHaveBeenCalled();
-  openProfileTab('behavior');
+  openProfileTab();
   await waitFor(() => expect(mocks.listQuery).toHaveBeenCalledTimes(1));
+  expect(mocks.discoverProfileResource.mock.calls.map(([view]) => view)).toEqual(['behavior']);
 
-  const behaviorTable = screen.getByTestId('table-Name-Kind-Namespace-Container-Status');
-  await waitFor(() => expect(within(behaviorTable).getByText('completed')).toBeTruthy());
-  expect(within(behaviorTable).getByText('web-app', { selector: 'a' }).getAttribute('href')).toBe(
+  const table = screen.getByTestId('table-Name-Kind-Namespace-Container-Status');
+  await waitFor(() => expect(within(table).getByText('completed')).toBeTruthy());
+  expect(within(table).getByText('web-app', { selector: 'a' }).getAttribute('href')).toBe(
     '/Runtime Detection/workloads/deployment-web-app'
   );
-
-  openProfileTab('network');
-  await waitFor(() => expect(mocks.listQuery).toHaveBeenCalledTimes(2));
-  expect(mocks.discoverProfileResource.mock.calls.map(([view]) => view)).toEqual([
-    'behavior',
-    'network',
-  ]);
-  expect(
-    mocks.listQuery.mock.calls.every(
-      ([resourceClass]) => resourceClass === mocks.containerProfileClass
-    )
-  ).toBe(true);
-  const networkTable = screen.getByTestId('table-Name-Kind-Namespace-Container-Status');
-  expect(within(networkTable).getByText('web-app', { selector: 'a' }).getAttribute('href')).toBe(
-    '/Network Neighborhood Detail/workloads/deployment-web-app'
-  );
+  // the network traffic is on the profile page, not on a tab of its own
+  expect(screen.queryByRole('tab', { name: 'Network Neighborhoods' })).toBeNull();
 });
 
 it('lists legacy profile resources on an older Storage API without changing detail links', async () => {
-  mocks.discoverProfileResource.mockImplementation(async view =>
-    view === 'behavior'
-      ? { plural: 'applicationprofiles', modern: false }
-      : { plural: 'networkneighborhoods', modern: false }
-  );
-  mocks.listQuery.mockImplementation(async resourceClass => [
-    {
-      ...profile,
-      kind:
-        resourceClass === mocks.applicationProfileClass
-          ? 'ApplicationProfile'
-          : 'NetworkNeighborhood',
-    },
-  ]);
+  mocks.discoverProfileResource.mockResolvedValue({
+    plural: 'applicationprofiles',
+    modern: false,
+  });
+  mocks.listQuery.mockImplementation(async () => [{ ...profile, kind: 'ApplicationProfile' }]);
 
   renderRuntimeDetection();
 
-  openProfileTab('behavior');
+  openProfileTab();
   await waitFor(() => expect(mocks.listQuery).toHaveBeenCalledTimes(1));
-  const behaviorTable = screen.getByTestId('table-Name-Kind-Namespace-Container-Status');
-  expect(within(behaviorTable).getByText('web-app', { selector: 'a' }).getAttribute('href')).toBe(
-    '/Runtime Detection/workloads/deployment-web-app'
-  );
-
-  openProfileTab('network');
-  await waitFor(() => expect(mocks.listQuery).toHaveBeenCalledTimes(2));
   expect(mocks.listQuery.mock.calls.map(([resourceClass]) => resourceClass)).toEqual([
     mocks.applicationProfileClass,
-    mocks.networkNeighborhoodsClass,
   ]);
-  const networkTable = screen.getByTestId('table-Name-Kind-Namespace-Container-Status');
-  expect(within(networkTable).getByText('web-app', { selector: 'a' }).getAttribute('href')).toBe(
-    '/Network Neighborhood Detail/workloads/deployment-web-app'
+  const table = screen.getByTestId('table-Name-Kind-Namespace-Container-Status');
+  expect(within(table).getByText('web-app', { selector: 'a' }).getAttribute('href')).toBe(
+    '/Runtime Detection/workloads/deployment-web-app'
   );
 });
 
@@ -260,24 +223,20 @@ it('shows API discovery failures without querying an assumed legacy resource', a
 
   renderRuntimeDetection();
 
-  openProfileTab('behavior');
-  expect(await screen.findByText('Discovery forbidden')).toBeTruthy();
-  openProfileTab('network');
+  openProfileTab();
   expect(await screen.findByText('Discovery forbidden')).toBeTruthy();
   expect(mocks.listQuery).not.toHaveBeenCalled();
   expect(screen.queryByText('No profiles found.')).toBeNull();
 });
 
-it('shows retrieval errors for both views instead of a misleading empty result', async () => {
+it('shows retrieval errors instead of a misleading empty result', async () => {
   mocks.listQuery.mockRejectedValue(new Error('Storage temporarily unavailable'));
 
   renderRuntimeDetection();
 
-  openProfileTab('behavior');
+  openProfileTab();
   expect(await screen.findByText('Storage temporarily unavailable')).toBeTruthy();
-  openProfileTab('network');
-  expect(await screen.findByText('Storage temporarily unavailable')).toBeTruthy();
-  expect(mocks.listQuery).toHaveBeenCalledTimes(2);
+  expect(mocks.listQuery).toHaveBeenCalledTimes(1);
   expect(screen.queryAllByTestId('table-Name-Kind-Namespace-Container-Status')).toHaveLength(0);
   expect(screen.queryByText('No profiles found.')).toBeNull();
 });
@@ -287,23 +246,41 @@ it('accepts an empty ContainerProfile list without showing an API error', async 
 
   renderRuntimeDetection();
 
-  openProfileTab('behavior');
+  openProfileTab();
   expect(await screen.findByText('No profiles found.')).toBeTruthy();
   expect(
     screen.getByTestId('table-Name-Kind-Namespace-Container-Status').querySelectorAll('tbody tr')
   ).toHaveLength(0);
-  openProfileTab('network');
-  expect(await screen.findByText('No profiles found.')).toBeTruthy();
-  expect(mocks.listQuery).toHaveBeenCalledTimes(2);
-  expect(
-    mocks.listQuery.mock.calls.every(
-      ([resourceClass]) => resourceClass === mocks.containerProfileClass
-    )
-  ).toBe(true);
   expect(screen.queryByText('Storage temporarily unavailable')).toBeNull();
+});
+
+it('lists the profiles of all selected clusters and names the clusters that fail', async () => {
+  mocks.clusters = ['cluster-a', 'cluster-b', 'cluster-c'];
+  mocks.listQuery.mockImplementation(async (_resourceClass, cluster) => {
+    if (cluster === 'cluster-b') throw new Error('forbidden');
+    return [{ ...profile, metadata: { ...profile.metadata, cluster } }];
+  });
+
+  renderRuntimeDetection();
+  openProfileTab();
+
   expect(
-    screen.getByTestId('table-Name-Kind-Namespace-Container-Status').querySelectorAll('tbody tr')
-  ).toHaveLength(0);
+    await screen.findByText('Unable to read the profiles of cluster cluster-b: forbidden')
+  ).toBeTruthy();
+  expect(mocks.discoverProfileResource.mock.calls).toEqual([
+    ['behavior', 'cluster-a'],
+    ['behavior', 'cluster-b'],
+    ['behavior', 'cluster-c'],
+  ]);
+  const table = screen.getByTestId('table-Name-Cluster-Kind-Namespace-Container-Status');
+  expect(
+    within(table)
+      .getAllByText('web-app', { selector: 'a' })
+      .map(link => link.getAttribute('href'))
+  ).toEqual([
+    '/cluster-a/Runtime Detection/workloads/deployment-web-app',
+    '/cluster-c/Runtime Detection/workloads/deployment-web-app',
+  ]);
 });
 
 it('offers the Alertmanager found in the cluster while none is configured', async () => {

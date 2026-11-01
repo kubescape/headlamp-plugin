@@ -4,7 +4,11 @@
 import '@xyflow/react/dist/style.css';
 import './style.css';
 import { Icon } from '@iconify/react';
-import { SectionBox, Tabs as HeadlampTabs } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import {
+  Link as HeadlampLink,
+  SectionBox,
+  Tabs as HeadlampTabs,
+} from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
 import Editor from '@monaco-editor/react';
 import { Alert, Box, Stack, Typography, useTheme } from '@mui/material';
@@ -22,6 +26,7 @@ import * as yaml from 'js-yaml';
 import { CSSProperties, useEffect, useMemo, useState } from 'react';
 import { useEditorTheme } from '../common/theme';
 import { getURLSegments } from '../common/url';
+import { RoutingName } from '../index';
 import { fetchObject, generatedNetworkPolicyClass } from '../model';
 import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
 import { ExistingPolicies, flowStatusColors, flowStatusLabels } from './ExistingPolicies';
@@ -29,6 +34,11 @@ import { createNodes, layoutElements } from './layout';
 import { NetworkPolicyActions } from './NetworkPolicyActions';
 import { FlowStatusContext, nodeFlowStatuses, nodeTypes } from './nodes';
 import { ComparisonResult, usePolicyComparison, workloadOf } from './policyComparison';
+
+/** The name the storage gives the generated network policy of a workload. */
+export function generatedPolicyName(kind: string, name: string) {
+  return `${kind.toLowerCase()}-${name}`;
+}
 
 /**
  * Reads a generated network policy once: the storage generates it from the runtime profiles,
@@ -78,6 +88,55 @@ export default function KubescapeNetworkPolicyDiagram() {
     );
   }
   return <GeneratedPolicyTabs policy={policy} cluster={cluster} />;
+}
+
+/**
+ * The diagram of the network policy Kubescape generated for a workload from the traffic of all
+ * its pods, as on the Network Policies page, with a link to that page.
+ */
+export function WorkloadNetworkGraph(
+  props: Readonly<{ kind: string; name: string; namespace: string; cluster?: string }>
+) {
+  const { kind, name, namespace } = props;
+  const cluster = props.cluster || getCluster() || '';
+  const policyName = generatedPolicyName(kind, name);
+  const { policy, error } = useGeneratedPolicy(policyName, namespace, cluster);
+
+  if (error) {
+    return (
+      <Alert severity="info" sx={{ mt: 2 }}>
+        Kubescape has not generated a network policy for this workload: {error}
+      </Alert>
+    );
+  }
+  if (!policy) {
+    return (
+      <Typography color="text.secondary" sx={{ mt: 2 }}>
+        Reading the generated network policy…
+      </Typography>
+    );
+  }
+  return <WorkloadGraph policy={policy} cluster={cluster} />;
+}
+
+function WorkloadGraph(props: Readonly<{ policy: GeneratedNetworkPolicy; cluster: string }>) {
+  const { policy, cluster } = props;
+  const comparison = usePolicyComparison(policy, cluster);
+  return (
+    <Box sx={{ mt: 2 }}>
+      <Typography variant="body2" color="text.secondary">
+        The traffic of all pods of the workload, as the network policy Kubescape generates from it.{' '}
+        <HeadlampLink
+          routeName={RoutingName.KubescapeNetworkPolicyDiagram}
+          params={{ namespace: policy.metadata.namespace, name: policy.metadata.name }}
+          activeCluster={cluster || undefined}
+        >
+          Open the network policy
+        </HeadlampLink>
+      </Typography>
+      <NetworkPolicyDiagram generatedNetworkPolicy={policy} comparison={comparison} />
+    </Box>
+  );
 }
 
 function GeneratedPolicyTabs(props: Readonly<{ policy: GeneratedNetworkPolicy; cluster: string }>) {

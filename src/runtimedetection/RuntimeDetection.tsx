@@ -24,7 +24,6 @@ import {
   ClusterError,
   containerProfileClass,
   listQuery,
-  networkNeighborhoodsClass,
   rulesClass,
 } from '../model';
 import { ContainerProfile } from '../softwarecomposition/ContainerProfile';
@@ -101,7 +100,6 @@ export function RuntimeDetection() {
         <TabList onChange={(_: any, v: string) => setTabValue(v)} sx={{ mb: 1 }}>
           <Tab label="Alerts" value="alerts" />
           <Tab label="Application Profiles" value="profiles" />
-          <Tab label="Network Neighborhoods" value="networks" />
           <Tab label="Seccomp Profiles" value="seccomp" />
           <Tab label="Rules" value="rules" />
           <Tab label="Rule Bindings" value="bindings" />
@@ -111,9 +109,6 @@ export function RuntimeDetection() {
         </TabPanel>
         <TabPanel value="profiles">
           {tabValue === 'profiles' && <ApplicationProfilesTab />}
-        </TabPanel>
-        <TabPanel value="networks">
-          {tabValue === 'networks' && <NetworkNeighborhoodsTab />}
         </TabPanel>
         <TabPanel value="seccomp">{tabValue === 'seccomp' && <SeccompProfilesTab />}</TabPanel>
         <TabPanel value="rules">
@@ -330,72 +325,67 @@ function AlertsTab() {
   );
 }
 
-// ── Container Profile perspectives ───────────────────────────────────────────
+// ── Application profiles ─────────────────────────────────────────────────────
 
+// The profiles learned per version of each workload: behaviour and network traffic. The traffic
+// is shown on the profile page as the diagram of the workload's generated network policy.
 function ApplicationProfilesTab() {
-  return <ContainerProfilesTab view="behavior" />;
-}
-
-function NetworkNeighborhoodsTab() {
-  return <ContainerProfilesTab view="network" />;
-}
-
-function ContainerProfilesTab({ view }: Readonly<{ view: 'behavior' | 'network' }>) {
+  const clusters = useHLSelectedClusters();
+  const clustersKey = clusters.join(',');
   const [items, setItems] = useState<ContainerProfile[]>([]);
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<ClusterError[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    discoverProfileResource(view)
-      .then(source =>
-        listQuery(
-          source.modern
-            ? containerProfileClass
-            : view === 'behavior'
-            ? applicationProfileClass
-            : networkNeighborhoodsClass
-        )
+    // Each cluster may run another Storage release, so the resource is discovered per cluster
+    Promise.allSettled(
+      clusters.map(cluster =>
+        discoverProfileResource('behavior', cluster).then(async source => ({
+          cluster,
+          source,
+          profiles: (await listQuery(
+            source.modern ? containerProfileClass : applicationProfileClass,
+            cluster
+          )) as ContainerProfile[],
+        }))
       )
-      .then((profiles: ContainerProfile[]) => {
-        if (active) setItems(profiles);
-      })
-      .catch((err: any) => {
-        if (active) setError(err?.message ?? String(err));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    ).then(results => {
+      if (!active) return;
+      const found = results.flatMap(result =>
+        result.status === 'fulfilled' ? [result.value] : []
+      );
+      setItems(found.flatMap(result => result.profiles));
+      setErrors(rejectedClusters(clusters, results));
+      setLoading(false);
+    });
     return () => {
       active = false;
     };
-  }, [view]);
+  }, [clustersKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const behavior = view === 'behavior';
+  // With one cluster its error says enough; with several, the cluster is named
+  const error = clusters.length === 1 ? errors[0]?.message : undefined;
+  const failed = errors.length === clusters.length;
+
   return (
     <>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        {behavior ? (
-          <>
-            Workload behaviour baselines recorded by Kubescape. Used by <code>ap.*</code> CEL
-            functions in rules.
-          </>
-        ) : (
-          <>
-            Workload network baselines recorded by Kubescape. Used by <code>nn.*</code> CEL
-            functions in rules.
-          </>
-        )}
+        The behaviour and network traffic Kubescape learned per version of each workload, used by
+        the <code>ap.*</code> and <code>nn.*</code> CEL functions in rules. A profile shows its
+        traffic as a network graph.
       </Typography>
-      {error && (
+      {error ? (
         <Alert severity="error" sx={{ mb: 1 }}>
           {error}
         </Alert>
+      ) : (
+        <ClusterErrors errors={errors} what="the profiles" />
       )}
-      {!loading && !error && items.length === 0 && (
+      {!loading && errors.length === 0 && items.length === 0 && (
         <Typography variant="body2">No profiles found.</Typography>
       )}
-      {!error && (
+      {!failed && (
         <HeadlampTable
           data={items}
           columns={[
@@ -405,9 +395,8 @@ function ContainerProfilesTab({ view }: Readonly<{ view: 'behavior' | 'network' 
                 p.metadata.labels?.['kubescape.io/workload-name'] ?? p.metadata.name,
               Cell: ({ cell, row }: any) => (
                 <HeadlampLink
-                  routeName={
-                    behavior ? RoutingName.RuntimeDetection : RoutingName.NetworkNeighborhoodDetail
-                  }
+                  routeName={RoutingName.RuntimeDetection}
+                  activeCluster={row.original.metadata.cluster}
                   params={{
                     name: row.original.metadata.name,
                     namespace: row.original.metadata.namespace,
@@ -418,6 +407,7 @@ function ContainerProfilesTab({ view }: Readonly<{ view: 'behavior' | 'network' 
               ),
               gridTemplate: 'auto',
             },
+            ...clusterColumns<ContainerProfile>(clusters, p => p.metadata.cluster),
             {
               header: 'Kind',
               accessorFn: (p: ContainerProfile) =>
