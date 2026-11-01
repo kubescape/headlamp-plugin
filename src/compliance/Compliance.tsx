@@ -102,14 +102,6 @@ export default function ComplianceView(): JSX.Element {
     customFrameworks?.find(fw => fw.name === kubescapeConfig?.framework) ??
     fullRegolibraryFramework;
 
-  // kubescape namespace
-  useEffect(() => {
-    setItemInSessionStorage(KubescapeSettings.KubescapeNamespace, null);
-    getKubescapeNamespace().then(({ error }) => {
-      console.log(error);
-    });
-  }, []);
-
   // fetch workload scans
   useEffect(() => {
     if (regoLoading) return;

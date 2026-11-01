@@ -75,10 +75,19 @@ function FrameworksTable(
   const { enqueueSnackbar } = useSnackbar();
 
   const handleDelete = async (framework: FrameWork) => {
-    const { kubeScapeNamespace } = await getKubescapeNamespace();
-    await remove(
-      `/api/v1/namespaces/${kubeScapeNamespace}/configmaps/${framework.configmapManifestName}`
-    );
+    const { kubeScapeNamespace, error } = await getKubescapeNamespace();
+    if (!kubeScapeNamespace) {
+      enqueueSnackbar(error ?? 'Kubescape namespace not found', { variant: 'error' });
+      return;
+    }
+    try {
+      await remove(
+        `/api/v1/namespaces/${kubeScapeNamespace}/configmaps/${framework.configmapManifestName}`
+      );
+    } catch (err: any) {
+      enqueueSnackbar(err?.message ?? `Failed to delete ${framework.name}`, { variant: 'error' });
+      return;
+    }
 
     enqueueSnackbar(`${framework.name} deleted successfully`, { variant: 'success' });
   };

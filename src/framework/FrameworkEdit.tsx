@@ -35,11 +35,10 @@ import { ErrorContainer } from '../common/ErrorContainer';
 import { ErrorMessage } from '../common/ErrorMessage';
 import { saveToFile } from '../common/filedialog';
 import { getKubescapePluginUrl } from '../common/PluginHelper';
-import { getItemFromSessionStorage, KubescapeSettings } from '../common/sessionStorage';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { getURLSegments } from '../common/url';
 import { complianceSeverity } from '../compliance/Compliance';
-import { checkUniqueness } from '../custom-objects/api-queries';
+import { checkUniqueness, useKubescapeNamespace } from '../custom-objects/api-queries';
 import { customObjectLabel } from '../model';
 import { Control, defaultFrameworkNames, FrameWork, Rule, useRegoData } from '../rego';
 
@@ -51,11 +50,10 @@ declare global {
 }
 
 export function FrameworkNew() {
-  const kubeScapeNamespace = getItemFromSessionStorage<string>(
-    KubescapeSettings.KubescapeNamespace
-  );
+  const { kubeScapeNamespace, error, loading } = useKubescapeNamespace();
+  if (loading) return <></>;
   if (!kubeScapeNamespace)
-    return <ErrorMessage error={new ApiError('Kubescape namespace not found')} />;
+    return <ErrorMessage error={new ApiError(error ?? 'Kubescape namespace not found')} />;
 
   return (
     <FrameworkEditor
@@ -67,12 +65,20 @@ export function FrameworkNew() {
 
 export function FrameworkEdit() {
   const [configMapName] = getURLSegments(-1);
-  const kubeScapeNamespace = getItemFromSessionStorage<string>(
-    KubescapeSettings.KubescapeNamespace
-  );
+  const { kubeScapeNamespace, error, loading } = useKubescapeNamespace();
+  if (loading) return <></>;
   if (!kubeScapeNamespace)
-    return <ErrorMessage error={new ApiError('Kubescape namespace not found')} />;
+    return <ErrorMessage error={new ApiError(error ?? 'Kubescape namespace not found')} />;
 
+  return (
+    <FrameworkEditLoader configMapName={configMapName} kubeScapeNamespace={kubeScapeNamespace} />
+  );
+}
+
+function FrameworkEditLoader(
+  props: Readonly<{ configMapName: string; kubeScapeNamespace: string }>
+) {
+  const { configMapName, kubeScapeNamespace } = props;
   const [configMap] = K8s.ResourceClasses.ConfigMap.useGet(configMapName, kubeScapeNamespace);
   const { controls, loading: regoLoading } = useRegoData();
 
