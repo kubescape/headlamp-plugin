@@ -11,11 +11,11 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { Box, Button, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { isAllowedNamespaceUpdated } from '../common/clusterContext';
 import { KubescapeConfig, kubescapeConfigStore } from '../common/config-store';
 import { ErrorMessage } from '../common/ErrorMessage';
-import { createExceptionCheck, PermittedIconButton } from '../common/permissions';
+import { createExceptionCheck, Permitted, PermittedIconButton } from '../common/permissions';
 import { ProgressIndicator } from '../common/ProgressIndicator';
 import {
   getItemFromSessionStorage,
@@ -32,6 +32,7 @@ import { vulnerabilityManifestClass, vulnerabilityManifestSummaryClass } from '.
 import { handleListPaginationTasks, QueryTask } from '../query';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
+import { CVEScan, getCVEList } from './cveList';
 import ImageListView from './ImageList';
 import WorkloadScanListView from './ResourceList';
 import {
@@ -45,18 +46,6 @@ import {
 } from './scanData';
 
 export type { ImageScan, WorkloadScan } from './scanData';
-
-interface CVEScan {
-  CVE: string;
-  description: string;
-  severity: string;
-  baseScore: number;
-  workloads: Set<string>;
-  images: Set<string>;
-  artifacts: Set<string>;
-  fixed: boolean;
-  relevant: boolean | undefined;
-}
 
 // A VulnerabilityManifestSummary holds counts and two references, about a kilobyte
 const summaryPageSize = 500;
@@ -170,14 +159,21 @@ function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
     KubescapeSettings.FixedCVEs,
     false
   );
-  const [selectedCve, setSelectedCve] = useState<string | null>(null);
+  const [exceptionCves, setExceptionCves] = useState<string[] | null>(null);
+  // clears the selection once the exception for the selected CVEs exists
+  const clearSelection = useRef<() => void>(() => {});
 
-  const cveList = getCVEList(workloadScans);
-
-  let cveListFiltered = cveList;
-  if (isRelevantCVESwitchChecked)
-    cveListFiltered = cveListFiltered.filter(cve => cve.relevant === undefined || cve.relevant);
-  if (isFixedCVESwitchChecked) cveListFiltered = cveListFiltered.filter(cve => cve.fixed);
+  // built once per set of scans; selecting rows or opening a dialog renders again
+  const cveList = useMemo(() => getCVEList(workloadScans), [workloadScans]);
+  const cveListFiltered = useMemo(
+    () =>
+      cveList.filter(
+        cve =>
+          (!isRelevantCVESwitchChecked || cve.relevant === undefined || cve.relevant) &&
+          (!isFixedCVESwitchChecked || cve.fixed)
+      ),
+    [cveList, isRelevantCVESwitchChecked, isFixedCVESwitchChecked]
+  );
 
   return (
     <>
@@ -315,7 +311,7 @@ function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
                 <PermittedIconButton
                   check={createExceptionCheck()}
                   title="Exclude CVE cluster-wide"
-                  onClick={() => setSelectedCve(row.original.CVE)}
+                  onClick={() => setExceptionCves([row.original.CVE])}
                 >
                   <Icon icon="mdi:shield-plus-outline" />
                 </PermittedIconButton>
@@ -332,71 +328,39 @@ function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
             ],
           }}
           reflectInURL="cve"
+          enableRowSelection
+          getRowId={(item: CVEScan) => item.CVE}
+          renderRowSelectionToolbar={({ table }) => {
+            const selected = table.getSelectedRowModel().rows.map(row => row.original.CVE);
+            clearSelection.current = () => table.resetRowSelection();
+            return (
+              <Permitted check={createExceptionCheck()}>
+                {allowed => (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    disabled={!allowed}
+                    startIcon={<Icon icon="mdi:shield-plus-outline" />}
+                    onClick={() => setExceptionCves(selected)}
+                  >
+                    Exclude {selected.length} {selected.length === 1 ? 'CVE' : 'CVEs'} cluster-wide
+                  </Button>
+                )}
+              </Permitted>
+            );
+          }}
         />
       </SectionBox>
 
-      {selectedCve && (
+      {exceptionCves && (
         <GuidedClusterVulnerabilityExceptionForm
-          cveId={selectedCve}
-          onClose={() => setSelectedCve(null)}
+          cveIds={exceptionCves}
+          onClose={() => setExceptionCves(null)}
+          onCreated={() => clearSelection.current()}
         />
       )}
     </>
   );
-}
-
-// create a list of CVE-ID with affected workloads and images
-function getCVEList(workloadScans: WorkloadScan[]): CVEScan[] {
-  const vulnerabilityList: CVEScan[] = [];
-
-  for (const workloadScan of workloadScans) {
-    if (workloadScan.imageScan?.matches) {
-      for (const match of workloadScan.imageScan.matches) {
-        const cve = vulnerabilityList.find(element => element.CVE === match.vulnerability.id);
-
-        const isRelevant = workloadScan.relevant?.matches?.some(
-          match => match.vulnerability.id === cve?.CVE
-        );
-
-        if (cve) {
-          cve.workloads.add(workloadScan.name + '/' + workloadScan.container);
-          cve.images.add(workloadScan.imageScan.imageName);
-          cve.artifacts.add(match.artifact.name + ' ' + match.artifact.version);
-
-          cve.fixed = cve.fixed || !!match.vulnerability.fix?.versions;
-          cve.relevant = cve.relevant || isRelevant;
-        } else {
-          const newCve: CVEScan = {
-            CVE: match.vulnerability.id,
-            description: match.vulnerability.description,
-            severity: match.vulnerability.severity,
-            baseScore: match.vulnerability.cvss ? match.vulnerability.cvss[0].metrics.baseScore : 0,
-            workloads: new Set<string>(),
-            images: new Set<string>(),
-            artifacts: new Set<string>(),
-            fixed: !!match.vulnerability.fix?.versions,
-            relevant: isRelevant,
-          };
-
-          // if vulnerability has no description, try get it from related
-          if (!newCve.description && match.relatedVulnerabilities) {
-            newCve.description = match.relatedVulnerabilities
-              .filter(rv => rv.id === newCve.CVE)
-              .map(rv => rv.description)
-              .join();
-          }
-
-          newCve.workloads.add(workloadScan.name + '/' + workloadScan.container);
-          newCve.images.add(workloadScan.imageScan.imageName);
-          newCve.artifacts.add(match.artifact.name + ' ' + match.artifact.version);
-
-          vulnerabilityList.push(newCve);
-        }
-      }
-    }
-  }
-
-  return vulnerabilityList;
 }
 
 function initQueryTasks(
