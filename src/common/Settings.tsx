@@ -178,6 +178,15 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
         <FormControlLabel
           control={
             <Switch
+              checked={kubescapeData?.notifications !== false}
+              onChange={(_, checked) => onDataChange?.({ ...data, notifications: checked })}
+            />
+          }
+          label="Notify about critical runtime alerts and security exceptions that expire within a week"
+        />
+        <FormControlLabel
+          control={
+            <Switch
               checked={kubescapeData?.imageVersions !== false}
               onChange={(_, checked) => onDataChange?.({ ...data, imageVersions: checked })}
             />

@@ -456,6 +456,11 @@ import addKubescapeNamespaceSection from './sections/NamespaceSection';
 
 registerDetailsViewSectionsProcessor(addKubescapeNamespaceSection);
 
+// Notifications for critical runtime alerts and expiring exceptions
+import { startNotifications } from './common/notifications';
+
+startNotifications();
+
 // Register plugin settings
 import { PLUGIN_NAME } from './common/config-store';
 import { KubescapeSettings } from './common/Settings';
