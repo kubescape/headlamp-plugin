@@ -14,11 +14,15 @@ import {
   ClusterSecurityException,
   SecurityException,
 } from '../softwarecomposition/SecurityException';
+import { exceptionHistory } from './history';
 import { SecurityExceptionForm } from './SecurityExceptionForm';
 
 interface Row {
   name: string;
   namespace: string;
+  author: string;
+  // who changed the exception last, according to its history
+  lastChange: string;
   reason: string;
   expiresAt: string;
   postureCount: number;
@@ -43,9 +47,15 @@ function exceptionCheck(row: Row, verb: 'update' | 'delete'): AccessCheck {
 
 function toRow(obj: KubeObject, isCluster: boolean): Row {
   const spec = obj.jsonData?.spec ?? {};
+  const lastEntry = exceptionHistory(obj.jsonData).at(-1);
   return {
     name: obj.metadata.name,
     namespace: isCluster ? 'Cluster-scoped' : obj.metadata.namespace ?? '',
+    author: spec.author ?? '',
+    lastChange:
+      lastEntry?.action === 'changed'
+        ? `${lastEntry.user ?? 'unknown user'}, ${new Date(lastEntry.time).toLocaleString()}`
+        : '',
     reason: spec.reason ?? '',
     expiresAt: spec.expiresAt ?? '',
     postureCount: spec.posture?.length ?? 0,
@@ -134,6 +144,14 @@ export function SecurityExceptions() {
             accessorKey: 'namespace',
           },
           {
+            header: 'Author',
+            accessorKey: 'author',
+          },
+          {
+            header: 'Last changed by',
+            accessorKey: 'lastChange',
+          },
+          {
             header: 'Reason',
             accessorKey: 'reason',
           },
@@ -147,6 +165,7 @@ export function SecurityExceptions() {
               return (
                 <span style={expired ? { color: 'red', fontWeight: 'bold' } : {}}>
                   {new Date(val).toLocaleDateString()}
+                  {expired && ' (expired, no longer applied)'}
                 </span>
               );
             },

@@ -1,5 +1,6 @@
 import {
   Box,
+  Checkbox,
   FormControl,
   FormControlLabel,
   InputLabel,
@@ -10,6 +11,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { useCurrentUser } from '../common/currentUser';
 import {
   VulnerabilityJustification,
   VulnerabilityStatus,
@@ -93,15 +95,64 @@ export function MetadataFields(
         value={reason}
         onChange={e => onReasonChange(e.target.value)}
       />
+      <ExpiryField expiresDate={expiresDate} onExpiresDateChange={onExpiresDateChange} />
+      <RecordedAs />
+    </>
+  );
+}
+
+// A date in the local time zone, as a date input shows it
+export function dateInDays(days: number, now: Date = new Date()): string {
+  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + days);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/**
+ * When the exception expires, or that it never does, which an empty date means. Choosing an
+ * expiry proposes a date a month ahead.
+ */
+function ExpiryField(
+  props: Readonly<{ expiresDate: string; onExpiresDateChange: (v: string) => void }>
+) {
+  const { expiresDate, onExpiresDateChange } = props;
+  const neverExpires = expiresDate === '';
+  return (
+    <Stack direction="row" spacing={2} alignItems="center">
       <TextField
         label="Expires at"
         type="date"
         fullWidth
+        disabled={neverExpires}
         InputLabelProps={{ shrink: true }}
+        inputProps={{ min: dateInDays(0) }}
         value={expiresDate}
         onChange={e => onExpiresDateChange(e.target.value)}
+        helperText={neverExpires ? 'The exception applies until it is deleted.' : undefined}
       />
-    </>
+      <FormControlLabel
+        sx={{ whiteSpace: 'nowrap' }}
+        control={
+          <Checkbox
+            checked={neverExpires}
+            onChange={(_, checked) => onExpiresDateChange(checked ? '' : dateInDays(30))}
+          />
+        }
+        label="Never expires"
+      />
+    </Stack>
+  );
+}
+
+// Tells the user under which name the change is recorded in the history of the exception
+function RecordedAs() {
+  const user = useCurrentUser();
+  return (
+    <Typography variant="body2" color="text.secondary">
+      {user
+        ? `The change is recorded in the history of the exception as ${user}.`
+        : 'The cluster does not tell who you are, so the change is recorded without a name.'}
+    </Typography>
   );
 }
 

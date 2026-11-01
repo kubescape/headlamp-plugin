@@ -29,6 +29,7 @@ import {
   VulnerabilityJustification,
   VulnerabilityStatus,
 } from '../softwarecomposition/SecurityException';
+import { recordChangeByCurrentUser } from './history';
 import {
   JUSTIFICATION_OPTIONS,
   MetadataFields,
@@ -256,27 +257,35 @@ export function SecurityExceptionForm(props: Readonly<SecurityExceptionFormProps
     };
 
     try {
+      // Keeps the author and history of an edited exception, and adds this change
+      const previous = isEdit ? existing : undefined;
       if (clusterScoped) {
-        const obj: ClusterSecurityException = {
-          ...(existing as ClusterSecurityException),
-          apiVersion: 'kubescape.io/v1beta1',
-          kind: 'ClusterSecurityException',
-          metadata: { ...existing?.metadata, name },
-          spec,
-        };
+        const obj = await recordChangeByCurrentUser<ClusterSecurityException>(
+          {
+            ...(existing as ClusterSecurityException),
+            apiVersion: 'kubescape.io/v1beta1',
+            kind: 'ClusterSecurityException',
+            metadata: { ...existing?.metadata, name },
+            spec,
+          },
+          previous
+        );
         if (isEdit) {
           await put(`/apis/kubescape.io/v1beta1/clustersecurityexceptions/${name}`, obj as any);
         } else {
           await post('/apis/kubescape.io/v1beta1/clustersecurityexceptions', obj);
         }
       } else {
-        const obj: SecurityException = {
-          ...(existing as SecurityException),
-          apiVersion: 'kubescape.io/v1beta1',
-          kind: 'SecurityException',
-          metadata: { ...existing?.metadata, name, namespace },
-          spec,
-        };
+        const obj = await recordChangeByCurrentUser<SecurityException>(
+          {
+            ...(existing as SecurityException),
+            apiVersion: 'kubescape.io/v1beta1',
+            kind: 'SecurityException',
+            metadata: { ...existing?.metadata, name, namespace },
+            spec,
+          },
+          previous
+        );
         if (isEdit) {
           await put(
             `/apis/kubescape.io/v1beta1/namespaces/${namespace}/securityexceptions/${name}`,

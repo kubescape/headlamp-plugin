@@ -70,6 +70,7 @@ export interface SecurityException {
     namespace: string;
     creationTimestamp?: string;
     uid?: string;
+    annotations?: Record<string, string>;
   };
   spec: SecurityExceptionSpec;
 }
@@ -81,6 +82,7 @@ export interface ClusterSecurityException {
     name: string;
     creationTimestamp?: string;
     uid?: string;
+    annotations?: Record<string, string>;
   };
   spec: SecurityExceptionSpec;
 }
