@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 import { RuntimeDetection } from './RuntimeDetection';
+import { SeccompProfileDetail } from './SeccompProfiles';
 
 const mocks = vi.hoisted(() => ({
   containerProfileClass: { pluralName: 'containerprofiles' },
@@ -10,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   networkNeighborhoodsClass: { pluralName: 'networkneighborhoods' },
   discoverProfileResource: vi.fn(),
   listQuery: vi.fn(),
+  fetchObject: vi.fn(),
+  seccompProfileClass: { pluralName: 'seccompprofiles' },
   request: vi.fn(),
   remove: vi.fn(),
   post: vi.fn(),
@@ -27,6 +30,7 @@ vi.mock('../index', () => ({
     RuleEdit: 'Edit Rule',
     RuleBindingNew: 'New Rule Binding',
     RuleBindingEdit: 'Edit Rule Binding',
+    SeccompProfileDetail: 'Seccomp Profile',
   },
   useHLSelectedClusters: () => mocks.clusters,
 }));
@@ -35,6 +39,9 @@ vi.mock('../model', () => ({
   applicationProfileClass: mocks.applicationProfileClass,
   networkNeighborhoodsClass: mocks.networkNeighborhoodsClass,
   listQuery: mocks.listQuery,
+  fetchObject: mocks.fetchObject,
+  seccompProfileClass: mocks.seccompProfileClass,
+  seccompProfileStorageClass: { pluralName: 'seccompprofiles' },
   rulesClass: { useList: () => [mocks.ruleObjects] },
 }));
 vi.mock('../softwarecomposition/profileApi', () => ({
@@ -544,4 +551,68 @@ it('lists and deletes the rule bindings of each selected cluster', async () => {
       { cluster: 'cluster-b' }
     )
   );
+});
+
+const seccompProfile = {
+  metadata: {
+    name: 'deployment-web',
+    namespace: 'shop',
+    labels: { 'kubescape.io/workload-name': 'web', 'kubescape.io/workload-kind': 'Deployment' },
+  },
+  spec: {
+    containers: [
+      {
+        name: 'web',
+        spec: {
+          defaultAction: 'SCMP_ACT_ERRNO',
+          syscalls: [{ names: ['read', 'write', 'openat'], action: 'SCMP_ACT_ALLOW' }],
+        },
+      },
+      { name: 'sidecar', spec: { defaultAction: 'SCMP_ACT_ERRNO', syscalls: [] } },
+    ],
+  },
+  status: {
+    containers: {
+      web: { status: 'Installed', localhostProfile: 'kubescape/shop/deployment-web/web.json' },
+    },
+  },
+};
+
+function serveSeccompProfilesFromCrd() {
+  mocks.request.mockImplementation(async (url: string) =>
+    url === '/apis/kubescape.io/v1' ? { resources: [{ name: 'seccompprofiles' }] } : { items: [] }
+  );
+}
+
+it('lists the seccomp profiles that Kubescape generated', async () => {
+  serveSeccompProfilesFromCrd();
+  mocks.listQuery.mockResolvedValue([seccompProfile]);
+
+  renderRuntimeDetection();
+  fireEvent.click(screen.getByRole('tab', { name: 'Seccomp Profiles' }));
+
+  const link = await screen.findByText('web', { selector: 'a' });
+  expect(link.getAttribute('href')).toBe('/Seccomp Profile/shop/deployment-web');
+  expect(mocks.listQuery).toHaveBeenCalledWith(mocks.seccompProfileClass, 'cluster-a');
+  const row = link.closest('tr')!;
+  expect(within(row).getByText('web, sidecar')).toBeTruthy();
+  expect(within(row).getByText('1 of 2')).toBeTruthy();
+});
+
+it('shows how to apply an installed seccomp profile and explains a missing one', async () => {
+  serveSeccompProfilesFromCrd();
+  mocks.fetchObject.mockResolvedValue(seccompProfile);
+
+  render(
+    <MemoryRouter initialEntries={['/kubescape/seccompprofiles/shop/deployment-web']}>
+      <SeccompProfileDetail />
+    </MemoryRouter>
+  );
+
+  expect(await screen.findByText('openat, read, write')).toBeTruthy();
+  expect(mocks.fetchObject.mock.calls[0].slice(0, 2)).toEqual(['deployment-web', 'shop']);
+  expect(
+    screen.getByText(/localhostProfile: kubescape\/shop\/deployment-web\/web\.json/)
+  ).toBeTruthy();
+  expect(screen.getByText(/has not installed this profile on the nodes yet/)).toBeTruthy();
 });

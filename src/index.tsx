@@ -48,6 +48,7 @@ namespace RoutingPath {
   export const ApplicationProfiles = '/kubescape/applicationprofiles';
   export const RuntimeDetection = '/kubescape/runtimedetection/:namespace/:name';
   export const NetworkNeighborhoodDetail = '/kubescape/networkneighborhood/:namespace/:name';
+  export const SeccompProfileDetail = '/kubescape/seccompprofiles/:namespace/:name';
   export const RuleBindingNew = '/kubescape/rulebinding/new';
   export const RuleBindingEdit = '/kubescape/rulebinding/:name';
 }
@@ -75,6 +76,7 @@ export namespace RoutingName {
   export const KubescapeWorkloadConfigurationScanFixes = 'Workload Configuration Fixes';
   export const RuntimeDetection = 'Runtime Detection';
   export const NetworkNeighborhoodDetail = 'Network Neighborhood Detail';
+  export const SeccompProfileDetail = 'Seccomp Profile';
   export const VAP = 'Validation Admission Policies';
   export const RuleNew = 'New Rule';
   export const RuleEdit = 'Edit Rule';
@@ -387,6 +389,16 @@ registerRoute({
   component: () => <NetworkNeighborhoodDetail />,
   exact: true,
   name: RoutingName.NetworkNeighborhoodDetail,
+});
+
+import { SeccompProfileDetail } from './runtimedetection/SeccompProfiles';
+
+registerRoute({
+  path: RoutingPath.SeccompProfileDetail,
+  sidebar: 'runtime-detection',
+  component: () => <SeccompProfileDetail />,
+  exact: true,
+  name: RoutingName.SeccompProfileDetail,
 });
 
 import { FrameworksPage } from './framework/FrameworkList';

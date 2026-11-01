@@ -49,6 +49,7 @@ import {
   fetchKubescapeSilences,
   Silence,
 } from './alertmanager';
+import { SeccompProfilesTab } from './SeccompProfiles';
 import { SilenceButton, SilenceList, SilenceNotice } from './Silences';
 
 const { createRouteURL } = Router;
@@ -101,6 +102,7 @@ export function RuntimeDetection() {
           <Tab label="Alerts" value="alerts" />
           <Tab label="Application Profiles" value="profiles" />
           <Tab label="Network Neighborhoods" value="networks" />
+          <Tab label="Seccomp Profiles" value="seccomp" />
           <Tab label="Rules" value="rules" />
           <Tab label="Rule Bindings" value="bindings" />
         </TabList>
@@ -113,6 +115,7 @@ export function RuntimeDetection() {
         <TabPanel value="networks">
           {tabValue === 'networks' && <NetworkNeighborhoodsTab />}
         </TabPanel>
+        <TabPanel value="seccomp">{tabValue === 'seccomp' && <SeccompProfilesTab />}</TabPanel>
         <TabPanel value="rules">
           <RulesTab />
         </TabPanel>

@@ -141,6 +141,26 @@ export const knownServersClass = makeCustomResourceClass({
   customResourceDefinition: undefined as any,
 });
 
+// Kubescape stores seccomp profiles in a CRD or in its storage, depending on the
+// seccompProfileBackend setting of the operator chart (src/runtimedetection/seccomp.ts).
+export const seccompProfileClass = makeCustomResourceClass({
+  apiInfo: [{ group: 'kubescape.io', version: 'v1' }],
+  isNamespaced: true,
+  singularName: 'seccompprofile',
+  pluralName: 'seccompprofiles',
+  kind: 'SeccompProfile',
+  customResourceDefinition: undefined as any,
+});
+
+export const seccompProfileStorageClass = makeCustomResourceClass({
+  apiInfo: spdxGroupVersions,
+  isNamespaced: true,
+  singularName: 'seccompprofile',
+  pluralName: 'seccompprofiles',
+  kind: 'SeccompProfile',
+  customResourceDefinition: undefined as any,
+});
+
 export const rulesClass = makeCustomResourceClass({
   apiInfo: [{ group: 'kubescape.io', version: 'v1' }],
   isNamespaced: true,
