@@ -27,7 +27,7 @@ import {
   rulesClass,
 } from '../model';
 import { ContainerProfile } from '../softwarecomposition/ContainerProfile';
-import { discoverProfileResource } from '../softwarecomposition/profileApi';
+import { discoverProfileResource, ProfileResource } from '../softwarecomposition/profileApi';
 import { AlertDetailsDialog } from './AlertDetails';
 import {
   alertMessage,
@@ -48,6 +48,8 @@ import {
   fetchKubescapeSilences,
   Silence,
 } from './alertmanager';
+import { isPartial } from './relearn';
+import { RelearnButton } from './RelearnDialog';
 import { SeccompProfilesTab } from './SeccompProfiles';
 import { SilenceButton, SilenceList, SilenceNotice } from './Silences';
 
@@ -333,8 +335,12 @@ function ApplicationProfilesTab() {
   const clusters = useHLSelectedClusters();
   const clustersKey = clusters.join(',');
   const [items, setItems] = useState<ContainerProfile[]>([]);
+  // the profile resource of each cluster, for relearning
+  const [sources, setSources] = useState<Record<string, ProfileResource>>({});
   const [errors, setErrors] = useState<ClusterError[]>([]);
   const [loading, setLoading] = useState(true);
+  // a relearn changes the profiles, so they are read again
+  const [reloads, setReloads] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -356,13 +362,14 @@ function ApplicationProfilesTab() {
         result.status === 'fulfilled' ? [result.value] : []
       );
       setItems(found.flatMap(result => result.profiles));
+      setSources(Object.fromEntries(found.map(result => [result.cluster, result.source])));
       setErrors(rejectedClusters(clusters, results));
       setLoading(false);
     });
     return () => {
       active = false;
     };
-  }, [clustersKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [clustersKey, reloads]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // With one cluster its error says enough; with several, the cluster is named
   const error = clusters.length === 1 ? errors[0]?.message : undefined;
@@ -388,6 +395,8 @@ function ApplicationProfilesTab() {
       {!failed && (
         <HeadlampTable
           data={items}
+          // the cells of a row keep what the row first showed, so each profile is a row of its own
+          getRowId={profileId}
           columns={[
             {
               header: 'Name',
@@ -427,14 +436,37 @@ function ApplicationProfilesTab() {
             },
             {
               header: 'Status',
-              accessorFn: (p: ContainerProfile) => p.metadata.annotations?.['kubescape.io/status'],
+              // a partial profile missed the start of its container
+              accessorFn: (p: ContainerProfile) =>
+                [p.metadata.annotations?.['kubescape.io/status'], isPartial(p) ? '(partial)' : '']
+                  .filter(Boolean)
+                  .join(' '),
               gridTemplate: 'auto',
+            },
+            {
+              header: '',
+              accessorFn: profileId,
+              Cell: ({ row }: any) => {
+                const source = sources[row.original.metadata.cluster ?? ''];
+                return source ? (
+                  <RelearnButton
+                    profile={row.original}
+                    source={source}
+                    onDone={() => setReloads(count => count + 1)}
+                  />
+                ) : null;
+              },
+              gridTemplate: 'min-content',
             },
           ]}
         />
       )}
     </>
   );
+}
+
+function profileId(profile: ContainerProfile) {
+  return `${profile.metadata.cluster ?? ''}/${profile.metadata.namespace}/${profile.metadata.name}`;
 }
 
 // ── Rules ─────────────────────────────────────────────────────────────────────

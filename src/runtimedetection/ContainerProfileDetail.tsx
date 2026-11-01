@@ -2,6 +2,7 @@
   The profile Kubescape learned for a version of a workload: its behaviour and network traffic,
   as YAML and, for the whole workload, as the diagram of the Network Policies page.
 */
+import { Router } from '@kinvolk/headlamp-plugin/lib';
 import {
   NameValueTable,
   SectionBox,
@@ -12,14 +13,19 @@ import Editor from '@monaco-editor/react';
 import { Alert, Box, Typography } from '@mui/material';
 import * as yaml from 'js-yaml';
 import { useEffect, useState } from 'react';
+import { useHistory } from 'react-router-dom';
 import { useEditorTheme } from '../common/theme';
 import { getURLSegments } from '../common/url';
+import { RoutingName } from '../index';
 import { applicationProfileClass, containerProfileClass } from '../model';
 import { WorkloadNetworkGraph } from '../networkpolicies/Diagram';
 import { ContainerProfile, getProfileContainers } from '../softwarecomposition/ContainerProfile';
 import { discoverProfileResource, ProfileResource } from '../softwarecomposition/profileApi';
 import { behaviorBaseline, networkBaseline } from './profileViews';
-import { workloadOfProfile } from './relearn';
+import { isPartial, workloadOfProfile } from './relearn';
+import { RelearnButton } from './RelearnDialog';
+
+const { createRouteURL } = Router;
 
 export function ContainerProfileDetail() {
   const [source, setSource] = useState<ProfileResource | null>(null);
@@ -71,6 +77,7 @@ function count(containers: ReturnType<typeof getProfileContainers>, field: strin
 
 function ResolvedProfileDetail({ source }: Readonly<{ source: ProfileResource }>) {
   const [name, namespace] = getURLSegments(-1, -2);
+  const history = useHistory();
   const [item, setItem] = useState<KubeObject | null>(null);
   const [error, setError] = useState('');
   // the graph is laid out once it is shown, so it is only drawn on its tab
@@ -127,7 +134,22 @@ function ResolvedProfileDetail({ source }: Readonly<{ source: ProfileResource }>
   }));
 
   return (
-    <SectionBox title="Application Profile" backLink>
+    <SectionBox
+      title="Application Profile"
+      backLink
+      headerProps={{
+        actions: [
+          <RelearnButton
+            key="relearn"
+            text
+            profile={profile}
+            source={source}
+            // the profile is gone or no longer used
+            onDone={() => history.push(createRouteURL(RoutingName.ApplicationProfiles))}
+          />,
+        ],
+      }}
+    >
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         What Kubescape learned from {source.modern ? 'ContainerProfile' : resourceClass.kind}{' '}
         {profile.metadata.name}.
@@ -148,6 +170,15 @@ function ResolvedProfileDetail({ source }: Readonly<{ source: ProfileResource }>
             value: containers.map(container => container.name).join(', ') || '—',
           },
           { name: 'Status', value: profile.metadata.annotations?.['kubescape.io/status'] ?? '—' },
+          ...(isPartial(profile)
+            ? [
+                {
+                  name: 'Completion',
+                  value:
+                    'Partial: Kubescape began to watch the container after it had started, so it did not learn the start',
+                },
+              ]
+            : []),
           { name: 'Execs', value: count(containers, 'execs') },
           { name: 'Opens', value: count(containers, 'opens') },
           ...(source.modern

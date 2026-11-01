@@ -23,6 +23,10 @@ vi.mock('../softwarecomposition/profileApi', () => ({
 vi.mock('../common/url', () => ({
   getURLSegments: () => [mocks.name, mocks.namespace],
 }));
+vi.mock('../index', () => ({ RoutingName: { ApplicationProfiles: 'Application Profile' } }));
+vi.mock('@kinvolk/headlamp-plugin/lib', () => ({
+  Router: { createRouteURL: (route: string) => `/${route}` },
+}));
 vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', () => ({
   SectionBox: ({ title, children }: { title: string; children: ReactNode }) => (
     <section>

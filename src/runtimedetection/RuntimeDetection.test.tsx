@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   fetchObject: vi.fn(),
   seccompProfileClass: { pluralName: 'seccompprofiles' },
   request: vi.fn(),
+  patch: vi.fn(),
   remove: vi.fn(),
   post: vi.fn(),
   updateConfig: vi.fn(),
@@ -65,6 +66,7 @@ vi.mock('../common/SetupCheck', () => ({ SetupCheck: () => null }));
 vi.mock('@kinvolk/headlamp-plugin/lib/ApiProxy', () => ({
   request: mocks.request,
   remove: mocks.remove,
+  patch: mocks.patch,
   post: mocks.post,
 }));
 vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', () => ({
@@ -153,6 +155,7 @@ beforeEach(() => {
   mocks.request.mockReset();
   mocks.request.mockResolvedValue({ items: [] });
   mocks.remove.mockReset();
+  mocks.patch.mockReset();
   mocks.post.mockReset();
   mocks.updateConfig.mockReset();
   mocks.clusters = ['cluster-a'];
@@ -173,6 +176,85 @@ function openProfileTab() {
   fireEvent.click(screen.getByRole('tab', { name: 'Application Profiles' }));
 }
 
+it('relearns a workload: restarts it and deletes the profiles it recorded', async () => {
+  const workloadProfile = (name: string, workload = 'web-app') => ({
+    kind: 'ContainerProfile',
+    metadata: {
+      name,
+      namespace: 'workloads',
+      cluster: 'cluster-a',
+      labels: {
+        'kubescape.io/workload-name': workload,
+        'kubescape.io/workload-kind': 'Deployment',
+      },
+      annotations: { 'kubescape.io/status': 'completed', 'kubescape.io/completion': 'partial' },
+    },
+  });
+  const current = workloadProfile('replicaset-web-app-6d4cf56db6-web-1a2b-3c4d');
+  mocks.listQuery.mockResolvedValue([current]);
+  mocks.request.mockImplementation(async (url: string) =>
+    url.endsWith('/namespaces/workloads/containerprofiles')
+      ? {
+          items: [
+            current,
+            workloadProfile('replicaset-web-app-5b7d9c8f6-web-5e6f-7a8b'),
+            workloadProfile('replicaset-api-7c9b8d6f5-api-9c0d-1e2f', 'api'),
+          ],
+        }
+      : url === '/apis/apps/v1/namespaces/workloads/deployments/web-app'
+      ? { spec: { replicas: 1, strategy: { type: 'Recreate' } } }
+      : { items: [] }
+  );
+  mocks.patch.mockResolvedValue({});
+  mocks.remove.mockResolvedValue({});
+
+  renderRuntimeDetection();
+  openProfileTab();
+  // the profile missed the start of its container
+  expect(await screen.findByText('completed (partial)')).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Relearn' }));
+  const dialog = screen.getByRole('dialog', { name: 'Relearn Deployment web-app' });
+  expect(within(dialog).getByText(/did not learn the start/)).toBeTruthy();
+  expect(
+    await within(dialog).findByText('Delete the 2 recorded profiles of this workload')
+  ).toBeTruthy();
+  // the restart is spelled out, with what it does to this workload
+  expect(
+    within(dialog).getByText('This restarts Deployment web-app in cluster cluster-a')
+  ).toBeTruthy();
+  expect(
+    await within(dialog).findByText(
+      /its pod stops before the new one starts, so the workload is down/
+    )
+  ).toBeTruthy();
+  const listsBefore = mocks.listQuery.mock.calls.length;
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Restart and relearn' }));
+
+  await waitFor(() => expect(mocks.remove).toHaveBeenCalledTimes(2));
+  expect(mocks.patch).toHaveBeenCalledWith(
+    '/apis/apps/v1/namespaces/workloads/deployments/web-app',
+    {
+      spec: {
+        template: {
+          metadata: {
+            annotations: { 'kubectl.kubernetes.io/restartedAt': expect.any(String) },
+          },
+        },
+      },
+    },
+    false,
+    { cluster: 'cluster-a' }
+  );
+  expect(mocks.remove.mock.calls.map(([url]) => url.split('/').pop())).toEqual([
+    'replicaset-web-app-6d4cf56db6-web-1a2b-3c4d',
+    'replicaset-web-app-5b7d9c8f6-web-5e6f-7a8b',
+  ]);
+  // the list is read again
+  await waitFor(() => expect(mocks.listQuery.mock.calls.length).toBeGreaterThan(listsBefore));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+});
+
 it('lists the ContainerProfiles with links to their pages and their status', async () => {
   mocks.listQuery.mockImplementation(async resourceClass => {
     if (resourceClass !== mocks.containerProfileClass) {
@@ -189,7 +271,7 @@ it('lists the ContainerProfiles with links to their pages and their status', asy
   await waitFor(() => expect(mocks.listQuery).toHaveBeenCalledTimes(1));
   expect(mocks.discoverProfileResource.mock.calls.map(([view]) => view)).toEqual(['behavior']);
 
-  const table = screen.getByTestId('table-Name-Kind-Namespace-Container-Status');
+  const table = screen.getByTestId('table-Name-Kind-Namespace-Container-Status-');
   await waitFor(() => expect(within(table).getByText('completed')).toBeTruthy());
   expect(within(table).getByText('web-app', { selector: 'a' }).getAttribute('href')).toBe(
     '/Runtime Detection/workloads/deployment-web-app'
@@ -212,7 +294,7 @@ it('lists legacy profile resources on an older Storage API without changing deta
   expect(mocks.listQuery.mock.calls.map(([resourceClass]) => resourceClass)).toEqual([
     mocks.applicationProfileClass,
   ]);
-  const table = screen.getByTestId('table-Name-Kind-Namespace-Container-Status');
+  const table = screen.getByTestId('table-Name-Kind-Namespace-Container-Status-');
   expect(within(table).getByText('web-app', { selector: 'a' }).getAttribute('href')).toBe(
     '/Runtime Detection/workloads/deployment-web-app'
   );
@@ -237,7 +319,7 @@ it('shows retrieval errors instead of a misleading empty result', async () => {
   openProfileTab();
   expect(await screen.findByText('Storage temporarily unavailable')).toBeTruthy();
   expect(mocks.listQuery).toHaveBeenCalledTimes(1);
-  expect(screen.queryAllByTestId('table-Name-Kind-Namespace-Container-Status')).toHaveLength(0);
+  expect(screen.queryAllByTestId('table-Name-Kind-Namespace-Container-Status-')).toHaveLength(0);
   expect(screen.queryByText('No profiles found.')).toBeNull();
 });
 
@@ -249,7 +331,7 @@ it('accepts an empty ContainerProfile list without showing an API error', async 
   openProfileTab();
   expect(await screen.findByText('No profiles found.')).toBeTruthy();
   expect(
-    screen.getByTestId('table-Name-Kind-Namespace-Container-Status').querySelectorAll('tbody tr')
+    screen.getByTestId('table-Name-Kind-Namespace-Container-Status-').querySelectorAll('tbody tr')
   ).toHaveLength(0);
   expect(screen.queryByText('Storage temporarily unavailable')).toBeNull();
 });
@@ -272,7 +354,7 @@ it('lists the profiles of all selected clusters and names the clusters that fail
     ['behavior', 'cluster-b'],
     ['behavior', 'cluster-c'],
   ]);
-  const table = screen.getByTestId('table-Name-Cluster-Kind-Namespace-Container-Status');
+  const table = screen.getByTestId('table-Name-Cluster-Kind-Namespace-Container-Status-');
   expect(
     within(table)
       .getAllByText('web-app', { selector: 'a' })
