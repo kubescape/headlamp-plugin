@@ -1,16 +1,18 @@
 /* 
   Create nodes for the networkpolicy diagram. 
 */
-import { Box, Tooltip } from '@mui/material';
+import { Box, Tooltip, useTheme } from '@mui/material';
 import { Handle, Node, NodeProps, Position } from '@xyflow/react';
 import * as yaml from 'js-yaml';
-import { ReactNode } from 'react';
+import { createContext, CSSProperties, ReactNode, useContext } from 'react';
 import {
   GeneratedNetworkPolicy,
   NetworkPolicy,
 } from '../softwarecomposition/GeneratedNetworkPolicy';
+import { Direction, FlowResult, FlowStatus } from './compare';
+import { flowStatusColors, flowStatusDescriptions } from './ExistingPolicies';
 import { K8sNamespace, LogosKubernetes, TablerWorld } from './icons';
-import { isClusterRange } from './layout';
+import { isClusterRange, withoutPerPodLabels } from './layout';
 import { compactPorts, portsText } from './ports';
 
 const sourceHandle = <Handle type="source" position={Position.Right} id="source" />;
@@ -28,6 +30,68 @@ export type ConnectedNode = Node<{
   // for a node of many pods, the labels whose values differ between them
   differingLabels?: string[];
 }>;
+
+/** Whether the current NetworkPolicies allow the traffic of a node, and which do. */
+export interface NodeFlowStatus {
+  status: FlowStatus;
+  allowedBy: string[];
+}
+
+// The statuses by node id, from the comparison with the current NetworkPolicies
+export const FlowStatusContext = createContext<Map<string, NodeFlowStatus>>(new Map());
+
+// A flow is one peer of a direction, without per-pod labels, as a node shows it
+function flowKey(direction: Direction, peer: NetworkPolicy.Peer) {
+  return JSON.stringify([direction, withoutPerPodLabels(peer)]);
+}
+
+/** The status of each node: that of its peers, or partly allowed when they differ. */
+export function nodeFlowStatuses(nodes: Node[], flows: FlowResult[] | undefined) {
+  const statuses = new Map<string, NodeFlowStatus>();
+  if (!flows) return statuses;
+  const flowByPeer = new Map(flows.map(flow => [flowKey(flow.direction, flow.peer), flow]));
+  for (const node of nodes) {
+    if (node.type !== 'sourceNode' && node.type !== 'targetNode') continue;
+    const direction = node.type === 'sourceNode' ? 'ingress' : 'egress';
+    const peers = (node.data.peers as NetworkPolicy.Peer[] | undefined) ?? [];
+    const found = [
+      ...new Set(peers.flatMap(peer => flowByPeer.get(flowKey(direction, peer)) ?? [])),
+    ];
+    if (found.length === 0) continue;
+    const kinds = new Set(found.map(flow => flow.status));
+    const status: FlowStatus =
+      kinds.size === 1
+        ? found[0].status
+        : kinds.has('allowed') || kinds.has('partly')
+        ? 'partly'
+        : 'blocked';
+    statuses.set(node.id, {
+      status,
+      allowedBy: [...new Set(found.flatMap(flow => flow.allowedBy))],
+    });
+  }
+  return statuses;
+}
+
+// An outline in the color of the status, which does not change the size of the node
+function useStatusStyle(flowStatus: NodeFlowStatus | undefined): CSSProperties | undefined {
+  const theme = useTheme();
+  const color = flowStatus && flowStatusColors[flowStatus.status];
+  if (!color || color === 'default') return undefined;
+  return { boxShadow: `0 0 0 2px ${theme.palette[color].main}` };
+}
+
+function StatusLine(props: Readonly<{ flowStatus?: NodeFlowStatus }>) {
+  const { flowStatus } = props;
+  if (!flowStatus) return null;
+  const by = flowStatus.allowedBy.length ? `: ${flowStatus.allowedBy.join(', ')}` : '';
+  return (
+    <div>
+      <b>{flowStatusDescriptions[flowStatus.status]}</b>
+      {by}
+    </div>
+  );
+}
 
 // MUI tooltips are at most 300px wide, which cut off the lines of label selectors
 const tooltipProps = { tooltip: { sx: { fontSize: '0.9em', maxWidth: 'min(90vw, 720px)' } } };
@@ -84,8 +148,10 @@ const MainNode = (props: NodeProps<ConnectedNode>) => {
 };
 
 const ConnectedNode = (props: NodeProps<ConnectedNode>) => {
-  const { type, data } = props;
+  const { id, type, data } = props;
   const count = data.peers?.length ?? 1;
+  const flowStatus = useContext(FlowStatusContext).get(id);
+  const statusStyle = useStatusStyle(flowStatus);
 
   if (data.group === 'ipRanges') {
     return <IpRangesNode {...props} />;
@@ -95,6 +161,7 @@ const ConnectedNode = (props: NodeProps<ConnectedNode>) => {
   const tooltip =
     count > 1 ? (
       <>
+        <StatusLine flowStatus={flowStatus} />
         <div>
           {differing
             ? `${count} pods that differ in ${differing}, with these labels in common:`
@@ -105,6 +172,7 @@ const ConnectedNode = (props: NodeProps<ConnectedNode>) => {
       </>
     ) : (
       <>
+        <StatusLine flowStatus={flowStatus} />
         <TooltipText>{yaml.dump(data.peers?.[0] ?? data.peer)}</TooltipText>
         <PortsTooltipLine ports={data.ports} />
       </>
@@ -112,7 +180,7 @@ const ConnectedNode = (props: NodeProps<ConnectedNode>) => {
 
   return (
     <Tooltip title={tooltip} slotProps={tooltipProps}>
-      <Box className="network-node">
+      <Box className="network-node" style={statusStyle}>
         <div className="title">
           {peerIcon(data.peer)} {peerOrigin(data.peer, workloadNamespace(data.policy))}
           {count > 1 && <span className="count"> ×{count}</span>}
@@ -137,10 +205,13 @@ function rangeText(policy: GeneratedNetworkPolicy, peer: NetworkPolicy.Peer) {
 // A node for the many IP ranges of one direction and ports, such as the clients of an
 // ingress controller; one node each would make a diagram of thousands of nodes
 const IpRangesNode = (props: NodeProps<ConnectedNode>) => {
-  const { type, data } = props;
+  const { id, type, data } = props;
   const count = data.peers.length;
+  const flowStatus = useContext(FlowStatusContext).get(id);
+  const statusStyle = useStatusStyle(flowStatus);
   const tooltip = (
     <>
+      <StatusLine flowStatus={flowStatus} />
       <div>{count} IP ranges:</div>
       <TooltipText>
         {data.peers
@@ -157,7 +228,7 @@ const IpRangesNode = (props: NodeProps<ConnectedNode>) => {
 
   return (
     <Tooltip title={tooltip} slotProps={tooltipProps}>
-      <Box className="network-node">
+      <Box className="network-node" style={statusStyle}>
         <div className="title">
           {peerIcon(data.peer)} {peerOrigin(data.peer, workloadNamespace(data.policy))}
           <span className="count"> ×{count}</span>

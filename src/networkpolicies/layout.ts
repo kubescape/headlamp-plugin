@@ -4,9 +4,8 @@ import {
   GeneratedNetworkPolicy,
   NetworkPolicy,
 } from '../softwarecomposition/GeneratedNetworkPolicy';
+import type { Direction } from './compare';
 import { portKey, sortPorts } from './ports';
-
-export type Direction = 'ingress' | 'egress';
 
 // Size of nodes that have not been rendered yet
 const defaultNodeWidth = 310;
