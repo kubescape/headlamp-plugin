@@ -28,6 +28,8 @@ export namespace WorkloadConfigurationScanSummary {
     };
     status: {
       status: Status;
+      // "w/exceptions" when the scanner applied a SecurityException
+      subStatus?: string;
     };
     exceptedByPolicy: boolean; // maintained from the UI
   }
