@@ -8,6 +8,10 @@ export type KubescapeConfig = {
   activeFrameworks: string[];
   pageSize: number;
   alertmanagerUrl: string | undefined;
+  // the newest version of images, looked up at public services, on unless false
+  imageVersions?: boolean;
+  // the end of life of the release line of images, on unless false
+  endOfLife?: boolean;
 };
 
 export const kubescapeConfigStore = new ConfigStore<KubescapeConfig>(PLUGIN_NAME);

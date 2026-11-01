@@ -34,6 +34,8 @@ import { VulnerabilityManifestSummary } from '../softwarecomposition/Vulnerabili
 import { getCVESummary } from './CVESummary';
 import { AcceptRiskButton, ExceptionChip, useSecurityExceptions } from './exceptionChips';
 import { ImageReference } from './ImageReference';
+import { imageSourceLabel } from './imageSource';
+import { imageVersionRows, useImageVersion, useImageVersionSettings } from './ImageVersion';
 import { getScanTime, getVulnerabilityReportCreatedAt } from './reportTimestamp';
 import { getManifestNamespace } from './scanData';
 
@@ -124,6 +126,12 @@ function WorkloadVulnerabilities(
   const { exceptions, reload } = useSecurityExceptions([cluster ?? ''], [workload.kind]);
   const exceptionData = exceptions.get(cluster ?? '');
   const [accepting, setAccepting] = useState(false);
+  const versionSettings = useImageVersionSettings();
+  const imageVersion = useImageVersion(
+    workload.image,
+    cluster,
+    imageSourceLabel(manifestAll?.spec.payload.source?.target?.config)
+  );
 
   // the findings, with those that an exception hid from the report
   const findings = useMemo(() => {
@@ -228,6 +236,7 @@ function WorkloadVulnerabilities(
                 />
               ),
             },
+            ...imageVersionRows(imageVersion, versionSettings),
             ...evaluationRows,
             {
               name: 'Scan record created',

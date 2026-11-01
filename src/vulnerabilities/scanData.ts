@@ -1,6 +1,7 @@
 import type { QueryTask } from '../query';
 import type { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import type { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
+import { imageSourceLabel } from './imageSource';
 import { getScanTime, getVulnerabilityReportCreatedAt } from './reportTimestamp';
 
 export interface ImageScan {
@@ -13,6 +14,8 @@ export interface ImageScan {
   matches: VulnerabilityManifest.Match[];
   // the findings that kubevuln hid because of a security exception
   ignoredMatches?: VulnerabilityManifest.IgnoredMatch[];
+  // the source repository the labels of the image name
+  source?: string;
 }
 
 export interface WorkloadScan {
@@ -96,6 +99,7 @@ export function toImageScan(manifest: VulnerabilityManifest): ImageScan {
       ...slimMatch(match),
       appliedIgnoreRules: match.appliedIgnoreRules,
     })),
+    source: imageSourceLabel(manifest.spec.payload.source?.target?.config),
   };
 }
 

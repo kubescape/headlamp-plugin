@@ -30,6 +30,8 @@ import { vulnerabilityManifestClass } from '../model';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import { AcceptRiskButton, ExceptionChip, useSecurityExceptions } from './exceptionChips';
 import { ImageReference } from './ImageReference';
+import { imageSourceLabel } from './imageSource';
+import { imageVersionRows, useImageVersion, useImageVersionSettings } from './ImageVersion';
 import { fetchImageWorkloads, ImageWorkload, latestScan } from './imageWorkloads';
 import { getVulnerabilityReportCreatedAt } from './reportTimestamp';
 
@@ -65,6 +67,12 @@ export default function ImageVulnerabilityDetails() {
   // wherever it runs
   const image: string | undefined =
     manifestVulnerability?.metadata.annotations?.['kubescape.io/image-tag'];
+  const versionSettings = useImageVersionSettings();
+  const imageVersion = useImageVersion(
+    image,
+    cluster,
+    imageSourceLabel(manifestVulnerability?.jsonData.spec.payload.source?.target?.config)
+  );
   const { exceptions, reload } = useSecurityExceptions([cluster], []);
   const exceptionData = exceptions.get(cluster);
   const covered = useMemo(
@@ -104,6 +112,7 @@ export default function ImageVulnerabilityDetails() {
                 name: 'Image',
                 value: <ImageReference image={image} />,
               },
+              ...imageVersionRows(imageVersion, versionSettings),
               evaluatedAt || !scannedAt
                 ? {
                     name: 'Last evaluated',

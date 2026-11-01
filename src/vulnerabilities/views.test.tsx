@@ -26,6 +26,15 @@ const mocks = vi.hoisted(() => ({
   cluster: 'cluster-a',
   name: 'workload-123',
   saveToFile: vi.fn(),
+  lookupImageVersion: vi.fn(),
+}));
+vi.mock('../common/config-store', () => ({
+  kubescapeConfigStore: { useConfig: () => () => ({}) },
+}));
+vi.mock('./imageVersionSources', async importOriginal => ({
+  ...(await importOriginal<typeof import('./imageVersionSources')>()),
+  lookupImageVersion: mocks.lookupImageVersion,
+  versionCheckerResults: async () => new Map(),
 }));
 vi.mock('../common/filedialog', () => ({ saveToFile: mocks.saveToFile }));
 vi.mock('../common/clusterContext', () => ({ getAllowedNamespaces: () => [] }));
@@ -125,6 +134,8 @@ beforeEach(() => {
   mocks.imageGet.mockReset();
   mocks.sbomGet.mockReset();
   mocks.sbomFilteredGet.mockReset();
+  mocks.lookupImageVersion.mockReset();
+  mocks.lookupImageVersion.mockResolvedValue({});
   mocks.cluster = 'cluster-a';
   mocks.name = 'workload-123';
   mocks.severity = null;
@@ -779,6 +790,41 @@ it('links the image of a workload to its page and to the tags in its registry', 
   expect(image.getAttribute('href')).toBe('/cluster-a/image/reports/image-123');
   expect(screen.getByRole('link', { name: /Docker Hub/ }).getAttribute('href')).toBe(
     'https://hub.docker.com/_/example/tags'
+  );
+});
+
+it('shows the newest version of the image of a workload and the end of its release line', async () => {
+  mocks.lookupImageVersion.mockResolvedValue({
+    latest: { latest: '2.0.1', source: { name: 'GitHub', url: 'https://github.com/o/r/releases' } },
+    line: {
+      product: 'example',
+      name: '1',
+      latest: '1.9.0',
+      eol: true,
+      eolFrom: '2025-01-31',
+      url: 'https://endoflife.date/example',
+    },
+  });
+  const workload = summary();
+  workload.metadata.annotations['kubescape.io/image-tag'] = 'example:1.2.3';
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? workload : manifest()
+  );
+  render(<WorkloadDetails />);
+
+  await waitFor(() => expect(valueFor('Latest version').textContent).toContain('2.0.1'));
+  expect(mocks.lookupImageVersion).toHaveBeenCalledWith('example:1.2.3', { latest: true });
+  expect(valueFor('Latest version').textContent).toContain(
+    'GitHub has 2.0.1, which is newer than 1.2.3. The newest of 1 is 1.9.0.'
+  );
+  expect(
+    within(valueFor('Latest version') as HTMLElement)
+      .getByRole('link')
+      .getAttribute('href')
+  ).toBe('https://github.com/o/r/releases');
+  expect(valueFor('End of life').textContent).toContain('Ended 2025-01-31');
+  expect(valueFor('End of life').textContent).toContain(
+    'example 1 reached its end of life on 2025-01-31 and gets no more fixes.'
   );
 });
 

@@ -7,18 +7,55 @@ import {
   SectionBox,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Stack } from '@mui/material';
-import { SeverityCountStack } from '../common/SeverityCountBox';
+import { useMemo } from 'react';
+import { severityColors, SeverityCountStack } from '../common/SeverityCountBox';
 import HeadlampTable from '../common/Table';
 import { RoutingName } from '../index';
+import {
+  EndOfLifeLabel,
+  ImageVersion,
+  imageVersionMapKey,
+  latestRank,
+  LatestVersionLabel,
+  useImageVersions,
+  useImageVersionSettings,
+} from './ImageVersion';
+import { imageTag } from './registry';
 import { getImageScanKey, getImageScans, ImageScan, WorkloadScan } from './scanData';
+
+type ImageRow = ImageScan & { version?: ImageVersion };
 
 export default function ImageListView(props: Readonly<{ workloadScans: WorkloadScan[] | null }>) {
   const { workloadScans } = props;
+  const imageScans = useMemo(
+    () => (workloadScans ? getImageScans(workloadScans) : []),
+    [workloadScans]
+  );
+  const settings = useImageVersionSettings();
+  const images = useMemo(
+    () =>
+      imageScans.map(scan => ({
+        image: scan.imageName,
+        cluster: scan.cluster,
+        source: scan.source,
+      })),
+    [imageScans]
+  );
+  const versions = useImageVersions(images);
+  // the table reads the values of a row again only when the rows change, so the versions that
+  // are found are part of the rows
+  const rows = useMemo<ImageRow[]>(
+    () =>
+      imageScans.map(scan => ({
+        ...scan,
+        version: versions.get(imageVersionMapKey({ image: scan.imageName, cluster: scan.cluster })),
+      })),
+    [imageScans, versions]
+  );
+
   if (!workloadScans) {
     return <></>;
   }
-
-  const imageScans = getImageScans(workloadScans);
 
   // recent kubevuln versions only record when they scanned the workloads that run an image
   const scannedAt = new Map<string, string>();
@@ -42,24 +79,43 @@ export default function ImageListView(props: Readonly<{ workloadScans: WorkloadS
               'Image',
               'Cluster',
               'Workloads',
+              ...(settings.enabled ? ['Tag', 'Latest version', 'Newer version available'] : []),
+              ...(settings.endOfLife ? ['End of life'] : []),
               'Last evaluated',
-              'Critical',
-              'High',
-              'Medium',
-              'Low',
+              ...Object.keys(severityColors),
               'Total',
             ],
             rows: () =>
-              imageScans.map(imageScan => [
-                imageScan.imageName,
-                imageScan.cluster,
-                imageWorkloads(workloadScans, imageScan).join('; '),
-                evaluatedAt(imageScan),
-                ...countImageScans(imageScan),
-                imageScan.matches.length,
-              ]),
+              rows.map(imageScan => {
+                const version = imageScan.version;
+                return [
+                  imageScan.imageName,
+                  imageScan.cluster,
+                  imageWorkloads(workloadScans, imageScan).join('; '),
+                  ...(settings.enabled
+                    ? [
+                        imageTag(imageScan.imageName),
+                        version?.latest?.latest,
+                        version?.latest ? (version.newer ? 'yes' : 'no') : undefined,
+                      ]
+                    : []),
+                  ...(settings.endOfLife
+                    ? [
+                        version?.line &&
+                          (version.line.eol
+                            ? `ended ${version.line.eolFrom ?? ''}`.trim()
+                            : version.line.eolFrom),
+                      ]
+                    : []),
+                  evaluatedAt(imageScan),
+                  ...countImageScans(imageScan),
+                  imageScan.matches.length,
+                ];
+              }),
           }}
-          data={imageScans}
+          data={rows}
+          // a cell keeps what it showed for the row it first showed
+          getRowId={getImageScanKey}
           columns={[
             {
               header: 'Image',
@@ -80,6 +136,43 @@ export default function ImageListView(props: Readonly<{ workloadScans: WorkloadS
               },
               gridTemplate: 'auto',
             },
+            ...(settings.enabled
+              ? [
+                  {
+                    id: 'Tag',
+                    header: 'Tag',
+                    accessorFn: (imageScan: ImageScan) => imageTag(imageScan.imageName) ?? '',
+                    gridTemplate: 'auto',
+                  },
+                  {
+                    id: 'Latest',
+                    header: 'Latest',
+                    // the value changes when the version is found, which redraws the cell
+                    accessorFn: (row: ImageRow) => row.version?.latest?.latest ?? '',
+                    sortingFn: (a: any, b: any) =>
+                      latestRank(a.original.version) - latestRank(b.original.version),
+                    sortDescFirst: true,
+                    Cell: ({ row }: any) => <LatestVersionLabel version={row.original.version} />,
+                    gridTemplate: 'auto',
+                  },
+                ]
+              : []),
+            ...(settings.endOfLife
+              ? [
+                  {
+                    id: 'End of life',
+                    header: 'End of life',
+                    // released lines without an announced end sort after the dated ones
+                    accessorFn: (row: ImageRow) => {
+                      const line = row.version?.line;
+                      return line ? line.eolFrom ?? (line.eol ? '0' : 'none') : undefined;
+                    },
+                    sortUndefined: 'last' as const,
+                    Cell: ({ row }: any) => <EndOfLifeLabel line={row.original.version?.line} />,
+                    gridTemplate: 'auto',
+                  },
+                ]
+              : []),
             {
               header: 'Workload',
               accessorFn: (imageScan: ImageScan) => (

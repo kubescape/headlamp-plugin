@@ -3,8 +3,10 @@ import { useClustersConf } from '@kinvolk/headlamp-plugin/lib/k8s';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
+import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import React from 'react';
@@ -125,6 +127,35 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
         fullWidth
         margin="normal"
       />
+
+      <Box display="flex" flexDirection="column">
+        <FormControlLabel
+          control={
+            <Switch
+              checked={kubescapeData?.imageVersions !== false}
+              onChange={(_, checked) => onDataChange?.({ ...data, imageVersions: checked })}
+            />
+          }
+          label="Show the newest version of images"
+        />
+        <Typography variant="body2" color="text.secondary" sx={{ ml: 6, mt: -0.5 }}>
+          Asks Quay, Google&apos;s Artifact Registry, shields.io (for Docker Hub), jsDelivr (for
+          projects on GitHub and Docker&apos;s official images) and endoflife.date about public
+          images, and reads version-checker in clusters that run it. Images are only asked about at
+          their own registry or at services that know them publicly, and answers are kept for a day.
+        </Typography>
+        <FormControlLabel
+          sx={{ ml: 4 }}
+          control={
+            <Switch
+              checked={kubescapeData?.imageVersions !== false && kubescapeData?.endOfLife !== false}
+              disabled={kubescapeData?.imageVersions === false}
+              onChange={(_, checked) => onDataChange?.({ ...data, endOfLife: checked })}
+            />
+          }
+          label="Show when the release line of an image reaches its end of life (from endoflife.date)"
+        />
+      </Box>
 
       <Box display="flex" flexDirection="column" mt={2}>
         <Box display="flex" alignItems="center" gap={2} mb={1}>
