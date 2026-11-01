@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  alertDomain,
   alertMessage,
   alertRule,
   alertSeverity,
@@ -95,6 +96,24 @@ describe('alertMessage', () => {
     expect(alertMessage(alert({}, { description: '', summary: 'Rule failed' }))).toBe(
       'Rule failed'
     );
+  });
+});
+
+describe('alertDomain', () => {
+  it('reads the domain from the message of the DNS rule, without the trailing dot', () => {
+    expect(
+      alertDomain(
+        alert({}, { description: 'Unexpected domain communication: golang.org. from: proxy' })
+      )
+    ).toBe('golang.org');
+    expect(
+      alertDomain(
+        alert({}, { message: 'Unexpected domain communication: API.Example.com from: app' })
+      )
+    ).toBe('api.example.com');
+    expect(
+      alertDomain(alert({}, { description: 'Unexpected process launched: sh' }))
+    ).toBeUndefined();
   });
 });
 

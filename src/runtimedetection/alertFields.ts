@@ -59,6 +59,16 @@ export function alertMessage(alert: AlertmanagerAlert): string | undefined {
   return description || message || summary || undefined;
 }
 
+// the message of the DNS rule: Unexpected domain communication: golang.org. from: proxy
+const domainMessage = /domain communication: (\S+?)\.? from: /i;
+
+/** The domain a DNS alert is about, without the trailing dot; it is only in the message. */
+export function alertDomain(alert: AlertmanagerAlert): string | undefined {
+  const { description, message } = alert.annotations;
+  const match = (description ?? '').match(domainMessage) ?? (message ?? '').match(domainMessage);
+  return match?.[1].toLowerCase();
+}
+
 export function alertPod(alert: AlertmanagerAlert): string | undefined {
   return alert.labels.pod ?? alert.labels.pod_name;
 }

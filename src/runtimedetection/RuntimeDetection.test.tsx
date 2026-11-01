@@ -513,6 +513,38 @@ it('shows an alert of the node-agent by severity, workload and finding, with its
             fingerprint: 'abc',
           },
         ]
+      : url.endsWith('/namespaces/certificates/containerprofiles')
+      ? {
+          items: [
+            {
+              metadata: {
+                name: 'replicaset-cert-watch-b576bb668-watcher-1a2b-3c4d',
+                namespace: 'certificates',
+                labels: { 'kubescape.io/workload-name': 'cert-watch' },
+                annotations: {
+                  'kubescape.io/instance-id':
+                    'apiVersion-apps/v1/namespace-certificates/kind-ReplicaSet/name-cert-watch-b576bb668/containerName-watcher',
+                },
+              },
+            },
+          ],
+        }
+      : url.endsWith('/containerprofiles/replicaset-cert-watch-b576bb668-watcher-1a2b-3c4d')
+      ? {
+          metadata: {
+            name: 'replicaset-cert-watch-b576bb668-watcher-1a2b-3c4d',
+            namespace: 'certificates',
+          },
+          spec: { egress: [{ dns: 'acme-v02.api.letsencrypt.org.' }, { dns: 'example.com.' }] },
+        }
+      : url.endsWith('/pods/cert-watch-b576bb668-5f2s6')
+      ? {
+          metadata: {
+            ownerReferences: [
+              { kind: 'ReplicaSet', name: 'cert-watch-b576bb668', controller: true },
+            ],
+          },
+        }
       : { items: [] }
   );
   mocks.post.mockResolvedValue({ status: { allowed: true } });
@@ -582,6 +614,26 @@ it('shows an alert of the node-agent by severity, workload and finding, with its
   expect(
     within(dialog).getByText('cert-watch-b576bb668-5f2s6').closest('a')?.getAttribute('href')
   ).toBe('/cluster-a/pod/certificates/cert-watch-b576bb668-5f2s6');
+  // the profile the container was checked against, of the version of the pod
+  const profileLink = await within(dialog).findByText('ReplicaSet cert-watch-b576bb668, watcher');
+  expect(profileLink.closest('a')?.getAttribute('href')).toBe(
+    '/cluster-a/Runtime Detection/certificates/replicaset-cert-watch-b576bb668-watcher-1a2b-3c4d'
+  );
+
+  // the domain of the DNS rule, below the rule, and what the profile learned
+  const names = within(dialog)
+    .getAllByRole('term')
+    .map(term => term.textContent);
+  expect(names.indexOf('Domain')).toBe(names.indexOf('Rule') + 1);
+  expect(names.indexOf('Severity')).toBe(names.indexOf('Domain') + 1);
+  expect(within(dialog).getByText('_acme-challenge.example.com')).toBeTruthy();
+  expect(
+    await within(dialog).findByText('2, and _acme-challenge.example.com is not one of them')
+  ).toBeTruthy();
+  expect(within(dialog).getByText('Under example.com it learned example.com')).toBeTruthy();
+  fireEvent.click(within(dialog).getByText('Show all 2'));
+  expect(within(dialog).getByText(/acme-v02\.api\.letsencrypt\.org/)).toBeTruthy();
+
   fireEvent.click(within(dialog).getByText('Close'));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 

@@ -25,9 +25,11 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
+import { RoutingName } from '../index';
 import type { Rule } from '../types/Rules';
 import {
+  alertDomain,
   alertMessage,
   alertNamespace,
   alertPod,
@@ -41,6 +43,14 @@ import {
   severityColor,
 } from './alertFields';
 import type { AlertmanagerAlert } from './alertmanager';
+import {
+  AlertProfileMatch,
+  compareDomain,
+  fetchLearnedDomains,
+  findAlertProfile,
+  profileInstance,
+  registeredDomain,
+} from './alertProfile';
 import { SilenceButton, SilenceNotice } from './Silences';
 
 function process(name: string | undefined, pid: string | undefined) {
@@ -70,6 +80,132 @@ const codeStyle = {
   bgcolor: 'action.hover',
   borderRadius: 1,
 };
+
+type ProfileLookup =
+  | { state: 'looking' }
+  | { state: 'found'; match: AlertProfileMatch }
+  | { state: 'none' }
+  | { state: 'error'; message: string };
+
+function useAlertProfile(alert: AlertmanagerAlert): ProfileLookup {
+  const [lookup, setLookup] = useState<ProfileLookup>({ state: 'looking' });
+  useEffect(() => {
+    let active = true;
+    setLookup({ state: 'looking' });
+    findAlertProfile(alert)
+      .then(match => {
+        if (active) setLookup(match ? { state: 'found', match } : { state: 'none' });
+      })
+      .catch(err => {
+        if (active) setLookup({ state: 'error', message: err?.message ?? String(err) });
+      });
+    return () => {
+      active = false;
+    };
+  }, [alert]);
+  return lookup;
+}
+
+type DomainsLookup = 'looking' | 'unavailable' | { error: string } | string[];
+
+/** The domains the profile of a DNS alert learned, once the profile is found. */
+function useLearnedDomains(
+  lookup: ProfileLookup,
+  domain: string | undefined,
+  container: string | undefined
+): DomainsLookup | undefined {
+  const [domains, setDomains] = useState<DomainsLookup>('looking');
+  const match = lookup.state === 'found' ? lookup.match : undefined;
+  useEffect(() => {
+    if (!match || !domain) return;
+    let active = true;
+    setDomains('looking');
+    fetchLearnedDomains(match, container)
+      .then(found => {
+        if (active) setDomains(found ?? 'unavailable');
+      })
+      .catch(err => {
+        if (active) setDomains({ error: err?.message ?? String(err) });
+      });
+    return () => {
+      active = false;
+    };
+  }, [match, domain, container]);
+  return match && domain ? domains : undefined;
+}
+
+/** How the domain of a DNS alert compares to what the profile learned. */
+function LearnedDomains(props: Readonly<{ domain: string; domains: DomainsLookup }>) {
+  const { domain, domains } = props;
+  const [showAll, setShowAll] = useState(false);
+  if (domains === 'looking') return <Typography color="text.secondary">Looking up…</Typography>;
+  if (domains === 'unavailable') {
+    return <>This Storage release keeps them in a separate NetworkNeighborhood</>;
+  }
+  if (!Array.isArray(domains)) return <>Unable to read the profile: {domains.error}</>;
+  if (domains.length === 0) {
+    return <>None: the profile learned no lookups, so every domain alerts</>;
+  }
+  const { learned, related } = compareDomain(domain, domains);
+  return (
+    <Stack spacing={0.5} alignItems="flex-start">
+      <span>
+        {learned
+          ? `${domains.length}, including ${domain}: the profile has it now`
+          : `${domains.length}, and ${domain} is not one of them`}
+      </span>
+      <Typography variant="body2" color="text.secondary">
+        {related.length > 0
+          ? `Under ${registeredDomain(domain)} it learned ${related.join(', ')}`
+          : `It learned nothing under ${registeredDomain(domain)}`}
+      </Typography>
+      <Link component="button" variant="body2" onClick={() => setShowAll(!showAll)}>
+        {showAll ? 'Hide the learned domains' : `Show all ${domains.length}`}
+      </Link>
+      {showAll && (
+        <Box component="pre" sx={{ ...codeStyle, alignSelf: 'stretch' }}>
+          {domains.join('\n')}
+        </Box>
+      )}
+    </Stack>
+  );
+}
+
+/** A link to the profile of the alert's container, and whether it is that of the pod itself. */
+function AlertProfileLink(props: Readonly<{ lookup: ProfileLookup; workload?: string }>) {
+  const { lookup, workload } = props;
+  if (lookup.state === 'looking') {
+    return <Typography color="text.secondary">Looking up…</Typography>;
+  }
+  if (lookup.state === 'none') return <>Kubescape has no profile of this container</>;
+  if (lookup.state === 'error') return <>Unable to read the profiles: {lookup.message}</>;
+  const { profile, ofPodVersion } = lookup.match;
+  const instance = profileInstance(profile);
+  return (
+    <Stack spacing={0.5}>
+      <HeadlampLink
+        routeName={RoutingName.RuntimeDetection}
+        params={{ namespace: profile.metadata.namespace, name: profile.metadata.name }}
+        activeCluster={profile.metadata.cluster}
+      >
+        {instance.kind && instance.name
+          ? `${instance.kind} ${instance.name}${
+              instance.container ? `, ${instance.container}` : ''
+            }`
+          : profile.metadata.name}
+      </HeadlampLink>
+      {!ofPodVersion && (
+        <Typography variant="body2" color="text.secondary">
+          {profile.metadata.labels?.['kubescape.io/workload-kind'] === 'CronJob'
+            ? 'The newest profile of the CronJob: Kubescape learns a CronJob per version of its template, not per Job.'
+            : `The newest profile of ${
+                workload ?? 'the workload'
+              }: the version of this pod has none, or the pod is gone.`}
+        </Typography>
+      )}
+    </Stack>
+  );
+}
 
 function MitreLink(props: Readonly<{ id: string }>) {
   const url = mitreUrl(props.id);
@@ -104,6 +240,10 @@ export function AlertDetailsDialog(
   const containerId = labels.container_id;
   const rule = labels.rule_name ?? labels.alertname;
   const workload = alertWorkload(alert);
+  const profileLookup = useAlertProfile(alert);
+  const container = labels.container_name ?? labels.container;
+  const domain = alertDomain(alert);
+  const learnedDomains = useLearnedDomains(profileLookup, domain, container);
   const messageSeverity =
     severityColor(severity) === 'error'
       ? 'error'
@@ -183,6 +323,7 @@ export function AlertDetailsDialog(
           title="Detection"
           rows={[
             { name: 'Rule', value: labels.rule_id ? `${rule} (${labels.rule_id})` : rule },
+            { name: 'Domain', value: domain },
             {
               name: 'Severity',
               value:
@@ -210,6 +351,16 @@ export function AlertDetailsDialog(
                   : profileDependencyTexts[profileDependency],
             },
             { name: 'Profile status', value: labels.profile_status },
+            {
+              name: 'Application profile',
+              value: <AlertProfileLink lookup={profileLookup} workload={workload} />,
+            },
+            {
+              name: 'Learned domains',
+              value: domain && learnedDomains && (
+                <LearnedDomains domain={domain} domains={learnedDomains} />
+              ),
+            },
             { name: 'Reported by', value: labels.host },
             {
               name: 'Container ID',
