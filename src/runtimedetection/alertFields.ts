@@ -91,6 +91,19 @@ export function workloadOfPod(pod: string): string {
   return pod;
 }
 
+/**
+ * A regular expression for the names of all pods of the workload of a pod, also those of later
+ * rollouts, or undefined for a pod whose name Kubernetes did not generate. Alertmanager anchors
+ * it at both ends.
+ */
+export function podsOfWorkloadPattern(pod: string): string | undefined {
+  for (const { tail, pattern } of ownerPatterns) {
+    const match = pattern.exec(pod);
+    if (match) return `${match[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${tail}`;
+  }
+  return undefined;
+}
+
 /** The workload of the alert, named by the exporter or read from the pod name. */
 export function alertWorkload(alert: AlertmanagerAlert): string | undefined {
   const named = alert.labels.workload_name ?? alert.labels.workload;

@@ -42,7 +42,14 @@ import {
   severityColor,
   severityRank,
 } from './alertFields';
-import { AlertmanagerAlert, detectAlertmanager, fetchKubescapeAlerts } from './alertmanager';
+import {
+  AlertmanagerAlert,
+  detectAlertmanager,
+  fetchKubescapeAlerts,
+  fetchKubescapeSilences,
+  Silence,
+} from './alertmanager';
+import { SilenceButton, SilenceList, SilenceNotice } from './Silences';
 
 const { createRouteURL } = Router;
 
@@ -123,6 +130,8 @@ function AlertsTab() {
   const clusters = useHLSelectedClusters();
   const clustersKey = clusters.join(',');
   const [alerts, setAlerts] = useState<AlertmanagerAlert[]>([]);
+  const [silences, setSilences] = useState<Silence[]>([]);
+  const [notice, setNotice] = useState<SilenceNotice | null>(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<ClusterError[]>([]);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -146,17 +155,30 @@ function AlertsTab() {
   const fetchAlerts = () => {
     if (!alertmanagerUrl) return;
     setLoading(true);
-    Promise.allSettled(clusters.map(cluster => fetchKubescapeAlerts(cluster)))
-      .then(results => {
+    Promise.all([
+      Promise.allSettled(clusters.map(cluster => fetchKubescapeAlerts(cluster))),
+      // the silences only add to the alerts, so failing to read them is not reported
+      Promise.allSettled(clusters.map(cluster => fetchKubescapeSilences(cluster))),
+    ])
+      .then(([results, silenceResults]) => {
         setAlerts(
           results
             .flatMap(result => (result.status === 'fulfilled' ? result.value : []))
             .sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime())
         );
+        setSilences(
+          silenceResults.flatMap(result => (result.status === 'fulfilled' ? result.value : []))
+        );
         setErrors(rejectedClusters(clusters, results));
         setLastRefresh(new Date());
       })
       .finally(() => setLoading(false));
+  };
+
+  // a silenced alert leaves the list, and an ended silence brings its alerts back
+  const onSilenceChange = (change: SilenceNotice) => {
+    setNotice(change);
+    if (change.severity === 'success') fetchAlerts();
   };
 
   useEffect(() => {
@@ -188,6 +210,11 @@ function AlertsTab() {
       </Stack>
 
       <ClusterErrors errors={errors} what="the alerts" />
+      {notice && (
+        <Alert severity={notice.severity} onClose={() => setNotice(null)} sx={{ mb: 1 }}>
+          {notice.text}
+        </Alert>
+      )}
 
       <HeadlampTable
         data={alerts}
@@ -274,6 +301,12 @@ function AlertsTab() {
             Cell: ({ cell }: any) => <ShowHideLabel>{cell.getValue()}</ShowHideLabel>,
             gridTemplate: 'minmax(280px, 2fr)',
           },
+          {
+            header: '',
+            accessorFn: (a: AlertmanagerAlert) => `${a.cluster}/${a.fingerprint}`,
+            Cell: ({ row }: any) => <SilenceButton alert={row.original} onDone={onSilenceChange} />,
+            gridTemplate: 'min-content',
+          },
         ]}
         initialState={{ sorting: [{ id: 'time', desc: true }] }}
       />
@@ -282,8 +315,14 @@ function AlertsTab() {
           alert={selected}
           rule={alertRule(rules, selected)}
           onClose={() => setSelected(null)}
+          onSilenced={change => {
+            setSelected(null);
+            onSilenceChange(change);
+          }}
         />
       )}
+
+      <SilenceList silences={silences} showCluster={clusters.length > 1} onDone={onSilenceChange} />
     </>
   );
 }

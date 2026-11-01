@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   listQuery: vi.fn(),
   request: vi.fn(),
   remove: vi.fn(),
+  post: vi.fn(),
   updateConfig: vi.fn(),
   clusters: ['cluster-a'],
   alertmanagerUrl: '',
@@ -48,6 +49,10 @@ vi.mock('../common/config-store', () => ({
     get: () => ({ alertmanagerUrl: 'monitoring/alertmanager:9093' }),
   },
 }));
+vi.mock('../common/currentUser', () => ({
+  getCurrentUser: async () => 'jane',
+  useCurrentUser: () => 'jane',
+}));
 vi.mock('@kinvolk/headlamp-plugin/lib', () => ({
   Router: { createRouteURL: (route: string) => `/${route}` },
 }));
@@ -56,6 +61,7 @@ vi.mock('../common/SetupCheck', () => ({ SetupCheck: () => null }));
 vi.mock('@kinvolk/headlamp-plugin/lib/ApiProxy', () => ({
   request: mocks.request,
   remove: mocks.remove,
+  post: mocks.post,
 }));
 vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', () => ({
   NameValueTable: ({ rows }: any) => (
@@ -143,6 +149,7 @@ beforeEach(() => {
   mocks.request.mockReset();
   mocks.request.mockResolvedValue({ items: [] });
   mocks.remove.mockReset();
+  mocks.post.mockReset();
   mocks.updateConfig.mockReset();
   mocks.clusters = ['cluster-a'];
   mocks.alertmanagerUrl = '';
@@ -315,6 +322,92 @@ it('offers the Alertmanager found in the cluster while none is configured', asyn
   expect(mocks.request).toHaveBeenCalledWith('/api/v1/services', { cluster: 'cluster-a' });
 });
 
+it('silences an alert as the current user and ends silences', async () => {
+  const proxy = '/api/v1/namespaces/monitoring/services/alertmanager:9093/proxy';
+  mocks.alertmanagerUrl = proxy;
+  mocks.request.mockImplementation(async (url: string) => {
+    if (url.startsWith(`${proxy}/api/v2/alerts`)) {
+      return [
+        {
+          labels: {
+            alertname: 'KubescapeRuleViolated',
+            rule_name: 'Unexpected process launched',
+            workload_name: 'web',
+            namespace: 'shop',
+          },
+          annotations: {},
+          startsAt: '2026-10-30T10:00:00Z',
+          status: { state: 'active' },
+          fingerprint: 'abc',
+        },
+      ];
+    }
+    if (url.startsWith(`${proxy}/api/v2/silences`)) {
+      return [
+        {
+          id: 'silence-1',
+          status: { state: 'active' },
+          matchers: [{ name: 'workload_name', value: 'db', isRegex: false, isEqual: true }],
+          startsAt: '2026-10-30T09:00:00Z',
+          endsAt: '2026-10-31T09:00:00Z',
+          createdBy: 'bob',
+          comment: 'Silenced for 24 hours in Headlamp',
+        },
+      ];
+    }
+    return { items: [] };
+  });
+  mocks.post.mockImplementation(async (url: string) =>
+    url.includes('selfsubjectaccessreviews') ? { status: { allowed: true } } : { silenceID: 's2' }
+  );
+
+  renderRuntimeDetection();
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Silence' }));
+  const dialog = screen.getByRole('dialog', { name: 'Silence an alert' });
+  expect(within(dialog).getByText('The silence is recorded in Alertmanager as jane.')).toBeTruthy();
+  // the workload is the scope unless another is chosen
+  expect(within(dialog).getByRole('radio', { name: /This workload/ })).toHaveProperty(
+    'checked',
+    true
+  );
+  fireEvent.click(within(dialog).getByRole('radio', { name: /All workloads in namespace/ }));
+  fireEvent.click(within(dialog).getByRole('button', { name: '1 hour' }));
+  // a silence needs a reason
+  const silenceButton = within(dialog).getByRole('button', { name: 'Silence' });
+  expect(silenceButton).toHaveProperty('disabled', true);
+  fireEvent.change(within(dialog).getByRole('textbox', { name: /Reason/ }), {
+    target: { value: 'Expected during the migration' },
+  });
+  fireEvent.click(silenceButton);
+
+  expect(
+    await screen.findByText('Silenced Unexpected process launched in namespace shop for 1 hour.')
+  ).toBeTruthy();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  const [url, silence, , options] = mocks.post.mock.calls.find(([url]) =>
+    url.endsWith('/api/v2/silences')
+  )!;
+  expect(url).toBe(`${proxy}/api/v2/silences`);
+  expect(silence.createdBy).toBe('jane');
+  expect(silence.comment).toBe('Expected during the migration');
+  expect(silence.matchers.map((matcher: any) => matcher.name)).toEqual([
+    'alertname',
+    'rule_name',
+    'namespace',
+  ]);
+  expect(options).toEqual({ cluster: 'cluster-a' });
+
+  expect(screen.getByText('workload_name=db')).toBeTruthy();
+  expect(screen.getByText(/Silenced by bob until/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'End silence' }));
+  await waitFor(() =>
+    expect(mocks.remove).toHaveBeenCalledWith(`${proxy}/api/v2/silence/silence-1`, {
+      cluster: 'cluster-a',
+    })
+  );
+});
+
 it('shows an alert of the node-agent by severity, workload and finding, with its details', async () => {
   const proxy = '/api/v1/namespaces/monitoring/services/alertmanager:9093/proxy';
   mocks.alertmanagerUrl = proxy;
@@ -356,6 +449,7 @@ it('shows an alert of the node-agent by severity, workload and finding, with its
         ]
       : { items: [] }
   );
+  mocks.post.mockResolvedValue({ status: { allowed: true } });
   mocks.ruleObjects = [
     {
       cluster: 'cluster-a',
@@ -386,7 +480,19 @@ it('shows an alert of the node-agent by severity, workload and finding, with its
     screen.getByText('Unexpected domain communication: _acme-challenge.example.com. from: watcher')
   ).toBeTruthy();
 
-  // a click on the row opens the details
+  // the silence button of the row opens only the silence dialog, and clicks in that dialog do
+  // not reach the row
+  fireEvent.click(screen.getByRole('button', { name: 'Silence' }));
+  const silenceDialog = screen.getByRole('dialog', { name: 'Silence an alert' });
+  expect(
+    within(silenceDialog).getByText(/pod_name=~cert-watch-\[bcdfghjklmnpqrstvwxz2456789\]/)
+  ).toBeTruthy();
+  fireEvent.click(within(silenceDialog).getByText('The whole cluster'));
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  fireEvent.click(within(silenceDialog).getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+  // a click anywhere else on the row does
   fireEvent.click(screen.getByText('cert-watch'));
   const dialog = screen.getByRole('dialog');
   expect(within(dialog).getByText('python3 (PID 9635)')).toBeTruthy();

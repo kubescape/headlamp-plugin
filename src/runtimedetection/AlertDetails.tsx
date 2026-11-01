@@ -41,6 +41,7 @@ import {
   severityColor,
 } from './alertFields';
 import type { AlertmanagerAlert } from './alertmanager';
+import { SilenceButton, SilenceNotice } from './Silences';
 
 function process(name: string | undefined, pid: string | undefined) {
   if (!name) return pid ? `PID ${pid}` : undefined;
@@ -81,16 +82,17 @@ function MitreLink(props: Readonly<{ id: string }>) {
   );
 }
 
-/** The details of a runtime alert, with what its rule detects. */
+/** The details of a runtime alert, with what its rule detects and the silence menu. */
 export function AlertDetailsDialog(
   props: Readonly<{
     alert: AlertmanagerAlert;
     // the rule as defined in the cluster, when it can be read
     rule?: Partial<Rule>;
     onClose: () => void;
+    onSilenced: (notice: SilenceNotice) => void;
   }>
 ) {
-  const { alert, rule: ruleDefinition, onClose } = props;
+  const { alert, rule: ruleDefinition, onClose, onSilenced } = props;
   const description = ruleDescription(ruleDefinition);
   const { mitreTactic, mitreTechnique, profileDependency } = ruleDefinition ?? {};
   const { labels, annotations } = alert;
@@ -242,6 +244,8 @@ export function AlertDetailsDialog(
         </Accordion>
       </DialogContent>
       <DialogActions>
+        <SilenceButton alert={alert} onDone={onSilenced} />
+        <Box sx={{ flexGrow: 1 }} />
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
     </Dialog>
