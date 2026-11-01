@@ -4,6 +4,7 @@ import Editor from '@monaco-editor/react';
 import { Alert, Typography } from '@mui/material';
 import * as yaml from 'js-yaml';
 import { useEffect, useState } from 'react';
+import { useEditorTheme } from '../common/theme';
 import { getURLSegments } from '../common/url';
 import {
   applicationProfileClass,
@@ -51,6 +52,7 @@ function ResolvedProfileDetail({
   const [name, namespace] = getURLSegments(-1, -2);
   const [item, setItem] = useState<KubeObject | null>(null);
   const [error, setError] = useState('');
+  const editorTheme = useEditorTheme();
 
   const resourceClass = source.modern
     ? containerProfileClass
@@ -129,7 +131,7 @@ function ResolvedProfileDetail({
       </SectionBox>
       <Editor
         language="yaml"
-        theme={localStorage.headlampThemePreference === 'dark' ? 'vs-dark' : ''}
+        theme={editorTheme}
         value={yaml.dump(baseline)}
         height="60vh"
         width="60vw"

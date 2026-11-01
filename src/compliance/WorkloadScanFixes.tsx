@@ -9,6 +9,7 @@ import { Link } from '@mui/material';
 import * as yaml from 'js-yaml';
 import { cloneDeep } from 'lodash';
 import { useEffect, useState } from 'react';
+import { useEditorTheme } from '../common/theme';
 import { getURLSegments } from '../common/url';
 import { fetchObject, workloadConfigurationScanClass } from '../model';
 import { useRegoData } from '../rego';
@@ -158,6 +159,7 @@ function Fix(
   }>
 ) {
   const { control, kind, name, namespace, cluster, rulePathPrefix } = props;
+  const editorTheme = useEditorTheme();
   const [resource, setResource] = useState<any>(null);
 
   useEffect(() => {
@@ -201,7 +203,7 @@ function Fix(
 
   return (
     <DiffEditor
-      theme={localStorage.headlampThemePreference === 'dark' ? 'vs-dark' : ''}
+      theme={editorTheme}
       language="yaml"
       original={original}
       modified={fixedYAML}

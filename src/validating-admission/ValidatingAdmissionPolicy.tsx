@@ -6,6 +6,7 @@ import * as yaml from 'js-yaml';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { getKubescapePluginUrl } from '../common/PluginHelper';
 import { TabPanel } from '../common/TabPanel';
+import { useEditorTheme } from '../common/theme';
 import { ValidatingAdmissionPolicy } from '../types/ValidatingAdmissionPolicy';
 import { loadWasm } from '../wasm/initWasmModule';
 import { ChoosePolicyButton } from './ChoosePolicyButton';
@@ -199,6 +200,7 @@ function AdmissionEvaluator() {
 
 function YAMLEditor(props: { editorRef: any; submitFn: any; value: string; handleChange?: any }) {
   const { editorRef, submitFn, value, handleChange } = props;
+  const editorTheme = useEditorTheme();
   const lastCodeCheckHandler = useRef(0);
 
   const [errors, setErrors] = useState('');
@@ -233,7 +235,7 @@ function YAMLEditor(props: { editorRef: any; submitFn: any; value: string; handl
           editorRef.current = editor;
           editor.onDidChangeModelContent(onChange);
         }}
-        theme={localStorage.headlampThemePreference === 'dark' ? 'vs-dark' : ''}
+        theme={editorTheme}
         value={value}
         height={600}
       />

@@ -6,10 +6,11 @@ import './style.css';
 import { SectionBox, Tabs as HeadlampTabs } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import Editor from '@monaco-editor/react';
-import { Box } from '@mui/material';
+import { Box, useTheme } from '@mui/material';
 import { ReactFlow, ReactFlowInstance } from '@xyflow/react';
 import * as yaml from 'js-yaml';
 import { useEffect, useState } from 'react';
+import { useEditorTheme } from '../common/theme';
 import { getURLSegments } from '../common/url';
 import { generatedNetworkPolicyClass } from '../model';
 import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
@@ -54,12 +55,13 @@ export default function KubescapeNetworkPolicyDiagram() {
 
 function NetworkPolicyEditor(props: Readonly<{ yaml: string }>) {
   const { yaml } = props;
+  const editorTheme = useEditorTheme();
 
   return (
     <Box paddingTop={2} height="100%">
       <Editor
         language={'yaml'}
-        theme={localStorage.headlampThemePreference === 'dark' ? 'vs-dark' : ''}
+        theme={editorTheme}
         value={yaml}
         height={window.innerHeight * 0.8}
       />
@@ -70,6 +72,7 @@ function NetworkPolicyEditor(props: Readonly<{ yaml: string }>) {
 function NetworkPolicyDiagram(props: Readonly<{ generatedNetworkPolicy: GeneratedNetworkPolicy }>) {
   const { generatedNetworkPolicy } = props;
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance>();
+  const theme = useTheme();
   const [dimensions, setDimensions] = useState({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -99,7 +102,7 @@ function NetworkPolicyDiagram(props: Readonly<{ generatedNetworkPolicy: Generate
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
-          colorMode={localStorage.headlampThemePreference}
+          colorMode={theme.palette.mode}
           fitView
           fitViewOptions={{ maxZoom: 1 }}
           proOptions={{ hideAttribution: true }}

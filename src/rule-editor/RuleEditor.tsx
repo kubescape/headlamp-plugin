@@ -39,6 +39,7 @@ import Autocomplete from '@mui/material/Autocomplete';
 import * as yaml from 'js-yaml';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TabPanel } from '../common/TabPanel';
+import { useEditorTheme } from '../common/theme';
 import { getURLSegments } from '../common/url';
 import { discoverProfileResource } from '../softwarecomposition/profileApi';
 import {
@@ -145,10 +146,6 @@ const EMPTY_NETWORK_YAML = `# NetworkNeighborhood mock data (keyed by containerI
 #           - "dns.google."
 `;
 
-function editorTheme() {
-  return localStorage.headlampThemePreference === 'dark' ? 'vs-dark' : '';
-}
-
 function MonacoEditor(
   props: Readonly<{
     editorRef?: React.MutableRefObject<any>;
@@ -159,12 +156,13 @@ function MonacoEditor(
   }>
 ) {
   const { editorRef, language, defaultValue, height, onChange } = props;
+  const editorTheme = useEditorTheme();
   return (
     <Editor
       language={language}
       defaultValue={defaultValue}
       height={height}
-      theme={editorTheme()}
+      theme={editorTheme}
       onMount={(editor: any) => {
         if (editorRef) editorRef.current = editor;
       }}
@@ -213,6 +211,7 @@ function RuleFormPage({
   initialRules?: Rule[];
   isEdit?: boolean;
 }>) {
+  const editorTheme = useEditorTheme();
   const [ruleMeta, setRuleMeta] = useState(
     initialMeta ?? {
       name: '',
@@ -442,7 +441,7 @@ function RuleFormPage({
             language="yaml"
             value={ruleYAML}
             height={700}
-            theme={editorTheme()}
+            theme={editorTheme}
             options={{ readOnly: true, minimap: { enabled: false }, scrollBeyondLastLine: false }}
           />
         </TabPanel>
