@@ -24,6 +24,7 @@ export default function SBOMDetail() {
   }
 
   const sbomSyft: SBOMSyft = sbomSyftObject.jsonData;
+  const artifacts = sbomSyft.spec.syft.artifacts ?? [];
   const message = filtered ? 'Showing in use artifacts only' : 'Showing all artifacts';
   return (
     <>
@@ -45,13 +46,13 @@ export default function SBOMDetail() {
             },
             {
               name: 'Components',
-              value: String(sbomSyft.spec.syft.artifacts.length),
+              value: String(artifacts.length),
             },
           ]}
         />
       </SectionBox>
 
-      <Artifacts artifacts={sbomSyft.spec.syft.artifacts} />
+      <Artifacts artifacts={artifacts} />
     </>
   );
 }

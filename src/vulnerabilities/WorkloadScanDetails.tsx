@@ -135,12 +135,17 @@ function Matches(
   const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useState(true);
   const [selectedCve, setSelectedCve] = useState<string | null>(null);
 
-  let relevantResults;
-  if (isRelevantCVESwitchChecked && relevant?.spec.payload.matches && results) {
-    relevantResults = results.filter(r =>
-      relevant.spec.payload.matches.some(m => m.vulnerability.id === r.vulnerability.id)
-    );
-  }
+  // Without a relevant manifest all findings are shown. A relevant manifest without matches
+  // means that none of the findings is relevant.
+  const relevantIds = relevant
+    ? new Set((relevant.spec.payload.matches ?? []).map(m => m.vulnerability.id))
+    : undefined;
+  const isRelevant = (match: VulnerabilityManifest.Match) =>
+    !relevantIds ? 'Unknown' : relevantIds.has(match.vulnerability.id) ? 'Yes' : 'No';
+  const shown =
+    isRelevantCVESwitchChecked && relevantIds
+      ? results.filter(r => relevantIds.has(r.vulnerability.id))
+      : results;
 
   return (
     <SectionBox title="Findings">
@@ -153,7 +158,12 @@ function Matches(
         }}
       />
       <HeadlampTable
-        data={relevantResults ?? results}
+        data={shown}
+        emptyMessage={
+          shown.length === 0 && results.length > 0
+            ? `None of the ${results.length} findings is relevant: Kubescape did not see the workload use the vulnerable packages. Switch off Relevant CVE to show them all.`
+            : undefined
+        }
         columns={[
           {
             header: 'Severity',
@@ -190,16 +200,7 @@ function Matches(
           },
           {
             header: 'Relevant',
-            accessorFn: (item: VulnerabilityManifest.Match) => {
-              if (!relevant) return 'Unknown';
-
-              return relevant.spec.payload.matches &&
-                relevant.spec.payload.matches.some(
-                  m => m.vulnerability.id === item.vulnerability.id
-                )
-                ? 'Yes'
-                : 'No';
-            },
+            accessorFn: isRelevant,
             gridTemplate: 'auto',
           },
           {

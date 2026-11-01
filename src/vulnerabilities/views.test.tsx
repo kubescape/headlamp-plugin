@@ -62,33 +62,41 @@ vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', () => ({
       ))}
     </dl>
   ),
-  Table: ({ data = [], columns }: any) => (
-    <table>
-      <tbody>
-        {data.map((item: any, i: number) => (
-          <tr key={i}>
-            {columns
-              .filter((col: any) => col.header !== undefined)
-              .map((col: any, j: number) => {
-                const value = col.accessorFn
-                  ? col.accessorFn(item)
-                  : col.accessorKey?.split('.').reduce((v: any, k: string) => v?.[k], item);
-                return (
-                  <td key={j}>
-                    {col.Cell
-                      ? col.Cell({
-                          cell: { getValue: () => value, row: { original: item } },
-                          row: { original: item },
-                        })
-                      : value}
-                  </td>
-                );
-              })}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  ),
+  // like Headlamp's table: the toolbar with the filters and export of a view, and only a
+  // message without the toolbar when there are no rows
+  Table: ({ data = [], columns, renderTopToolbarCustomActions, emptyMessage }: any) =>
+    data.length === 0 ? (
+      <div>{emptyMessage ?? 'No data to be shown.'}</div>
+    ) : (
+      <>
+        {renderTopToolbarCustomActions?.({ table: {} })}
+        <table>
+          <tbody>
+            {data.map((item: any, i: number) => (
+              <tr key={i}>
+                {columns
+                  .filter((col: any) => col.header !== undefined)
+                  .map((col: any, j: number) => {
+                    const value = col.accessorFn
+                      ? col.accessorFn(item)
+                      : col.accessorKey?.split('.').reduce((v: any, k: string) => v?.[k], item);
+                    return (
+                      <td key={j}>
+                        {col.Cell
+                          ? col.Cell({
+                              cell: { getValue: () => value, row: { original: item } },
+                              row: { original: item },
+                            })
+                          : value}
+                      </td>
+                    );
+                  })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>
+    ),
 }));
 
 beforeEach(() => {
@@ -207,7 +215,7 @@ it('isolates failed reports and uses kubescape only for legacy references withou
 
 it('shows independent workload dates and preserves relevancy filtering and exception controls', async () => {
   const all = manifest();
-  all.spec.payload.matches.push(match('CVE-2'));
+  all.spec.payload.matches!.push(match('CVE-2'));
   mocks.request.mockImplementation(async (url: string) =>
     url.includes('summaries/') ? summary() : url.endsWith('/image-123') ? all : manifest(T2)
   );
@@ -220,6 +228,21 @@ it('shows independent workload dates and preserves relevancy filtering and excep
   expect(screen.getByText('CVE-2')).toBeTruthy();
   fireEvent.click(screen.getAllByRole('button')[0]);
   expect(screen.getByText('Exception for CVE-1')).toBeTruthy();
+});
+
+it('shows no relevant findings when the relevant manifest has no matches', async () => {
+  const relevant = manifest(T2);
+  relevant.spec.payload.matches = null;
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? summary() : url.endsWith('/image-123') ? manifest() : relevant
+  );
+  render(<WorkloadDetails />);
+  await waitFor(() => expect(valueFor('Relevant findings last evaluated').textContent).toBe(T2));
+  expect(screen.queryByText('CVE-1')).toBeNull();
+  expect(screen.getByText(/None of the 1 findings is relevant/)).toBeTruthy();
+  // the switch stays, although the table without rows shows no toolbar
+  fireEvent.click(screen.getByRole('checkbox'));
+  expect(screen.getByText('CVE-1')).toBeTruthy();
 });
 
 it('updates a mounted workload view on a new fetch and drops previous-cluster results', async () => {

@@ -14,7 +14,7 @@ export interface SBOMSyft {
 
 export namespace SBOMSyft {
   export interface Syft {
-    artifacts: Artifact[];
+    artifacts: Artifact[] | null; // null when there are no packages, e.g. none in use
     distro: Distro;
   }
 
