@@ -19,6 +19,7 @@ const compliance: string = 'compliance';
 export const useHLSelectedClusters = useSelectedClusters ?? (() => [getCluster()]); //For backwards compatibility
 
 namespace RoutingPath {
+  export const Overview = '/kubescape/overview';
   export const ComplianceView = '/kubescape/compliance';
   export const KubescapeConfigurationScanNamespaceSummary = '/kubescape/compliance/:namespace';
   export const KubescapeWorkloadConfigurationScanDetails =
@@ -53,6 +54,7 @@ namespace RoutingPath {
 }
 
 export namespace RoutingName {
+  export const Overview = 'Kubescape Overview';
   export const ApplicationProfiles = 'Application Profile';
   export const ComplianceView = 'Compliance';
   export const ImageVulnerabilityDetails = 'Image Vulnerabilities';
@@ -89,7 +91,14 @@ registerSidebarEntry({
   name: kubescape,
   label: 'Kubescape',
   icon: 'mdi:shield-search',
-  url: RoutingPath.ComplianceView,
+  url: RoutingPath.Overview,
+});
+
+registerSidebarEntry({
+  parent: kubescape,
+  name: 'overview',
+  label: 'Overview',
+  url: RoutingPath.Overview,
 });
 
 registerSidebarEntry({
@@ -153,6 +162,16 @@ function withRegoData(Component: React.ComponentType) {
     );
   };
 }
+
+import KubescapeOverview from './overview/Overview';
+
+registerRoute({
+  path: RoutingPath.Overview,
+  sidebar: 'overview',
+  component: withRegoData(KubescapeOverview),
+  exact: true,
+  name: RoutingName.Overview,
+});
 
 registerRoute({
   path: RoutingPath.ComplianceView,

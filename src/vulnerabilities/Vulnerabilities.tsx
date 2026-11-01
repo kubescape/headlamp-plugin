@@ -71,11 +71,15 @@ export default function KubescapeVulnerabilities() {
 
   useEffect(() => {
     const fetchData = async () => {
-      initQueryTasks(clusters, setProgressMessage, kubescapeConfig);
-
-      await handleListPaginationTasks(vulnerabilityContext.queryTasks, continueReading, setLoading);
-
-      setWorkloadScanData([...vulnerabilityContext.workloadScans]);
+      setWorkloadScanData(
+        await readVulnerabilityScans(
+          clusters,
+          kubescapeConfig,
+          continueReading,
+          setLoading,
+          setProgressMessage
+        )
+      );
     };
 
     fetchData().catch(error => setError(error));
@@ -366,6 +370,23 @@ function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
       )}
     </>
   );
+}
+
+/**
+ * Reads the vulnerability scans of the clusters into the cache, which other pages share.
+ *
+ * @returns A copy of the cached workload scans.
+ */
+export async function readVulnerabilityScans(
+  clusters: string[],
+  kubescapeConfig: KubescapeConfig,
+  continueReading: React.MutableRefObject<boolean>,
+  setLoading: (loading: boolean) => void,
+  setProgressMessage: React.Dispatch<React.SetStateAction<string>>
+): Promise<WorkloadScan[]> {
+  initQueryTasks(clusters, setProgressMessage, kubescapeConfig);
+  await handleListPaginationTasks(vulnerabilityContext.queryTasks, continueReading, setLoading);
+  return [...vulnerabilityContext.workloadScans];
 }
 
 function initQueryTasks(
