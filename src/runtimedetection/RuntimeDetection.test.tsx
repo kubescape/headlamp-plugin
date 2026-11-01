@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
   listQuery: vi.fn(),
   request: vi.fn(),
   remove: vi.fn(),
+  updateConfig: vi.fn(),
   clusters: ['cluster-a'],
+  alertmanagerUrl: '',
+  ruleObjects: [] as any[],
 }));
 
 vi.mock('../index', () => ({
@@ -31,12 +34,20 @@ vi.mock('../model', () => ({
   applicationProfileClass: mocks.applicationProfileClass,
   networkNeighborhoodsClass: mocks.networkNeighborhoodsClass,
   listQuery: mocks.listQuery,
-  rulesClass: { useList: () => [[]] },
+  rulesClass: { useList: () => [mocks.ruleObjects] },
 }));
 vi.mock('../softwarecomposition/profileApi', () => ({
   discoverProfileResource: mocks.discoverProfileResource,
 }));
-vi.mock('../common/config-store', () => ({ getAlertmanagerUrl: () => '' }));
+vi.mock('../common/config-store', () => ({
+  getAlertmanagerUrl: () => mocks.alertmanagerUrl,
+  isValidAlertmanagerAddress: () => true,
+  kubescapeConfigStore: {
+    useConfig: () => () => ({}),
+    update: mocks.updateConfig,
+    get: () => ({ alertmanagerUrl: 'monitoring/alertmanager:9093' }),
+  },
+}));
 vi.mock('@kinvolk/headlamp-plugin/lib', () => ({
   Router: { createRouteURL: (route: string) => `/${route}` },
 }));
@@ -47,6 +58,16 @@ vi.mock('@kinvolk/headlamp-plugin/lib/ApiProxy', () => ({
   remove: mocks.remove,
 }));
 vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', () => ({
+  NameValueTable: ({ rows }: any) => (
+    <dl>
+      {rows.map((row: any) => (
+        <div key={row.name}>
+          <dt>{row.name}</dt>
+          <dd>{row.value}</dd>
+        </div>
+      ))}
+    </dl>
+  ),
   SectionBox: ({ title, children }: { title: string; children: ReactNode }) => (
     <section>
       <h1>{title}</h1>
@@ -54,8 +75,14 @@ vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', () => ({
     </section>
   ),
   ShowHideLabel: ({ children }: { children: ReactNode }) => <>{children}</>,
-  Link: ({ children, routeName, params }: any) => (
-    <a href={`/${routeName}/${params.namespace}/${params.name}`}>{children}</a>
+  Link: ({ children, routeName, params, activeCluster }: any) => (
+    <a
+      href={`${activeCluster ? `/${activeCluster}` : ''}/${routeName}/${params.namespace}/${
+        params.name
+      }`}
+    >
+      {children}
+    </a>
   ),
   Table: ({ data = [], columns }: any) => (
     <table data-testid={`table-${columns.map((column: any) => column.header).join('-')}`}>
@@ -72,8 +99,18 @@ vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', () => ({
             {columns.map((column: any, cellIndex: number) => {
               const value = column.accessorFn?.(item) ?? item[column.accessorKey];
               const cell = { getValue: () => value };
+              // the cell props of the column; Headlamp replaces those of the table
+              const props =
+                typeof column.muiTableBodyCellProps === 'function'
+                  ? column.muiTableBodyCellProps({ cell, row: { original: item } })
+                  : {};
               return (
-                <td key={cellIndex}>
+                <td
+                  key={cellIndex}
+                  onClick={props.onClick}
+                  onKeyDown={props.onKeyDown}
+                  tabIndex={props.tabIndex}
+                >
                   {column.Cell ? column.Cell({ cell, row: { original: item } }) : value}
                 </td>
               );
@@ -106,7 +143,10 @@ beforeEach(() => {
   mocks.request.mockReset();
   mocks.request.mockResolvedValue({ items: [] });
   mocks.remove.mockReset();
+  mocks.updateConfig.mockReset();
   mocks.clusters = ['cluster-a'];
+  mocks.alertmanagerUrl = '';
+  mocks.ruleObjects = [];
 });
 afterEach(cleanup);
 
@@ -250,6 +290,132 @@ it('accepts an empty ContainerProfile list without showing an API error', async 
   expect(
     screen.getByTestId('table-Name-Kind-Namespace-Container-Status').querySelectorAll('tbody tr')
   ).toHaveLength(0);
+});
+
+it('offers the Alertmanager found in the cluster while none is configured', async () => {
+  mocks.request.mockImplementation(async (url: string) =>
+    url === '/api/v1/services'
+      ? {
+          items: [
+            {
+              metadata: { name: 'alertmanager', namespace: 'monitoring' },
+              spec: { ports: [{ port: 9093 }] },
+            },
+          ],
+        }
+      : { items: [] }
+  );
+
+  renderRuntimeDetection();
+
+  fireEvent.click(await screen.findByText('Use monitoring/alertmanager:9093'));
+  expect(mocks.updateConfig).toHaveBeenCalledWith({
+    alertmanagerUrl: 'monitoring/alertmanager:9093',
+  });
+  expect(mocks.request).toHaveBeenCalledWith('/api/v1/services', { cluster: 'cluster-a' });
+});
+
+it('shows an alert of the node-agent by severity, workload and finding, with its details', async () => {
+  const proxy = '/api/v1/namespaces/monitoring/services/alertmanager:9093/proxy';
+  mocks.alertmanagerUrl = proxy;
+  mocks.request.mockImplementation(async (url: string) =>
+    url.startsWith(`${proxy}/api/v2/alerts`)
+      ? [
+          {
+            labels: {
+              alertname: 'KubescapeRuleViolated',
+              rule_name: 'DNS Anomalies in container',
+              rule_id: 'R0005',
+              severity: '1',
+              namespace: 'certificates',
+              pod_name: 'cert-watch-b576bb668-5f2s6',
+              container_name: 'watcher',
+              node_name: 'node-1',
+              comm: 'python3',
+              pid: '9635',
+              pcomm: 'containerd-shim',
+              ppid: '7476',
+              // node-agent v0.3 sends memory addresses as ids
+              uid: '824701441376',
+              gid: '0',
+              trace: '{}',
+              profile_status: 'completed',
+            },
+            annotations: {
+              description:
+                'Unexpected domain communication: _acme-challenge.example.com. from: watcher',
+              summary:
+                "Rule 'DNS Anomalies in container' in 'cert-watch-b576bb668-5f2s6' namespace 'certificates' failed",
+              fix: '',
+            },
+            startsAt: '2026-10-31T17:19:17Z',
+            endsAt: '2026-10-31T18:19:17Z',
+            status: { state: 'active' },
+            fingerprint: 'abc',
+          },
+        ]
+      : { items: [] }
+  );
+  mocks.ruleObjects = [
+    {
+      cluster: 'cluster-a',
+      jsonData: {
+        metadata: { name: 'default-rules', namespace: 'kubescape' },
+        spec: {
+          rules: [
+            {
+              id: 'R0005',
+              name: 'DNS Anomalies in container',
+              description:
+                'Detects unexpected domain requests that are not whitelisted by the learned profile',
+              mitreTactic: 'TA0011',
+              mitreTechnique: 'T1071.004',
+              profileDependency: 0,
+            },
+          ],
+        },
+      },
+    },
+  ];
+
+  renderRuntimeDetection();
+
+  expect(await screen.findByText('cert-watch')).toBeTruthy();
+  expect(screen.getByText('Low')).toBeTruthy();
+  expect(
+    screen.getByText('Unexpected domain communication: _acme-challenge.example.com. from: watcher')
+  ).toBeTruthy();
+
+  // a click on the row opens the details
+  fireEvent.click(screen.getByText('cert-watch'));
+  const dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByText('python3 (PID 9635)')).toBeTruthy();
+  expect(within(dialog).getByText('containerd-shim (PID 7476)')).toBeTruthy();
+  expect(within(dialog).getByText('DNS Anomalies in container (R0005)')).toBeTruthy();
+  expect(within(dialog).getByText('Low (priority 1)')).toBeTruthy();
+  // what the rule detects, from the rules of the cluster
+  expect(
+    within(dialog).getByText(
+      'Detects unexpected domain requests that are not whitelisted by the learned profile.'
+    )
+  ).toBeTruthy();
+  expect(within(dialog).getByText('T1071.004').getAttribute('href')).toBe(
+    'https://attack.mitre.org/techniques/T1071/004/'
+  );
+  expect(within(dialog).getByText(/^Required/)).toBeTruthy();
+  expect(within(dialog).getByText('Group ID')).toBeTruthy();
+  expect(within(dialog).queryByText('User ID')).toBeNull();
+  expect(within(dialog).queryByText('Fix')).toBeNull();
+  expect(within(dialog).queryByText('Trace')).toBeNull();
+  expect(
+    within(dialog).getByText('cert-watch-b576bb668-5f2s6').closest('a')?.getAttribute('href')
+  ).toBe('/cluster-a/pod/certificates/cert-watch-b576bb668-5f2s6');
+  fireEvent.click(within(dialog).getByText('Close'));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+  // and so does Enter on the rule
+  fireEvent.keyDown(screen.getByText('DNS Anomalies in container'), { key: 'Enter' });
+  expect(screen.getByRole('dialog')).toBeTruthy();
 });
 
 it('lists and deletes the rule bindings of each selected cluster', async () => {

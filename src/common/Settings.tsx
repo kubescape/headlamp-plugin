@@ -3,6 +3,7 @@ import { useClustersConf } from '@kinvolk/headlamp-plugin/lib/k8s';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
@@ -10,6 +11,7 @@ import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import React from 'react';
+import { detectAlertmanager } from '../runtimedetection/alertmanager';
 import { isValidAlertmanagerAddress, KubescapeConfig } from './config-store';
 
 interface SettingsProps {
@@ -38,11 +40,41 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
     'idle'
   );
   const [testMessage, setTestMessage] = React.useState('');
+  // Alertmanager addresses found in the selected cluster, null before looking
+  const [detected, setDetected] = React.useState<string[] | null>(null);
+  const [detecting, setDetecting] = React.useState(false);
 
   React.useEffect(() => {
     if (kubescapeData?.alertmanagerUrl !== undefined)
       setAlertmanagerAddress(kubescapeData.alertmanagerUrl);
   }, [kubescapeData?.alertmanagerUrl]);
+
+  const changeAlertmanagerAddress = (address: string) => {
+    setAlertmanagerAddress(address);
+    if (onDataChange) onDataChange({ ...data, alertmanagerUrl: address });
+  };
+
+  const handleDetect = async (fillIn: boolean) => {
+    setDetecting(true);
+    try {
+      const addresses = await detectAlertmanager(selectedCluster);
+      setDetected(addresses);
+      if (fillIn && addresses.length > 0) changeAlertmanagerAddress(addresses[0]);
+    } catch {
+      setDetected([]);
+    } finally {
+      setDetecting(false);
+    }
+  };
+
+  // Suggest the Alertmanager of the cluster while none is configured
+  React.useEffect(() => {
+    if (selectedCluster && !kubescapeData?.alertmanagerUrl && detected === null) {
+      handleDetect(true);
+    }
+    // only when the cluster is known; handleDetect changes on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCluster]);
 
   React.useEffect(() => {
     setInputValue((kubescapeData?.pageSize || 50).toString());
@@ -184,12 +216,17 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
                 ? 'Invalid format. Use: namespace/service-name:port'
                 : 'Address of the Alertmanager service. Format: namespace/service-name:port'
             }
-            onChange={e => {
-              setAlertmanagerAddress(e.target.value);
-              if (onDataChange) onDataChange({ ...data, alertmanagerUrl: e.target.value });
-            }}
+            onChange={e => changeAlertmanagerAddress(e.target.value)}
             fullWidth
           />
+          <Button
+            variant="outlined"
+            disabled={!selectedCluster || detecting}
+            onClick={() => handleDetect(!alertmanagerAddress)}
+            sx={{ mt: 1, minWidth: '100px' }}
+          >
+            {detecting ? 'Detecting…' : 'Detect'}
+          </Button>
           <Button
             variant="contained"
             disabled={addressError || !alertmanagerAddress || testStatus === 'testing'}
@@ -199,6 +236,27 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
             {testStatus === 'testing' ? 'Testing…' : 'Test Connection'}
           </Button>
         </Box>
+        {detected && detected.length === 0 && (
+          <Typography variant="body2" color="text.secondary">
+            No Alertmanager service found in cluster {selectedCluster}.
+          </Typography>
+        )}
+        {detected && detected.length > 0 && (
+          <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+            <Typography variant="body2" color="text.secondary">
+              Found in {selectedCluster}:
+            </Typography>
+            {detected.map(address => (
+              <Chip
+                key={address}
+                label={address}
+                size="small"
+                color={address === alertmanagerAddress ? 'primary' : 'default'}
+                onClick={() => changeAlertmanagerAddress(address)}
+              />
+            ))}
+          </Box>
+        )}
         {testStatus !== 'idle' && testMessage && (
           <Alert
             severity={

@@ -9,11 +9,11 @@ import {
 import { localeDate } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { TabContext, TabList } from '@mui/lab';
 import { Alert, Chip, IconButton, Stack, Tab, Tooltip, Typography } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import { ClusterErrors } from '../common/ClusterErrors';
 import { clusterColumns, rejectedClusters } from '../common/clusters';
-import { getAlertmanagerUrl } from '../common/config-store';
+import { getAlertmanagerUrl, kubescapeConfigStore } from '../common/config-store';
 import { PermittedIconButton } from '../common/permissions';
 import { SetupCheck } from '../common/SetupCheck';
 import HeadlampTable from '../common/Table';
@@ -29,17 +29,58 @@ import {
 } from '../model';
 import { ContainerProfile } from '../softwarecomposition/ContainerProfile';
 import { discoverProfileResource } from '../softwarecomposition/profileApi';
-import { AlertMessagePopup } from './AlertMessagePopup';
+import { AlertDetailsDialog } from './AlertDetails';
+import {
+  alertMessage,
+  alertNamespace,
+  alertPod,
+  alertRule,
+  alertSeverity,
+  alertWorkload,
+  indexRules,
+  ruleDescription,
+  severityColor,
+  severityRank,
+} from './alertFields';
+import { AlertmanagerAlert, detectAlertmanager, fetchKubescapeAlerts } from './alertmanager';
 
 const { createRouteURL } = Router;
 
-interface AlertmanagerAlert {
-  labels: Record<string, string>;
-  annotations: Record<string, string>;
-  startsAt: string;
-  endsAt: string;
-  status: { state: string };
-  fingerprint: string;
+// Offers to use the Alertmanager found in the cluster when none is configured
+function AlertmanagerSuggestion(props: Readonly<{ cluster: string }>) {
+  const { cluster } = props;
+  const [addresses, setAddresses] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    detectAlertmanager(cluster)
+      .catch(() => [])
+      .then(found => {
+        if (active) setAddresses(found);
+      });
+    return () => {
+      active = false;
+    };
+  }, [cluster]);
+
+  return (
+    <Alert severity="warning" variant="filled">
+      Alertmanager URL is not configured. Please set it in the Kubescape plugin settings.
+      {addresses && addresses.length > 0 && (
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }} flexWrap="wrap">
+          <span>Found in cluster {cluster}:</span>
+          {addresses.map(address => (
+            <Chip
+              key={address}
+              label={`Use ${address}`}
+              size="small"
+              onClick={() => kubescapeConfigStore.update({ alertmanagerUrl: address })}
+            />
+          ))}
+        </Stack>
+      )}
+    </Alert>
+  );
 }
 
 export function RuntimeDetection() {
@@ -79,40 +120,56 @@ export function RuntimeDetection() {
 // ── Alerts ────────────────────────────────────────────────────────────────────
 
 function AlertsTab() {
+  const clusters = useHLSelectedClusters();
+  const clustersKey = clusters.join(',');
   const [alerts, setAlerts] = useState<AlertmanagerAlert[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<ClusterError[]>([]);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [selected, setSelected] = useState<AlertmanagerAlert | null>(null);
+  // the rules of the clusters, for what each alert's rule detects
+  const [ruleObjects] = rulesClass.useList({ clusters }) as any;
+  const rules = useMemo(
+    () =>
+      indexRules(
+        (ruleObjects ?? []).map((object: any) => ({
+          cluster: object.cluster,
+          rules: object.jsonData?.spec?.rules,
+        }))
+      ),
+    [ruleObjects]
+  );
+  // re-render when the Alertmanager address is configured
+  kubescapeConfigStore.useConfig()();
   const alertmanagerUrl = getAlertmanagerUrl();
 
   const fetchAlerts = () => {
     if (!alertmanagerUrl) return;
     setLoading(true);
-    setError('');
-    const url = `${alertmanagerUrl}/api/v2/alerts?filter=alertname%3D%22KubescapeRuleViolated%22&active=true&silenced=false&inhibited=false`;
-    request(url)
-      .then((data: any) => {
-        const items: AlertmanagerAlert[] = Array.isArray(data) ? data : [];
-        items.sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime());
-        setAlerts(items);
+    Promise.allSettled(clusters.map(cluster => fetchKubescapeAlerts(cluster)))
+      .then(results => {
+        setAlerts(
+          results
+            .flatMap(result => (result.status === 'fulfilled' ? result.value : []))
+            .sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime())
+        );
+        setErrors(rejectedClusters(clusters, results));
         setLastRefresh(new Date());
       })
-      .catch((err: any) => setError(err?.message ?? String(err)))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     fetchAlerts();
-    const interval = setInterval(fetchAlerts, 60_000);
+    // no refreshing while Headlamp is minimized or in a background tab
+    const interval = setInterval(() => {
+      if (!document.hidden) fetchAlerts();
+    }, 60_000);
     return () => clearInterval(interval);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [alertmanagerUrl, clustersKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!alertmanagerUrl) {
-    return (
-      <Alert severity="warning" variant="filled">
-        Alertmanager URL is not configured. Please set it in the Kubescape plugin settings.
-      </Alert>
-    );
+    return <AlertmanagerSuggestion cluster={clusters[0]} />;
   }
 
   return (
@@ -130,15 +187,16 @@ function AlertsTab() {
         )}
       </Stack>
 
-      {error && (
-        <Typography color="error" variant="body2" sx={{ mb: 1 }}>
-          {error}
-        </Typography>
-      )}
+      <ClusterErrors errors={errors} what="the alerts" />
 
       <HeadlampTable
         data={alerts}
+        // a click on an alert shows its details
+        onRowClick={setSelected}
+        // the cells of a row keep what the row first showed, so each alert is a row of its own
+        getRowId={(a: AlertmanagerAlert) => `${a.cluster}/${a.fingerprint}/${a.startsAt}`}
         columns={[
+          ...clusterColumns<AlertmanagerAlert>(clusters, alert => alert.cluster),
           {
             id: 'time',
             header: 'Time',
@@ -153,59 +211,79 @@ function AlertsTab() {
           },
           {
             header: 'Rule',
-            accessorFn: (a: AlertmanagerAlert) => a.labels.rule_name ?? a.labels.alertname,
+            // with what the rule detects, which the search also finds; Headlamp only redraws a
+            // cell when its value changes, so rules read after the alerts are part of it
+            accessorFn: (a: AlertmanagerAlert) =>
+              [a.labels.rule_name ?? a.labels.alertname, ruleDescription(alertRule(rules, a))]
+                .filter(Boolean)
+                .join('\n'),
+            Cell: ({ cell }: any) => {
+              const [name, description] = String(cell.getValue()).split('\n');
+              return description ? (
+                <Tooltip title={description}>
+                  <span>{name}</span>
+                </Tooltip>
+              ) : (
+                name
+              );
+            },
+            // the details can also be opened with the keyboard
+            muiTableBodyCellProps: ({ row }: any) => ({
+              tabIndex: 0,
+              onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setSelected(row.original);
+                }
+              },
+            }),
             gridTemplate: 'auto',
           },
           {
+            id: 'severity',
             header: 'Severity',
-            accessorFn: (a: AlertmanagerAlert) => a.labels.severity,
+            accessorFn: (a: AlertmanagerAlert) => alertSeverity(a) ?? '',
+            sortingFn: (a: any, b: any) =>
+              (severityRank[alertSeverity(a.original) ?? 'None'] ?? 0) -
+              (severityRank[alertSeverity(b.original) ?? 'None'] ?? 0),
             Cell: ({ cell }: any) => {
-              const v = cell.getValue();
-              if (!v) return null;
-              const color: any = v === 'critical' ? 'error' : v === 'high' ? 'warning' : 'default';
-              return <Chip label={v} color={color} size="small" />;
+              const severity = cell.getValue();
+              if (!severity) return null;
+              return <Chip label={severity} color={severityColor(severity)} size="small" />;
             },
             gridTemplate: 'min-content',
           },
           {
             header: 'Pod',
-            accessorFn: (a: AlertmanagerAlert) => a.labels.pod ?? a.labels.pod_name,
+            accessorFn: (a: AlertmanagerAlert) => alertPod(a),
             gridTemplate: 'auto',
           },
           {
             header: 'Workload',
-            accessorFn: (a: AlertmanagerAlert) => a.labels.workload_name ?? a.labels.workload,
+            accessorFn: (a: AlertmanagerAlert) => alertWorkload(a),
             gridTemplate: 'auto',
           },
           {
             header: 'Namespace',
-            accessorFn: (a: AlertmanagerAlert) => a.labels.namespace ?? a.labels.workload_namespace,
+            accessorFn: (a: AlertmanagerAlert) => alertNamespace(a),
             gridTemplate: 'auto',
           },
           {
             header: 'Message',
-            accessorFn: (a: AlertmanagerAlert) =>
-              a.annotations.summary ?? a.annotations.description ?? a.annotations.message,
+            accessorFn: (a: AlertmanagerAlert) => alertMessage(a),
             Cell: ({ cell }: any) => <ShowHideLabel>{cell.getValue()}</ShowHideLabel>,
-            gridTemplate: '2fr',
-          },
-          {
-            header: '',
-            accessorFn: () => '...',
-            Cell: ({ row }: any) => (
-              <AlertMessagePopup
-                content={JSON.stringify(
-                  { labels: row.original.labels, annotations: row.original.annotations },
-                  null,
-                  2
-                )}
-              />
-            ),
-            gridTemplate: 'min-content',
+            gridTemplate: 'minmax(280px, 2fr)',
           },
         ]}
         initialState={{ sorting: [{ id: 'time', desc: true }] }}
       />
+      {selected && (
+        <AlertDetailsDialog
+          alert={selected}
+          rule={alertRule(rules, selected)}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </>
   );
 }
@@ -449,12 +527,6 @@ function formatSelector(selector: any): string {
     );
   }
   return parts.length ? parts.join(', ') : '(all)';
-}
-
-function severityColor(severity: string | undefined): 'error' | 'warning' | 'default' {
-  if (severity === 'Critical' || severity === 'High') return 'error';
-  if (severity === 'Medium') return 'warning';
-  return 'default';
 }
 
 const RULE_BINDING_API = '/apis/kubescape.io/v1/runtimerulealertbindings';
