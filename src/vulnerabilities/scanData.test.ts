@@ -2,10 +2,12 @@ import {
   getImageScanKey,
   getImageScans,
   getManifestReferenceKey,
+  ImageScan,
   toImageScan,
+  toWorkloadScan,
   WorkloadScan,
 } from './scanData';
-import { manifest, T0, T1, T2 } from './testFixtures';
+import { manifest, summary, T0, T1, T2 } from './testFixtures';
 
 it('maps timestamps without changing identity or findings', () => {
   const report = manifest();
@@ -30,6 +32,47 @@ it('maps legacy and empty/missing findings without manufacturing an evaluation t
   expect(toImageScan(report).matches).toEqual([]);
   Reflect.deleteProperty(report.spec.payload, 'matches');
   expect(toImageScan(report).matches).toEqual([]);
+});
+
+it('finds the reports in the operator namespace when the summary refers to the workload namespace', () => {
+  // as Kubescape stores them: all reports in the operator namespace
+  const report = (cluster: string, name: string, namespace = 'kubescape') => {
+    const scan = toImageScan(manifest());
+    return { ...scan, cluster, namespace, manifestName: name };
+  };
+  const images = new Map<string, ImageScan>(
+    [
+      report('cluster-a', 'image-123'),
+      report('cluster-a', 'relevant-123'),
+      report('cluster-b', 'other-image'),
+    ].map(scan => [getImageScanKey(scan), scan])
+  );
+  const s = summary();
+  s.spec.vulnerabilitiesRef.all = {
+    kind: 'vulnerabilitymanifests',
+    name: 'image-123',
+    namespace: 'workloads',
+  };
+  s.spec.vulnerabilitiesRef.relevant = {
+    kind: 'vulnerabilitymanifests',
+    name: 'relevant-123',
+    namespace: 'workloads',
+  };
+
+  const workload = toWorkloadScan(s, images);
+
+  expect(workload.imageScan?.manifestName).toBe('image-123');
+  expect(workload.relevant?.manifestName).toBe('relevant-123');
+
+  // a report of the same name in another cluster is not the one
+  s.metadata.cluster = 'cluster-b';
+  expect(toWorkloadScan(s, images).imageScan).toBeUndefined();
+
+  // the referenced report wins when it exists where the summary says
+  const exact = report('cluster-a', 'image-123', 'workloads');
+  images.set(getImageScanKey(exact), exact);
+  s.metadata.cluster = 'cluster-a';
+  expect(toWorkloadScan(s, images).imageScan).toBe(exact);
 });
 
 it('uses cluster and referenced namespace in keys, with the legacy namespace default', () => {

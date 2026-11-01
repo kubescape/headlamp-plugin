@@ -15,6 +15,7 @@ import { FormControlLabel, IconButton, Link, Switch, Tooltip } from '@mui/materi
 import { useEffect, useState } from 'react';
 import makeSeverityLabel from '../common/SeverityLabel';
 import { getURLSegments } from '../common/url';
+import { getKubescapeNamespace } from '../custom-objects/api-queries';
 import { GuidedVulnerabilityExceptionForm } from '../exceptions/GuidedVulnerabilityExceptionForm';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
@@ -275,14 +276,27 @@ export async function fetchVulnerabilityManifest(
     namespace?: string;
   }): Promise<VulnerabilityManifest | null> {
     if (!reference?.name) return null;
-    try {
-      return await request(
-        `/apis/spdx.softwarecomposition.kubescape.io/v1beta1/namespaces/${getManifestNamespace(
-          reference
-        )}/vulnerabilitymanifests/${reference.name}`,
+    const read = (namespace: string) =>
+      request(
+        `/apis/spdx.softwarecomposition.kubescape.io/v1beta1/namespaces/${namespace}/vulnerabilitymanifests/${reference.name}`,
         { cluster }
       );
-    } catch (error) {
+    const referenced = getManifestNamespace(reference);
+    try {
+      return await read(referenced);
+    } catch (error: any) {
+      // the storage may keep the report in the operator namespace instead of the referenced one
+      if (error?.status === 404) {
+        const { kubeScapeNamespace } = await getKubescapeNamespace(cluster ?? getCluster());
+        if (kubeScapeNamespace && kubeScapeNamespace !== referenced) {
+          try {
+            return await read(kubeScapeNamespace);
+          } catch (fallbackError) {
+            console.error(fallbackError);
+            return null;
+          }
+        }
+      }
       console.error(error);
       return null;
     }

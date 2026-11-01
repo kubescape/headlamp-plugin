@@ -170,6 +170,31 @@ it.each(['all', 'relevant', 'both', 'neither'] as const)(
   }
 );
 
+it('reads a report from the operator namespace when it is not where the summary refers to', async () => {
+  window.sessionStorage.clear();
+  const s = summary();
+  s.spec.vulnerabilitiesRef.all = {
+    kind: 'vulnerabilitymanifests',
+    name: 'image-123',
+    namespace: 'workloads',
+  };
+  s.spec.vulnerabilitiesRef.relevant = undefined;
+  mocks.request.mockImplementation(async (url: string) => {
+    if (url.includes('summaries/')) return s;
+    if (url.startsWith('api/v1/pods?'))
+      return { items: [{ metadata: { namespace: 'kubescape' } }] };
+    if (url.includes('/namespaces/kubescape/vulnerabilitymanifests/image-123')) return manifest(T2);
+    throw Object.assign(new Error('not found'), { status: 404 });
+  });
+
+  const [, all] = await fetchVulnerabilityManifest('workload-123', 'workloads', 'cluster-a');
+
+  expect(all?.metadata.name).toBe('image-123');
+  expect(mocks.request.mock.calls.map(([url]) => url.split('?')[0])).toContain(
+    '/apis/spdx.softwarecomposition.kubescape.io/v1beta1/namespaces/workloads/vulnerabilitymanifests/image-123'
+  );
+});
+
 it.each(['all', 'relevant'] as const)(
   'renders the available date when the %s reference is absent',
   async missing => {

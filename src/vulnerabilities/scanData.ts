@@ -45,6 +45,40 @@ export function getManifestReferenceKey(
     : undefined;
 }
 
+// The reports of each cluster by name, built again when reports were added
+const reportsByName = new WeakMap<
+  Map<string, ImageScan>,
+  { size: number; byName: Map<string, ImageScan> }
+>();
+
+function findReportByName(images: Map<string, ImageScan>, cluster: string, name: string) {
+  let index = reportsByName.get(images);
+  if (!index || index.size !== images.size) {
+    const byName = new Map<string, ImageScan>();
+    for (const image of images.values()) {
+      byName.set(JSON.stringify([image.cluster, image.manifestName]), image);
+    }
+    index = { size: images.size, byName };
+    reportsByName.set(images, index);
+  }
+  return index.byName.get(JSON.stringify([cluster, name]));
+}
+
+/**
+ * The report a summary refers to. Kubescape storage keeps the reports in the operator
+ * namespace while summaries can refer to the namespace of their workload, so a report that is
+ * not in the referenced namespace is looked up by its name, which is unique in a cluster.
+ */
+export function findImageScan(
+  images: Map<string, ImageScan>,
+  cluster: string,
+  reference?: { name?: string; namespace?: string } | null
+): ImageScan | undefined {
+  const key = getManifestReferenceKey(cluster, reference);
+  if (!key || !reference?.name) return undefined;
+  return images.get(key) ?? findReportByName(images, cluster, reference.name);
+}
+
 export function toImageScan(manifest: VulnerabilityManifest): ImageScan {
   return {
     manifestName: manifest.metadata.name,
@@ -70,8 +104,6 @@ export function toWorkloadScan(
   images: Map<string, ImageScan>
 ): WorkloadScan {
   const cluster = summary.metadata.cluster;
-  const all = getManifestReferenceKey(cluster, summary.spec.vulnerabilitiesRef?.all);
-  const relevant = getManifestReferenceKey(cluster, summary.spec.vulnerabilitiesRef?.relevant);
   return {
     manifestName: summary.metadata.name,
     name: summary.metadata.labels['kubescape.io/workload-name'],
@@ -79,8 +111,8 @@ export function toWorkloadScan(
     cluster,
     container: summary.metadata.labels['kubescape.io/workload-container-name'],
     kind: summary.metadata.labels['kubescape.io/workload-kind'],
-    imageScan: all ? images.get(all) : undefined,
-    relevant: relevant ? images.get(relevant) : undefined,
+    imageScan: findImageScan(images, cluster, summary.spec.vulnerabilitiesRef?.all),
+    relevant: findImageScan(images, cluster, summary.spec.vulnerabilitiesRef?.relevant),
   };
 }
 
