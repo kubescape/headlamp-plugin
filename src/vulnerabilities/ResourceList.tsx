@@ -6,8 +6,8 @@ import {
   SectionBox,
   TableColumn,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { Box, Stack, Tooltip } from '@mui/material';
 import { makeNamespaceLink } from '../common/Namespace';
+import { SeverityCountStack } from '../common/SeverityCountBox';
 import HeadlampTable from '../common/Table';
 import { RoutingName, useHLSelectedClusters } from '../index';
 import { WorkloadScan } from './Vulnerabilities';
@@ -187,33 +187,16 @@ function resultStack(workloadScan: WorkloadScan) {
   if (!workloadScan.imageScan) {
     return <div />;
   }
-  function box(color: string, severity: string) {
-    return (
-      <Box
-        sx={{
-          borderLeft: 2,
-          borderTop: 1,
-          borderRight: 1,
-          borderBottom: 1,
-          borderColor: `gray gray gray ${color}`,
-          textAlign: 'center',
-          width: 25,
-        }}
-      >
-        <Tooltip title={severity}>
-          <Box>{countScans(workloadScan, severity)}</Box>
-        </Tooltip>
-      </Box>
-    );
-  }
 
   return (
-    <Stack direction="row" spacing={1}>
-      {box('purple', 'Critical')}
-      {box('red', 'High')}
-      {box('orange', 'Medium')}
-      {box('yellow', 'Low')}
-    </Stack>
+    <SeverityCountStack
+      count={severity => countScans(workloadScan, severity)}
+      link={{
+        routeName: RoutingName.KubescapeVulnerabilityDetails,
+        params: { name: workloadScan.manifestName, namespace: workloadScan.namespace },
+        activeCluster: workloadScan.cluster,
+      }}
+    />
   );
 }
 

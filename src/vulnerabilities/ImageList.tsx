@@ -6,7 +6,8 @@ import {
   Link as HeadlampLink,
   SectionBox,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { Box, Stack, Tooltip } from '@mui/material';
+import { Stack } from '@mui/material';
+import { SeverityCountStack } from '../common/SeverityCountBox';
 import HeadlampTable from '../common/Table';
 import { RoutingName } from '../index';
 import { getImageScanKey, getImageScans, ImageScan, WorkloadScan } from './scanData';
@@ -148,35 +149,18 @@ export default function ImageListView(props: Readonly<{ workloadScans: WorkloadS
 }
 
 function resultStack(imageScan: ImageScan) {
-  function box(color: string, severity: string) {
-    return (
-      <Box
-        sx={{
-          borderLeft: 2,
-          borderTop: 1,
-          borderRight: 1,
-          borderBottom: 1,
-          borderColor: `gray gray gray ${color}`,
-          textAlign: 'center',
-          width: 25,
-        }}
-      >
-        <Tooltip title={cveList(imageScan, severity)}>
-          <Box>
-            {imageScan.matches.filter(match => match.vulnerability.severity === severity).length}
-          </Box>
-        </Tooltip>
-      </Box>
-    );
-  }
-
   return (
-    <Stack direction="row" spacing={1}>
-      {box('purple', 'Critical')}
-      {box('red', 'High')}
-      {box('orange', 'Medium')}
-      {box('yellow', 'Low')}
-    </Stack>
+    <SeverityCountStack
+      count={severity =>
+        imageScan.matches.filter(match => match.vulnerability.severity === severity).length
+      }
+      tooltip={severity => cveList(imageScan, severity)}
+      link={{
+        routeName: RoutingName.ImageVulnerabilityDetails,
+        params: { name: imageScan.manifestName, namespace: imageScan.namespace },
+        activeCluster: imageScan.cluster,
+      }}
+    />
   );
 }
 

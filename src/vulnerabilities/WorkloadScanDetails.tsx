@@ -10,14 +10,14 @@ import {
   ShowHideLabel,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
-import { Button, FormControlLabel, Link, Stack, Switch } from '@mui/material';
+import { Button, Chip, FormControlLabel, Link, Stack, Switch } from '@mui/material';
 import { ReactNode, useEffect, useState } from 'react';
 import { vulnerabilityScanCommand } from '../common/operatorCommands';
 import { createExceptionCheck, PermittedIconButton } from '../common/permissions';
 import { ScanNowButton } from '../common/ScanNowButton';
 import makeSeverityLabel from '../common/SeverityLabel';
 import HeadlampTable from '../common/Table';
-import { getURLSegments } from '../common/url';
+import { getURLSegments, useURLSearchParam } from '../common/url';
 import { getKubescapeNamespace } from '../custom-objects/api-queries';
 import { GuidedVulnerabilityExceptionForm } from '../exceptions/GuidedVulnerabilityExceptionForm';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
@@ -193,8 +193,13 @@ function Matches(
   }>
 ) {
   const { manifest, relevant, workloadName, workloadNamespace, workloadKind, imageRef } = props;
-  const results: VulnerabilityManifest.Match[] = manifest.spec.payload.matches ?? [];
-  const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useState(true);
+
+  // Severity links count all findings, so they open with the Relevant CVE switch off
+  const [severity, clearSeverity] = useURLSearchParam('severity');
+  const results = (manifest.spec.payload.matches ?? []).filter(
+    match => !severity || match.vulnerability.severity === severity
+  );
+  const [isRelevantCVESwitchChecked, setIsRelevantCVESwitchChecked] = useState(!severity);
   const [selectedCve, setSelectedCve] = useState<string | null>(null);
 
   // Without a relevant manifest all findings are shown. A relevant manifest without matches
@@ -217,14 +222,19 @@ function Matches(
     <SectionBox title="Findings">
       <HeadlampTable
         toolbarStart={
-          <FormControlLabel
-            checked={isRelevantCVESwitchChecked}
-            control={<Switch color="primary" />}
-            label={'Relevant CVE'}
-            onChange={(event: any, checked: boolean) => {
-              setIsRelevantCVESwitchChecked(checked);
-            }}
-          />
+          <>
+            <FormControlLabel
+              checked={isRelevantCVESwitchChecked}
+              control={<Switch color="primary" />}
+              label={'Relevant CVE'}
+              onChange={(event: any, checked: boolean) => {
+                setIsRelevantCVESwitchChecked(checked);
+              }}
+            />
+            {severity && (
+              <Chip label={`Only ${severity} findings`} onDelete={clearSeverity} size="small" />
+            )}
+          </>
         }
         csvExport={{
           fileName: `kubescape-${workloadNamespace}-${workloadName}-cves.csv`,

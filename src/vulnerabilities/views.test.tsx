@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   imageGet: vi.fn(),
   sbomGet: vi.fn(),
   sbomFilteredGet: vi.fn(),
+  severity: null as string | null,
   cluster: 'cluster-a',
   name: 'workload-123',
   saveToFile: vi.fn(),
@@ -41,7 +42,10 @@ vi.mock('../model', () => ({
   sbomSyftClass: { useApiGet: mocks.sbomGet },
   sbomSyftFilteredClass: { useApiGet: mocks.sbomFilteredGet },
 }));
-vi.mock('../common/url', () => ({ getURLSegments: () => [mocks.name, 'workloads'] }));
+vi.mock('../common/url', () => ({
+  getURLSegments: () => [mocks.name, 'workloads'],
+  useURLSearchParam: (name: string) => [name === 'severity' ? mocks.severity : null, () => {}],
+}));
 vi.mock('@kinvolk/headlamp-plugin/lib/ApiProxy', () => ({ request: mocks.request }));
 vi.mock('@kinvolk/headlamp-plugin/lib/Utils', () => ({ getCluster: () => mocks.cluster }));
 vi.mock('../exceptions/GuidedVulnerabilityExceptionForm', () => ({
@@ -57,8 +61,13 @@ vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', () => ({
   SectionBox: ({ children }: { children: ReactNode }) => <section>{children}</section>,
   ShowHideLabel: ({ children }: { children: ReactNode }) => <>{children}</>,
   Tabs: () => null,
-  Link: ({ children, activeCluster, routeName, params }: any) => (
-    <a href={`/${activeCluster}/${routeName}/${params.namespace}/${params.name}`}>{children}</a>
+  Link: ({ children, activeCluster, routeName, params, search = '', ...rest }: any) => (
+    <a
+      {...rest}
+      href={`/${activeCluster}/${routeName}/${params.namespace}/${params.name}${search}`}
+    >
+      {children}
+    </a>
   ),
   NameValueTable: ({ rows }: any) => (
     <dl>
@@ -115,6 +124,7 @@ beforeEach(() => {
   mocks.sbomFilteredGet.mockReset();
   mocks.cluster = 'cluster-a';
   mocks.name = 'workload-123';
+  mocks.severity = null;
 });
 afterEach(cleanup);
 
@@ -488,8 +498,58 @@ it('keeps workload navigation on the source cluster and uses the relevant SBOM n
     '/cluster-b/workload/workloads/workload-123'
   );
   expect(screen.getByText('SBOM').getAttribute('href')).toBe(
-    '/cluster-b/sbom/relevant-reports/relevant-123'
+    '/cluster-b/sbom/relevant-reports/relevant-123?filtered'
   );
+  expect(screen.getByLabelText('1 High findings').getAttribute('href')).toBe(
+    '/cluster-b/workload/workloads/workload-123?severity=High'
+  );
+});
+
+it('links image severity counts to the findings of that severity', () => {
+  const image = toImageScan(manifest());
+  image.matches = [match('CVE-1'), match('CVE-2')];
+  image.matches[1].vulnerability.severity = 'Critical';
+  const s = summary();
+  render(
+    <ImageList workloadScans={[toWorkloadScan(s, new Map([[getImageScanKey(image), image]]))]} />
+  );
+  expect(screen.getByLabelText('1 High findings').getAttribute('href')).toBe(
+    '/cluster-a/image/reports/image-123?severity=High'
+  );
+  expect(screen.getByLabelText('0 Low findings').getAttribute('href')).toBe(
+    '/cluster-a/image/reports/image-123?severity=Low'
+  );
+});
+
+it('shows only findings of the linked severity, including irrelevant ones', async () => {
+  const all = manifest();
+  all.spec.payload.matches = [match('CVE-1'), match('CVE-2')];
+  all.spec.payload.matches[1].vulnerability.severity = 'Low';
+  mocks.severity = 'Low';
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? summary() : url.endsWith('/image-123') ? all : manifest(T2)
+  );
+  render(<WorkloadDetails />);
+  // CVE-2 is not in the relevant manifest, so the Relevant CVE switch must start off
+  await waitFor(() => expect(screen.getByText('CVE-2')).toBeTruthy());
+  expect(screen.queryByText('CVE-1')).toBeNull();
+  expect(screen.getByText('Only Low findings')).toBeTruthy();
+  expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
+});
+
+it('filters image findings by the linked severity', async () => {
+  let receive: (item: any) => void = () => {};
+  mocks.imageGet.mockImplementation((callback: typeof receive) => {
+    receive = callback;
+  });
+  mocks.severity = 'Critical';
+  render(<ImageDetails />);
+  const report = manifest();
+  report.spec.payload.matches = [match('CVE-1'), match('CVE-2')];
+  report.spec.payload.matches[1].vulnerability.severity = 'Critical';
+  await act(async () => receive({ metadata: report.metadata, jsonData: report }));
+  expect(screen.getByText('CVE-2')).toBeTruthy();
+  expect(screen.queryByText('CVE-1')).toBeNull();
 });
 
 it('offers a rescan only for workloads whose scan names the workload', async () => {

@@ -9,11 +9,11 @@ import {
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
-import { Link } from '@mui/material';
+import { Chip, Link } from '@mui/material';
 import { useState } from 'react';
 import makeSeverityLabel from '../common/SeverityLabel';
 import HeadlampTable from '../common/Table';
-import { getURLSegments } from '../common/url';
+import { getURLSegments, useURLSearchParam } from '../common/url';
 import { vulnerabilityManifestClass } from '../model';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import { getVulnerabilityReportCreatedAt } from './reportTimestamp';
@@ -59,7 +59,10 @@ export default function ImageVulnerabilityDetails() {
 
 function Matches(props: { manifestVulnerability: VulnerabilityManifest }) {
   const { manifestVulnerability } = props;
-  const results = manifestVulnerability.spec.payload.matches ?? [];
+  const [severity, clearSeverity] = useURLSearchParam('severity');
+  const results = (manifestVulnerability.spec.payload.matches ?? []).filter(
+    match => !severity || match.vulnerability.severity === severity
+  );
 
   const fixVersions = (match: VulnerabilityManifest.Match) =>
     Array.isArray(match.vulnerability.fix?.versions)
@@ -77,6 +80,11 @@ function Matches(props: { manifestVulnerability: VulnerabilityManifest }) {
   return (
     <SectionBox title="Findings">
       <HeadlampTable
+        toolbarStart={
+          severity && (
+            <Chip label={`Only ${severity} findings`} onDelete={clearSeverity} size="small" />
+          )
+        }
         csvExport={{
           fileName: `kubescape-${manifestVulnerability.metadata.name}-cves.csv`,
           header: [
