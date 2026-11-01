@@ -4,6 +4,7 @@
 import { Box, Tooltip } from '@mui/material';
 import { Handle, Node, NodeProps, Position } from '@xyflow/react';
 import * as yaml from 'js-yaml';
+import { ReactNode } from 'react';
 import {
   GeneratedNetworkPolicy,
   NetworkPolicy,
@@ -18,6 +19,18 @@ export type ConnectedNode = Node<{
   policy: GeneratedNetworkPolicy;
   ports: NetworkPolicy.Port[];
 }>;
+
+// MUI tooltips are at most 300px wide, which cut off the lines of label selectors
+const tooltipProps = { tooltip: { sx: { fontSize: '0.9em', maxWidth: 'min(90vw, 720px)' } } };
+
+// Preformatted text whose long lines wrap instead of running out of the tooltip
+function TooltipText(props: Readonly<{ children: ReactNode }>) {
+  return (
+    <Box component="pre" sx={{ m: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+      {props.children}
+    </Box>
+  );
+}
 
 const MainNode = (props: NodeProps<ConnectedNode>) => {
   const { data } = props;
@@ -48,7 +61,7 @@ const ConnectedNode = (props: NodeProps<ConnectedNode>) => {
   const peerYaml = yaml.dump(data.peer);
 
   return (
-    <Tooltip title={<pre>{peerYaml}</pre>} slotProps={{ tooltip: { sx: { fontSize: '0.9em' } } }}>
+    <Tooltip title={<TooltipText>{peerYaml}</TooltipText>} slotProps={tooltipProps}>
       <Box className="network-node">
         <div className="title">
           {peerIcon(data.peer)} {peerOrigin(data.peer)}

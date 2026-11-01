@@ -2,30 +2,46 @@ import dagre from '@dagrejs/dagre';
 import { Edge, MarkerType, Node } from '@xyflow/react';
 import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
 
+// Size of nodes that have not been rendered yet
+const defaultNodeWidth = 310;
+const defaultNodeHeight = 70;
+
+function nodeSize(node: Node) {
+  return {
+    width: node.measured?.width ?? defaultNodeWidth,
+    height: node.measured?.height ?? defaultNodeHeight,
+  };
+}
+
+/**
+ * Positions the nodes from left to right. Rendered nodes are laid out with their measured
+ * size, so that nodes with long selectors do not overlap.
+ */
 export function layoutElements(nodes: Node[], edges: Edge[]) {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: 'LR' });
-
-  const nodeWidth = 360;
-  const nodeHeight = 70;
+  dagreGraph.setGraph({ rankdir: 'LR', nodesep: 20, ranksep: 100 });
 
   nodes.forEach(node => {
-    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+    dagreGraph.setNode(node.id, nodeSize(node));
   });
 
+  // dagre adds the end of an edge that is not a node without a size, which makes every
+  // position NaN, so React Flow draws all nodes on top of each other
+  const ids = new Set(nodes.map(node => node.id));
   edges.forEach(edge => {
-    dagreGraph.setEdge(edge.source, edge.target);
+    if (ids.has(edge.source) && ids.has(edge.target)) dagreGraph.setEdge(edge.source, edge.target);
   });
 
   dagre.layout(dagreGraph);
 
+  // dagre positions the center of a node, React Flow its top left corner
   nodes.forEach(node => {
     const nodeWithPosition = dagreGraph.node(node.id);
-    node.position = {
-      x: nodeWithPosition.x ?? 0,
-      y: nodeWithPosition.y ?? 0,
-    };
+    const { width, height } = nodeSize(node);
+    const x = (nodeWithPosition?.x ?? 0) - width / 2;
+    const y = (nodeWithPosition?.y ?? 0) - height / 2;
+    node.position = { x: Number.isFinite(x) ? x : 0, y: Number.isFinite(y) ? y : 0 };
   });
 }
 

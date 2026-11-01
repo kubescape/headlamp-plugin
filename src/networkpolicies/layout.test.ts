@@ -145,6 +145,49 @@ describe('layoutElements', () => {
     expect(nodes[0].position.x).toBeLessThan(nodes[1].position.x);
   });
 
+  it('lays out rendered nodes by their measured size without overlap', () => {
+    const node = (id: string, height: number): Node => ({
+      id,
+      data: {},
+      position: { x: 0, y: 0 },
+      measured: { width: 310, height },
+    });
+    // Sources with long pod selectors are much taller than the other nodes
+    const nodes = [
+      node('main', 50),
+      node('tall-1', 200),
+      node('tall-2', 200),
+      node('short', 50),
+      node('target', 50),
+    ];
+    const edges: Edge[] = [
+      { id: '0', source: 'tall-1', target: 'main' },
+      { id: '1', source: 'tall-2', target: 'main' },
+      { id: '2', source: 'short', target: 'main' },
+      { id: '3', source: 'main', target: 'target' },
+    ];
+
+    layoutElements(nodes, edges);
+
+    const box = (n: Node) => ({
+      left: n.position.x,
+      right: n.position.x + n.measured!.width!,
+      top: n.position.y,
+      bottom: n.position.y + n.measured!.height!,
+    });
+    for (const [i, a] of nodes.entries()) {
+      for (const b of nodes.slice(i + 1)) {
+        const [boxA, boxB] = [box(a), box(b)];
+        const separate =
+          boxA.right <= boxB.left ||
+          boxB.right <= boxA.left ||
+          boxA.bottom <= boxB.top ||
+          boxB.bottom <= boxA.top;
+        expect(separate, `${a.id} overlaps ${b.id}`).toBe(true);
+      }
+    }
+  });
+
   it('handles a single node with no edges', () => {
     const nodes: Node[] = [{ id: 'a', data: {}, position: { x: 0, y: 0 } }];
     const edges: Edge[] = [];
@@ -176,5 +219,26 @@ describe('layoutElements', () => {
       expect(Number.isFinite(node.position.x)).toBe(true);
       expect(Number.isFinite(node.position.y)).toBe(true);
     });
+  });
+});
+
+describe('layoutElements with edges to missing nodes', () => {
+  it('lays out nodes with valid positions when an edge refers to a missing node', () => {
+    const nodes: Node[] = [
+      { id: 'main', position: { x: 0, y: 0 }, data: {} },
+      { id: '1', position: { x: 0, y: 0 }, data: {} },
+    ];
+    const edges: Edge[] = [
+      { id: 'a', source: '1', target: 'main' },
+      { id: 'b', source: 'main', target: '7' },
+    ];
+
+    layoutElements(nodes, edges);
+
+    for (const node of nodes) {
+      expect(Number.isFinite(node.position.x)).toBe(true);
+      expect(Number.isFinite(node.position.y)).toBe(true);
+    }
+    expect(nodes[0].position.x).toBeGreaterThan(nodes[1].position.x);
   });
 });
