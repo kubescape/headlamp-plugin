@@ -207,13 +207,9 @@ export function fetchObject(
 ): Promise<any> {
   const group = objectClass.apiEndpoint.apiInfo[0].group;
   const version = objectClass.apiEndpoint.apiInfo[0].version;
+  const namespacePath = namespace ? `namespaces/${namespace}/` : '';
 
-  return request(
-    `/apis/${group}/${version}/${namespace ? 'namespaces/' : ''}${namespace}/${
-      objectClass.pluralName
-    }/${name}`,
-    {
-      cluster: cluster,
-    }
-  );
+  return request(`/apis/${group}/${version}/${namespacePath}${objectClass.pluralName}/${name}`, {
+    cluster: cluster,
+  });
 }
