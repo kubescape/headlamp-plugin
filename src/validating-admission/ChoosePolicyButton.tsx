@@ -32,7 +32,7 @@ export function ChoosePolicyButton() {
 
   return (
     <Stack direction="row" spacing={0}>
-      <FormControl variant="outlined" sx={{ width: 600 }}>
+      <FormControl variant="outlined" sx={{ width: 480 }}>
         <TextField
           select
           value={selectedValue}
