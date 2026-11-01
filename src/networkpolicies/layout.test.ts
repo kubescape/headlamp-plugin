@@ -1,6 +1,6 @@
 import { Edge, MarkerType, Node } from '@xyflow/react';
 import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
-import { createNodes, layoutElements } from './layout';
+import { createNodes, layoutElements, policyPeers } from './layout';
 
 function makePolicy(
   overrides: Partial<Pick<GeneratedNetworkPolicy['spec']['spec'], 'ingress' | 'egress'>> = {}
@@ -108,6 +108,69 @@ describe('createNodes', () => {
 
     expect(nodes).toHaveLength(1); // only main
     expect(edges).toHaveLength(0);
+  });
+
+  it('shows a peer once per direction, with the ports of all its rules', () => {
+    const backup = { podSelector: { matchLabels: { app: 'backup' } } };
+    const web = { podSelector: { matchLabels: { app: 'web' } } };
+    const policy = makePolicy({
+      ingress: [
+        { ports: [{ protocol: 'TCP', port: '9090' }], from: [backup] },
+        { ports: [{ protocol: 'TCP', port: '8080' }], from: [web, backup] },
+      ],
+      egress: [{ ports: [{ protocol: 'TCP', port: '8080' }], to: [backup] }],
+    });
+    const { nodes } = createNodes(policy);
+
+    expect(nodes.map(node => node.type)).toEqual([
+      'mainNode',
+      'sourceNode',
+      'sourceNode',
+      'targetNode',
+    ]);
+    expect(nodes[1].data.peer).toEqual(backup);
+    expect(nodes[1].data.ports).toEqual([
+      { protocol: 'TCP', port: '8080' },
+      { protocol: 'TCP', port: '9090' },
+    ]);
+  });
+
+  it('gives a peer of a rule without ports all ports', () => {
+    const web = { podSelector: { matchLabels: { app: 'web' } } };
+    const { nodes } = createNodes(
+      makePolicy({
+        ingress: [{ ports: [{ protocol: 'TCP', port: '80' }], from: [web] }, { from: [web] }],
+      })
+    );
+    expect(nodes[1].data.ports).toEqual([]);
+  });
+});
+
+describe('policyPeers', () => {
+  it('gives each peer of a direction the ports of all its rules', () => {
+    const api = { podSelector: { matchLabels: { app: 'api' } } };
+    expect(
+      policyPeers(
+        makePolicy({
+          ingress: [
+            { ports: [{ protocol: 'UDP', port: '53' }], from: [api] },
+            { ports: [{ protocol: 'TCP', port: 443 as unknown as string }], from: [api] },
+            { ports: [{ protocol: 'TCP', port: '443' }], from: [api] },
+          ],
+          egress: [{ ports: [{ protocol: 'TCP', port: '80' }], to: [api] }],
+        })
+      )
+    ).toEqual([
+      {
+        direction: 'ingress',
+        peer: api,
+        ports: [
+          { protocol: 'TCP', port: 443 },
+          { protocol: 'UDP', port: '53' },
+        ],
+      },
+      { direction: 'egress', peer: api, ports: [{ protocol: 'TCP', port: '80' }] },
+    ]);
   });
 });
 

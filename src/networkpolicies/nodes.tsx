@@ -10,6 +10,7 @@ import {
   NetworkPolicy,
 } from '../softwarecomposition/GeneratedNetworkPolicy';
 import { K8sNamespace, LogosKubernetes, TablerWorld } from './icons';
+import { compactPorts, portsText } from './ports';
 
 const sourceHandle = <Handle type="source" position={Position.Right} id="source" />;
 const targetHandle = <Handle type="target" position={Position.Left} id="target" />;
@@ -30,6 +31,22 @@ function TooltipText(props: Readonly<{ children: ReactNode }>) {
       {props.children}
     </Box>
   );
+}
+
+// Port ranges listed on a node; its tooltip lists all of them
+const portRangesOnNode = 4;
+
+function PortsLine(props: Readonly<{ ports: NetworkPolicy.Port[] }>) {
+  const ranges = compactPorts(props.ports ?? []);
+  const text =
+    ranges.length <= portRangesOnNode
+      ? portsText(ranges)
+      : `${portsText(ranges.slice(0, portRangesOnNode - 1))}, … (${props.ports.length} ports)`;
+  return <div className="text">{text}</div>;
+}
+
+function PortsTooltipLine(props: Readonly<{ ports: NetworkPolicy.Port[] }>) {
+  return <div>Ports: {portsText(compactPorts(props.ports ?? []))}</div>;
 }
 
 const MainNode = (props: NodeProps<ConnectedNode>) => {
@@ -58,10 +75,15 @@ const MainNode = (props: NodeProps<ConnectedNode>) => {
 const ConnectedNode = (props: NodeProps<ConnectedNode>) => {
   const { type, data } = props;
 
-  const peerYaml = yaml.dump(data.peer);
+  const tooltip = (
+    <>
+      <TooltipText>{yaml.dump(data.peer)}</TooltipText>
+      <PortsTooltipLine ports={data.ports} />
+    </>
+  );
 
   return (
-    <Tooltip title={<TooltipText>{peerYaml}</TooltipText>} slotProps={tooltipProps}>
+    <Tooltip title={tooltip} slotProps={tooltipProps}>
       <Box className="network-node">
         <div className="title">
           {peerIcon(data.peer)} {peerOrigin(data.peer)}
@@ -70,7 +92,7 @@ const ConnectedNode = (props: NodeProps<ConnectedNode>) => {
         <div className="text">{podSelector(data.peer)}</div>
         <div className="text">{dnsSelector(data.policy, data.peer)}</div>
         <div className="text">{ipSelector(data.peer)}</div>
-        <div className="text">{portsToString(data.ports)}</div>
+        <PortsLine ports={data.ports} />
         {type === 'sourceNode' ? sourceHandle : targetHandle}
       </Box>
     </Tooltip>
@@ -82,16 +104,6 @@ export const nodeTypes = {
   targetNode: ConnectedNode,
   mainNode: MainNode,
 };
-
-function portsToString(ports: NetworkPolicy.Port[]): string {
-  let text = '';
-  if (ports) {
-    for (const port of ports) {
-      text += `${port.protocol}:${port.port}`;
-    }
-  }
-  return text;
-}
 
 function podSelector(peer: NetworkPolicy.Peer): string {
   let text = '';

@@ -1,6 +1,12 @@
 import dagre from '@dagrejs/dagre';
 import { Edge, MarkerType, Node } from '@xyflow/react';
-import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
+import {
+  GeneratedNetworkPolicy,
+  NetworkPolicy,
+} from '../softwarecomposition/GeneratedNetworkPolicy';
+import { portKey, sortPorts } from './ports';
+
+export type Direction = 'ingress' | 'egress';
 
 // Size of nodes that have not been rendered yet
 const defaultNodeWidth = 310;
@@ -62,64 +68,76 @@ export function createNodes(networkPolicy: GeneratedNetworkPolicy): {
   };
   nodes.push(workloadNode);
 
-  if (networkPolicy.spec.spec.ingress) {
-    for (const ingress of networkPolicy.spec.spec.ingress) {
-      if (!ingress.from) {
-        continue;
-      }
-      for (const from of ingress.from) {
-        const node: Node = {
-          id: nodes.length.toString(),
-          data: {
-            peer: from,
-            policy: networkPolicy,
-            ports: ingress.ports,
-          },
-          position: { x: 0, y: 0 },
-          type: 'sourceNode',
-        };
-        nodes.push(node);
+  // Each peer once, with the ports of all its rules
+  for (const policyPeer of policyPeers(networkPolicy)) {
+    const type = policyPeer.direction === 'ingress' ? 'sourceNode' : 'targetNode';
+    const node: Node = {
+      id: nodes.length.toString(),
+      data: {
+        peer: policyPeer.peer,
+        policy: networkPolicy,
+        ports: policyPeer.ports,
+      },
+      position: { x: 0, y: 0 },
+      type,
+    };
+    nodes.push(node);
 
-        const edge: Edge = {
-          id: edges.length.toString(),
-          source: node.id,
-          target: workloadNode.id,
-          type: 'step',
-          markerEnd: { type: MarkerType.Arrow },
-        };
-        edges.push(edge);
-      }
-    }
-  }
-
-  if (networkPolicy.spec.spec.egress) {
-    for (const egress of networkPolicy.spec.spec.egress) {
-      if (!egress.to) {
-        continue;
-      }
-      for (const to of egress.to) {
-        const node: Node = {
-          id: nodes.length.toString(),
-          data: {
-            peer: to,
-            policy: networkPolicy,
-            ports: egress.ports,
-          },
-          position: { x: 0, y: 0 },
-          type: 'targetNode',
-        };
-        nodes.push(node);
-
-        const edge: Edge = {
-          id: edges.length.toString(),
-          source: workloadNode.id,
-          target: node.id,
-          type: 'step',
-          markerEnd: { type: MarkerType.Arrow },
-        };
-        edges.push(edge);
-      }
-    }
+    edges.push({
+      id: edges.length.toString(),
+      source: type === 'sourceNode' ? node.id : workloadNode.id,
+      target: type === 'sourceNode' ? workloadNode.id : node.id,
+      type: 'step',
+      markerEnd: { type: MarkerType.Arrow },
+    });
   }
   return { nodes, edges };
+}
+
+/** A peer of a direction of the policy, with the ports of all rules it is in. */
+export interface PolicyPeer {
+  direction: Direction;
+  peer: NetworkPolicy.Peer;
+  // sorted; none for a peer of a rule without ports, which allows all ports
+  ports: NetworkPolicy.Port[];
+}
+
+/**
+ * The peers of the policy, each once per direction. Generated policies often have a rule
+ * per port with the same peers, such as one for each passive port of an FTP server.
+ */
+export function policyPeers(networkPolicy: GeneratedNetworkPolicy): PolicyPeer[] {
+  const found = new Map<
+    string,
+    PolicyPeer & { byKey: Map<string, NetworkPolicy.Port>; allPorts: boolean }
+  >();
+  const collect = (
+    direction: Direction,
+    peers: NetworkPolicy.Peer[] = [],
+    ports: NetworkPolicy.Port[] | undefined
+  ) => {
+    for (const peer of peers) {
+      const key = JSON.stringify([direction, peer]);
+      let entry = found.get(key);
+      if (!entry) {
+        entry = { direction, peer, ports: [], byKey: new Map(), allPorts: false };
+        found.set(key, entry);
+      }
+      if (!ports?.length) entry.allPorts = true;
+      for (const port of ports ?? []) {
+        if (!entry.byKey.has(portKey(port))) entry.byKey.set(portKey(port), port);
+      }
+    }
+  };
+  for (const ingress of networkPolicy.spec.spec.ingress ?? []) {
+    collect('ingress', ingress.from, ingress.ports);
+  }
+  for (const egress of networkPolicy.spec.spec.egress ?? []) {
+    collect('egress', egress.to, egress.ports);
+  }
+  return [...found.values()].map(({ direction, peer, byKey, allPorts }) => ({
+    direction,
+    peer,
+    ports: allPorts ? [] : sortPorts([...byKey.values()]),
+  }));
 }
