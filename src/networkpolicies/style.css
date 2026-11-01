@@ -17,6 +17,10 @@
   padding: 0px;
 }
 
+.network-node .title .count {
+  font-weight: bold;
+}
+
 .dark .network-node {
   background: #444242;
   color: white;
