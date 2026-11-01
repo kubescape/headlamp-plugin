@@ -26,6 +26,7 @@ import { fetchObject, generatedNetworkPolicyClass } from '../model';
 import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
 import { ExistingPolicies, flowStatusColors, flowStatusLabels } from './ExistingPolicies';
 import { createNodes, layoutElements } from './layout';
+import { NetworkPolicyActions } from './NetworkPolicyActions';
 import { FlowStatusContext, nodeFlowStatuses, nodeTypes } from './nodes';
 import { ComparisonResult, usePolicyComparison, workloadOf } from './policyComparison';
 
@@ -88,6 +89,7 @@ function GeneratedPolicyTabs(props: Readonly<{ policy: GeneratedNetworkPolicy; c
 
   return (
     <SectionBox title={`Generated Network Policy - ${workload}`} backLink>
+      <NetworkPolicyActions generatedNetworkPolicy={policy} />
       <HeadlampTabs
         tabs={[
           {
