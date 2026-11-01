@@ -1,11 +1,11 @@
 ---
-name: Commits must be signed by the author
-description: Always use -S flag when committing so commits are GPG-signed by the author
+name: Commits must be signed off by the author
+description: Always use -s flag when committing so commits carry a DCO Signed-off-by trailer
 type: feedback
 ---
 
 Always use `git commit -s` so commits include a `Signed-off-by` trailer.
 
-**Why:** User's preference; keeps commit authorship explicit.
+**Why:** CONTRIBUTING.md requires sign-off per the Developer Certificate of Origin.
 
 **How to apply:** Add `-s` to every `git commit` invocation.
