@@ -18,6 +18,9 @@ export type KubescapeConfig = {
   imageVersions?: boolean;
   // the end of life of the release line of images, on unless false
   endOfLife?: boolean;
+  // also looking up images that may be private, whose names then go to shields.io and jsDelivr,
+  // off unless true
+  possiblyPrivateImages?: boolean;
 };
 
 export const kubescapeConfigStore = new ConfigStore<KubescapeConfig>(PLUGIN_NAME);

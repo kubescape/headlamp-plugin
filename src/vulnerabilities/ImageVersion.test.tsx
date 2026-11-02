@@ -1,12 +1,14 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import {
+  changeImageVersionSetting,
   EndOfLifeLabel,
   ImageVersion,
   imageVersionRows,
   useImageVersion,
   useImageVersionSettings,
 } from './ImageVersion';
+import { possiblyPrivatePermit } from './imageVersionSources';
 
 const mocks = vi.hoisted(() => ({
   config: {} as Record<string, unknown>,
@@ -64,9 +66,57 @@ it('takes the newest version from version-checker when it runs in the cluster', 
   render(<Details image="nginx:1.29.3" />);
   await waitFor(() => expect(screen.getByText('1.31.9')).toBeTruthy());
   expect(screen.getByText(/version-checker has 1.31.9, which is newer than 1.29.3/)).toBeTruthy();
-  // only the end of life is looked up elsewhere
-  expect(mocks.lookup).toHaveBeenCalledWith('nginx:1.29.3', { latest: false });
+  // only the end of life is looked up elsewhere, and only for images known to be public
+  expect(mocks.lookup).toHaveBeenCalledWith('nginx:1.29.3', {
+    latest: false,
+    possiblyPrivate: undefined,
+  });
   expect(screen.getByText('End of life')).toBeTruthy();
+});
+
+it('looks up images that may be private only when the settings allow it', async () => {
+  const view = render(<Details image="team/app:1.2.0" />);
+  await waitFor(() => expect(screen.getByText('Latest version')).toBeTruthy());
+  expect(mocks.lookup).toHaveBeenCalledTimes(1);
+  expect(mocks.lookup).toHaveBeenLastCalledWith('team/app:1.2.0', {
+    latest: true,
+    possiblyPrivate: undefined,
+  });
+
+  // switching the setting on looks the image up again
+  mocks.config = { possiblyPrivateImages: true };
+  view.rerender(<Details image="team/app:1.2.0" />);
+  await waitFor(() => expect(mocks.lookup).toHaveBeenCalledTimes(2));
+  expect(mocks.lookup).toHaveBeenLastCalledWith('team/app:1.2.0', {
+    latest: true,
+    possiblyPrivate: expect.any(AbortSignal),
+  });
+
+  // and it counts for nothing while the newest versions are switched off
+  mocks.config = { imageVersions: false, possiblyPrivateImages: true };
+  view.rerender(<Details image="team/app:1.2.0" />);
+  await new Promise(resolve => setTimeout(resolve, 50));
+  expect(mocks.lookup).toHaveBeenCalledTimes(2);
+});
+
+it('stops the lookups of images that may be private once the settings no longer allow them', () => {
+  const permit = possiblyPrivatePermit();
+  expect(changeImageVersionSetting({ pageSize: 50 }, 'possiblyPrivateImages', true)).toEqual({
+    pageSize: 50,
+    possiblyPrivateImages: true,
+  });
+  expect(permit.aborted).toBe(false);
+
+  expect(
+    changeImageVersionSetting({ possiblyPrivateImages: true }, 'possiblyPrivateImages', false)
+  ).toEqual({ possiblyPrivateImages: false });
+  expect(permit.aborted).toBe(true);
+
+  // as does switching off the newest versions altogether, with a new permit
+  const next = possiblyPrivatePermit();
+  expect(next.aborted).toBe(false);
+  changeImageVersionSetting({ possiblyPrivateImages: true }, 'imageVersions', false);
+  expect(next.aborted).toBe(true);
 });
 
 it('leaves out the end of life when it is switched off', async () => {

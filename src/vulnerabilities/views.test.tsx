@@ -813,7 +813,10 @@ it('shows the newest version of the image of a workload and the end of its relea
   render(<WorkloadDetails />);
 
   await waitFor(() => expect(valueFor('Latest version').textContent).toContain('2.0.1'));
-  expect(mocks.lookupImageVersion).toHaveBeenCalledWith('example:1.2.3', { latest: true });
+  expect(mocks.lookupImageVersion).toHaveBeenCalledWith('example:1.2.3', {
+    latest: true,
+    possiblyPrivate: undefined,
+  });
   expect(valueFor('Latest version').textContent).toContain(
     'GitHub has 2.0.1, which is newer than 1.2.3. The newest of 1 is 1.9.0.'
   );

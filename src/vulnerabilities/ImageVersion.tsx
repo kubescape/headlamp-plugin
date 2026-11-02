@@ -10,7 +10,9 @@ import {
   imageVersionKey,
   LatestVersion,
   lookupImageVersion,
+  possiblyPrivatePermit,
   ReleaseLine,
+  stopPossiblyPrivateLookups,
   versionCheckerResults,
 } from './imageVersionSources';
 import { imageTag, registryPage } from './registry';
@@ -27,7 +29,25 @@ export interface ImageVersion {
 export function useImageVersionSettings() {
   const config = kubescapeConfigStore.useConfig()() as KubescapeConfig | undefined;
   const enabled = config?.imageVersions !== false;
-  return { enabled, endOfLife: enabled && config?.endOfLife !== false };
+  return {
+    enabled,
+    endOfLife: enabled && config?.endOfLife !== false,
+    possiblyPrivate: enabled && config?.possiblyPrivateImages === true,
+  };
+}
+
+/**
+ * The settings with a switch of the image versions changed. Switching off the newest versions or
+ * the images that may be private stops the lookups that would still send names that may be
+ * private, also those that wait their turn.
+ */
+export function changeImageVersionSetting<T extends object>(
+  data: T | undefined,
+  setting: 'imageVersions' | 'possiblyPrivateImages',
+  on: boolean
+) {
+  if (!on) stopPossiblyPrivateLookups();
+  return { ...data, [setting]: on };
 }
 
 export interface ImageInCluster {
@@ -43,11 +63,14 @@ export function imageVersionMapKey({ image, cluster }: ImageInCluster) {
 
 const noVersions = new Map<string, ImageVersion>();
 
-async function findVersion({ image, cluster, source }: ImageInCluster): Promise<ImageVersion> {
+async function findVersion(
+  { image, cluster, source }: ImageInCluster,
+  possiblyPrivate: AbortSignal | undefined
+): Promise<ImageVersion> {
   const tag = imageTag(image);
   const key = imageVersionKey(image);
   const checked = key ? (await versionCheckerResults(cluster)).get(key) : undefined;
-  const found = await lookupImageVersion(image, { latest: !checked, source });
+  const found = await lookupImageVersion(image, { latest: !checked, source, possiblyPrivate });
   if (checked) {
     return {
       tag,
@@ -72,7 +95,7 @@ async function findVersion({ image, cluster, source }: ImageInCluster): Promise<
  * version are left out. Empty when the setting is off.
  */
 export function useImageVersions(images: ImageInCluster[]): Map<string, ImageVersion> {
-  const { enabled } = useImageVersionSettings();
+  const { enabled, possiblyPrivate } = useImageVersionSettings();
   // the images to look up, with the source their labels name
   const wanted = useMemo(
     () =>
@@ -85,6 +108,8 @@ export function useImageVersions(images: ImageInCluster[]): Map<string, ImageVer
 
   useEffect(() => {
     if (!enabled || !wanted) return;
+    // taken now, so that switching the setting off also stops the lookups that start later
+    const permit = possiblyPrivate ? possiblyPrivatePermit() : undefined;
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const found = new Map<string, ImageVersion>();
@@ -97,9 +122,10 @@ export function useImageVersions(images: ImageInCluster[]): Map<string, ImageVer
         const [key, source] = line.split('\t');
         const [cluster, ...rest] = key.split('|');
         const image = rest.join('|');
-        const version = await findVersion({ cluster, image, source: source || undefined }).catch(
-          () => null
-        );
+        const version = await findVersion(
+          { cluster, image, source: source || undefined },
+          permit
+        ).catch(() => null);
         if (!version?.latest && !version?.line) return;
         found.set(key, version);
         // a list of images redraws a few times a second at most
@@ -113,7 +139,7 @@ export function useImageVersions(images: ImageInCluster[]): Map<string, ImageVer
       active = false;
       if (timer) clearTimeout(timer);
     };
-  }, [enabled, wanted]);
+  }, [enabled, possiblyPrivate, wanted]);
 
   return enabled ? versions : noVersions;
 }

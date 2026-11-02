@@ -11,10 +11,18 @@
   no list of known images: every image is looked up the same way. version-checker, when it runs
   in a cluster, checks every image there against its own registry.
 
-  Images are only asked about at their own registry or at services that know them publicly, and
-  the project an image's labels name only when the image is public, so the names of private
-  images and their repositories go nowhere else. Answers are kept for a day, in localStorage
-  where they are small.
+  The name of an image only goes to its own registry, and to other services once it is known to
+  be public: by its registry, which holds only public images (registry.k8s.io) or answers for it
+  (Quay, Artifact Registry), as an official image of Docker Hub on the list that jsDelivr reads
+  once a day without naming an image, or, for the project of a ghcr.io image, by GitHub, which
+  runs ghcr.io and shows whether the project is public. Docker Hub cannot be asked from the
+  browser, so the name of another Docker Hub image,
+  which may be private, only goes to shields.io when the settings allow names that may be private
+  (possiblyPrivate); so do the projects of ghcr.io images that GitHub does not show and of Upbound
+  packages of other publishers than Upbound and the Crossplane community. Switching that setting
+  off stops those requests that were not sent yet (possiblyPrivatePermit). The project an image's
+  labels name is only asked about when the image is public. Answers are kept for a day, in
+  localStorage where they are small.
 */
 import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import { githubProjectOfSource } from './imageSource';
@@ -53,7 +61,7 @@ const day = 24 * 3600 * 1000;
 const retryAfter = 3600 * 1000;
 const storageName = 'kubescape-plugin.image-versions.';
 // raised when lookups change, so that answers of the old lookups are not used
-const storageVersion = 4;
+const storageVersion = 7;
 const storagePrefix = `${storageName}${storageVersion}.`;
 
 const memory = new Map<string, { expires: number; value: Promise<unknown> }>();
@@ -150,8 +158,13 @@ export function cached<T>(
       return result ?? null;
     },
     error => {
-      // the failure is not stored, nor an answer built on it
-      memory.set(key, { expires: now + retryAfter, value });
+      if (error instanceof LookupStopped) {
+        // nothing failed, so the next lookup asks again
+        if (memory.get(key)?.value === value) memory.delete(key);
+      } else {
+        // the failure is not stored, nor an answer built on it
+        memory.set(key, { expires: now + retryAfter, value });
+      }
       throw error;
     }
   );
@@ -160,22 +173,74 @@ export function cached<T>(
   return value;
 }
 
+/*
+  The names of images that may be private are only sent with a permit, which switching the setting
+  off revokes: the requests that wait their turn and those that lookups have yet to make are then
+  not sent.
+*/
+let privateNames = new AbortController();
+
+/** The permit to send the names of images that may be private, while the settings allow it. */
+export function possiblyPrivatePermit(): AbortSignal {
+  return privateNames.signal;
+}
+
+/** Revokes the permit, when the settings no longer allow names that may be private. */
+export function stopPossiblyPrivateLookups() {
+  privateNames.abort();
+  privateNames = new AbortController();
+}
+
+/** A request that was not sent, as its permit was revoked. */
+class LookupStopped extends Error {}
+
 // at most four requests at a time, so that a list of images does not flood the services
 const maxRequests = 4;
 let running = 0;
 const waiting: Array<() => void> = [];
 
-/** The JSON of a public service; null for a repository it does not know or may not show. */
-async function fetchBody(url: string, as: 'json' | 'text'): Promise<any> {
+/** Waits for a free request; a revoked permit takes the request out of the queue. */
+function waitTurn(permit?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const stop = () => {
+      const index = waiting.indexOf(turn);
+      if (index >= 0) waiting.splice(index, 1);
+      reject(new LookupStopped());
+    };
+    const turn = () => {
+      permit?.removeEventListener('abort', stop);
+      resolve();
+    };
+    if (permit?.aborted) return stop();
+    waiting.push(turn);
+    permit?.addEventListener('abort', stop, { once: true });
+  });
+}
+
+/**
+ * The JSON of a public service; null for a repository it does not know or may not show, which it
+ * says with one of the missing statuses. A request with a permit is only sent while it holds.
+ */
+async function fetchBody(
+  url: string,
+  as: 'json' | 'text',
+  missing: number[] = [401, 403, 404],
+  permit?: AbortSignal
+): Promise<any> {
   while (running >= maxRequests) {
-    await new Promise<void>(resolve => waiting.push(resolve));
+    await waitTurn(permit);
+  }
+  if (permit?.aborted) {
+    // the turn goes to the next request
+    waiting.shift()?.();
+    throw new LookupStopped();
   }
   running++;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000);
   try {
     const response = await fetch(url, { signal: controller.signal, credentials: 'omit' });
-    if ([401, 403, 404].includes(response.status)) return null;
+    if (missing.includes(response.status)) return null;
     if (!response.ok) throw new Error(`${url} answered ${response.status}`);
     return as === 'json' ? await response.json() : await response.text();
   } finally {
@@ -185,8 +250,8 @@ async function fetchBody(url: string, as: 'json' | 'text'): Promise<any> {
   }
 }
 
-function fetchJson(url: string): Promise<any> {
-  return fetchBody(url, 'json');
+function fetchJson(url: string, permit?: AbortSignal): Promise<any> {
+  return fetchBody(url, 'json', undefined, permit);
 }
 
 function strings(values: unknown[]): string[] {
@@ -211,12 +276,28 @@ function quayTags(repository: string) {
 }
 
 /** The versions of a GitHub project, from the tags jsDelivr reads; GitHub's own API allows only
- * 60 requests an hour from an address. */
-function githubVersions(project: string) {
+ * 60 requests an hour from an address. A project that may be private is asked with a permit. */
+function githubVersions(project: string, permit?: AbortSignal) {
   return cached<string[]>(`github|${project}`, async () => {
-    const body = await fetchJson(`https://data.jsdelivr.com/v1/packages/gh/${project}`);
+    const body = await fetchJson(`https://data.jsdelivr.com/v1/packages/gh/${project}`, permit);
     return body ? strings((body.versions ?? []).map((version: any) => version?.version)) : null;
   });
+}
+
+/**
+ * Whether a GitHub project is public, asked of GitHub, which runs ghcr.io and so knows the names
+ * of its images already. GitHub answers 60 of these requests an hour from an address and says 403
+ * after that, so the answers are kept a day, and a refusal is asked again after an hour.
+ */
+function isPublicGithubProject(project: string) {
+  return cached<boolean>(
+    `github-project|${project}`,
+    async () => {
+      const body = await fetchBody(`https://api.github.com/repos/${project}`, 'json', [404]);
+      return body?.private === false;
+    },
+    { persist: true }
+  );
 }
 
 interface Release {
@@ -393,9 +474,57 @@ const publicRegistries = [
   'public.ecr.aws',
   'mcr.microsoft.com',
   'docker.elastic.co',
-  'xpkg.upbound.io',
   'xpkg.crossplane.io',
 ];
+
+// The publishers of the Upbound marketplace whose packages are public: Upbound and the Crossplane
+// community, whose names tell nothing about the cluster that runs them
+const upboundPublishers = ['upbound/', 'crossplane-contrib/'];
+
+/**
+ * Whether an image is public by its name: it is in a registry that only holds public images, or
+ * it is a package of a publisher of the Upbound marketplace whose packages are public; others may
+ * have private repositories there.
+ */
+function isPublicByName({ registry, repository }: ImageReference) {
+  return (
+    publicRegistries.includes(registry) ||
+    (registry === 'xpkg.upbound.io' &&
+      upboundPublishers.some(publisher => repository.startsWith(publisher)))
+  );
+}
+
+/**
+ * The GitHub project the registry of an image implies, when its name may go to jsDelivr: the image
+ * is public or the settings allow names that may be private (mayName), or GitHub shows the project
+ * of a ghcr.io image as public.
+ */
+async function impliedProject(reference: ImageReference, mayName: boolean) {
+  const project = githubProject(reference);
+  if (!project || mayName) return project;
+  if (reference.registry === 'ghcr.io' && (await isPublicGithubProject(project))) return project;
+  return undefined;
+}
+
+/**
+ * The names of Docker's official images: the library files that Docker builds them from, listed
+ * by jsDelivr in one request a day, which names no image.
+ */
+function officialImageNames() {
+  return cached<string[]>(
+    'official-names',
+    async () => {
+      const body = await fetchJson(
+        'https://data.jsdelivr.com/v1/packages/gh/docker-library/official-images@master?structure=flat'
+      );
+      if (!body) return null;
+      return strings((body.files ?? []).map((file: any) => file?.name)).flatMap(
+        file => file.match(/^\/library\/([^/]+)$/)?.[1] ?? []
+      );
+    },
+    { persist: true }
+  );
+}
 
 /**
  * The tags of an official image of Docker Hub, from the library files that Docker builds them
@@ -420,9 +549,12 @@ function officialImageTags(name: string) {
  * The newest version of an image of Docker Hub as shields.io, which makes the version badges of
  * projects, reads it. It sorts the most recent tags by their version and adds a v to the version.
  */
-function dockerHubVersion(repository: string) {
+function dockerHubVersion(repository: string, permit: AbortSignal) {
   return cached<string>(`shields|${repository}`, async () => {
-    const body = await fetchJson(`https://img.shields.io/docker/v/${repository}.json?sort=semver`);
+    const body = await fetchJson(
+      `https://img.shields.io/docker/v/${repository}.json?sort=semver`,
+      permit
+    );
     return typeof body?.value === 'string' ? body.value : null;
   });
 }
@@ -529,13 +661,21 @@ function newestListedTag(tag: string, tags: string[] | null) {
 /**
  * The newest version from the registry of the image or the GitHub project it is built from: the
  * project its registry implies, or the one its labels name (sourceProject) when the image is
- * public, which its registry or shields.io knowing it shows.
+ * public, which its registry or shields.io knowing it shows. shields.io and the implied project
+ * of an image not known to be public are only asked about when possiblyPrivate allows it.
  */
-function registryOrProjectLatest(reference: ImageReference, tag: string, sourceProject?: string) {
+function registryOrProjectLatest(
+  reference: ImageReference,
+  tag: string,
+  sourceProject: string | undefined,
+  possiblyPrivate: AbortSignal | undefined
+) {
   return cached<LatestVersion>(
-    `latest|${reference.registry}/${reference.repository}:${tag}|${sourceProject ?? ''}`,
+    `latest|${reference.registry}/${reference.repository}:${tag}|${sourceProject ?? ''}|${
+      possiblyPrivate ? 'any' : 'public'
+    }`,
     async () => {
-      let isPublic = publicRegistries.includes(reference.registry);
+      let isPublic = isPublicByName(reference);
       if (reference.registry === 'quay.io') {
         const tags = await quayTags(reference.repository);
         isPublic = tags !== null;
@@ -568,14 +708,19 @@ function registryOrProjectLatest(reference: ImageReference, tag: string, sourceP
       const official =
         dockerHub.registry === 'docker.io' && dockerHub.repository.match(/^library\/([^/]+)$/);
       if (official) {
-        isPublic = true;
-        const newest = newestListedTag(tag, await officialImageTags(official[1]));
+        // an image without a publisher may also be one built locally, so only the names of
+        // Docker's official images are asked about
+        const names = await officialImageNames();
+        const tags = names?.includes(official[1]) ? await officialImageTags(official[1]) : null;
+        isPublic = tags !== null;
+        const newest = newestListedTag(tag, tags);
         if (newest)
           return { latest: newest, source: { name: 'Docker Hub', url: dockerHubPage?.url } };
       }
       let dockerHubNewest: string | undefined;
-      if (dockerHub.registry === 'docker.io' && !official) {
-        const version = await dockerHubVersion(dockerHub.repository);
+      // Docker Hub cannot be asked whether a repository is public, and shields.io learns the name
+      if (dockerHub.registry === 'docker.io' && !official && possiblyPrivate) {
+        const version = await dockerHubVersion(dockerHub.repository, possiblyPrivate);
         // shields.io only sees public repositories; it says so for others. It also answers
         // "invalid response data" for some public ones, and writes 2026.2.1 as v2026.2.1
         if (version && !/not found/i.test(version)) isPublic = true;
@@ -585,9 +730,12 @@ function registryOrProjectLatest(reference: ImageReference, tag: string, sourceP
           undefined;
       }
       // the releases of the project go before shields.io, which sorts the tags loosely
-      const project = githubProject(reference) ?? (isPublic ? sourceProject : undefined);
+      const project =
+        (await impliedProject(reference, isPublic || !!possiblyPrivate)) ??
+        (isPublic ? sourceProject : undefined);
       if (project) {
-        const versions = await githubVersions(project);
+        // the project of an image not known to be public is only named with the permit
+        const versions = await githubVersions(project, isPublic ? undefined : possiblyPrivate);
         const newest = versions && newestRelease(tag, versions);
         if (newest) {
           return {
@@ -646,6 +794,9 @@ export async function lookupImageVersion(
     latest?: boolean;
     // the source repository the labels of the image name (imageSourceLabel)
     source?: string;
+    // the permit to send the names of images that may be private to shields.io and jsDelivr
+    // (possiblyPrivatePermit), when the settings allow it
+    possiblyPrivate?: AbortSignal;
   } = {}
 ): Promise<PublicVersion> {
   const reference = parseImageReference(image);
@@ -656,7 +807,9 @@ export async function lookupImageVersion(
   const [latest, endOfLife] = await Promise.all([
     options.latest === false
       ? null
-      : registryOrProjectLatest(reference, tag, sourceProject).catch(() => null),
+      : registryOrProjectLatest(reference, tag, sourceProject, options.possiblyPrivate).catch(
+          () => null
+        ),
     endOfLifeOf(reference, tag, githubProject(reference) ?? sourceProject).catch(
       () => ({} as Awaited<ReturnType<typeof endOfLifeOf>>)
     ),

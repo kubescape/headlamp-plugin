@@ -13,6 +13,7 @@ import Typography from '@mui/material/Typography';
 import React from 'react';
 import { detectPrometheus } from '../overview/prometheus';
 import { detectAlertmanager } from '../runtimedetection/alertmanager';
+import { changeImageVersionSetting } from '../vulnerabilities/ImageVersion';
 import { isValidAlertmanagerAddress, KubescapeConfig } from './config-store';
 
 interface SettingsProps {
@@ -197,17 +198,35 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
           control={
             <Switch
               checked={kubescapeData?.imageVersions !== false}
-              onChange={(_, checked) => onDataChange?.({ ...data, imageVersions: checked })}
+              onChange={(_, checked) =>
+                onDataChange?.(changeImageVersionSetting(data, 'imageVersions', checked))
+              }
             />
           }
           label="Show the newest version of images"
         />
         <Typography variant="body2" color="text.secondary" sx={{ ml: 6, mt: -0.5 }}>
-          Asks Quay, Google&apos;s Artifact Registry, shields.io (for Docker Hub), jsDelivr (for
-          projects on GitHub and Docker&apos;s official images) and endoflife.date about public
-          images, and reads version-checker in clusters that run it. Images are only asked about at
-          their own registry or at services that know them publicly, and answers are kept for a day.
+          Asks Quay, Google&apos;s Artifact Registry, GitHub, jsDelivr (for projects on GitHub and
+          Docker&apos;s official images) and endoflife.date about public images, and reads
+          version-checker in clusters that run it. The name of an image only goes to its own
+          registry, or elsewhere once it is known to be public; answers are kept for a day.
         </Typography>
+        <FormControlLabel
+          sx={{ ml: 4 }}
+          control={
+            <Switch
+              checked={
+                kubescapeData?.imageVersions !== false &&
+                kubescapeData?.possiblyPrivateImages === true
+              }
+              disabled={kubescapeData?.imageVersions === false}
+              onChange={(_, checked) =>
+                onDataChange?.(changeImageVersionSetting(data, 'possiblyPrivateImages', checked))
+              }
+            />
+          }
+          label="Also look up Docker Hub, GHCR and Upbound images that may be private, which sends their names to shields.io and jsDelivr"
+        />
         <FormControlLabel
           sx={{ ml: 4 }}
           control={

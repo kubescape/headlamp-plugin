@@ -6,7 +6,9 @@ import {
   githubProject,
   lookupImageVersion,
   parseVersionCheckerMetrics,
+  possiblyPrivatePermit,
   purlKey,
+  stopPossiblyPrivateLookups,
   versionCheckerResults,
 } from './imageVersionSources';
 
@@ -26,11 +28,21 @@ const fetchMock = vi.fn(async (url: string) => {
 const quay = (repository: string, page = 1) =>
   `https://quay.io/api/v1/repository/${repository}/tag/?onlyActiveTags=true&limit=100&page=${page}`;
 const jsdelivr = (project: string) => `https://data.jsdelivr.com/v1/packages/gh/${project}`;
+const githubRepository = (project: string) => `https://api.github.com/repos/${project}`;
 const endOfLife = (product: string) => `https://endoflife.date/api/v1/products/${product}/`;
 const identifiers = 'https://endoflife.date/api/v1/identifiers/purl/';
 const products = 'https://endoflife.date/api/v1/products/';
 const officialImage = (name: string) =>
   `https://cdn.jsdelivr.net/gh/docker-library/official-images@master/library/${name}`;
+const officialNames =
+  'https://data.jsdelivr.com/v1/packages/gh/docker-library/official-images@master?structure=flat';
+// the files of Docker's official images, as jsDelivr lists them
+const officialFiles = (...names: string[]) => ({
+  files: [
+    { name: '/.bin/docker-buildx-ensure.sh' },
+    ...names.map(name => ({ name: `/library/${name}` })),
+  ],
+});
 const shields = (repository: string) =>
   `https://img.shields.io/docker/v/${repository}.json?sort=semver`;
 const text = (body: string) => () => new Response(body, { status: 200 });
@@ -55,7 +67,11 @@ const redisReleases = {
 beforeEach(() => {
   clearVersionCache();
   window.localStorage.clear();
-  answers = { [identifiers]: { result: [] }, [products]: { result: [] } };
+  answers = {
+    [identifiers]: { result: [] },
+    [products]: { result: [] },
+    [officialNames]: officialFiles('nginx', 'redis', 'varnish'),
+  };
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
   mocks.request.mockReset();
@@ -94,7 +110,8 @@ describe('lookupImageVersion', () => {
     expect((await lookupImageVersion('quay.io/team/app:v1.0.0')).latest).toBeUndefined();
   });
 
-  it('reads the versions of the GitHub project of a ghcr.io image from jsDelivr', async () => {
+  it('reads the versions of the public GitHub project of a ghcr.io image from jsDelivr', async () => {
+    answers[githubRepository('external-secrets/external-secrets')] = { private: false };
     answers[jsdelivr('external-secrets/external-secrets')] = {
       versions: [{ version: '2.14.0' }, { version: 'helm-chart-2.14.0' }, { version: '2.8.0' }],
     };
@@ -106,7 +123,42 @@ describe('lookupImageVersion', () => {
         url: 'https://github.com/external-secrets/external-secrets/releases',
       },
     });
-    expect(requested()).not.toContainEqual(expect.stringContaining('api.github.com'));
+    // GitHub, which runs ghcr.io, is asked whether the project is public first
+    expect(requested().filter(url => !url.startsWith('https://endoflife.date'))).toEqual([
+      githubRepository('external-secrets/external-secrets'),
+      jsdelivr('external-secrets/external-secrets'),
+    ]);
+  });
+
+  it('never sends the name of a private ghcr.io image to jsDelivr', async () => {
+    // GitHub does not show a private project to others
+    const found = await lookupImageVersion('ghcr.io/acme/secret-project:v1.2.3');
+    expect(found).toEqual({});
+    expect(requested()).toContain(githubRepository('acme/secret-project'));
+    expect(requested()).not.toContainEqual(expect.stringContaining('jsdelivr'));
+
+    // unless the settings allow names of images that may be private
+    answers[jsdelivr('acme/secret-project')] = { versions: [{ version: '1.3.0' }] };
+    const allowed = await lookupImageVersion('ghcr.io/acme/secret-project:v1.2.3', {
+      possiblyPrivate: possiblyPrivatePermit(),
+    });
+    expect(allowed.latest?.latest).toBe('1.3.0');
+  });
+
+  it('asks GitHub again after an hour when it refuses to answer', async () => {
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    // the 60 requests an hour are used up
+    answers[githubRepository('team/app')] = () => new Response('{}', { status: 403 });
+    expect(await lookupImageVersion('ghcr.io/team/app:1.0.0')).toEqual({});
+    expect(await lookupImageVersion('ghcr.io/team/app:1.0.0')).toEqual({});
+    expect(requestedAt('https://api.github.com')).toHaveLength(1);
+    expect(requested()).not.toContain(jsdelivr('team/app'));
+
+    answers[githubRepository('team/app')] = { private: false };
+    answers[jsdelivr('team/app')] = { versions: [{ version: '1.1.0' }] };
+    clock.mockReturnValue(now + 3600 * 1000 + 1);
+    expect((await lookupImageVersion('ghcr.io/team/app:1.0.0')).latest?.latest).toBe('1.1.0');
   });
 
   it('reads the tags of an official Docker Hub image from the files Docker builds it from', async () => {
@@ -128,6 +180,8 @@ describe('lookupImageVersion', () => {
     expect(
       (await lookupImageVersion('public.ecr.aws/docker/library/nginx:1.31.3')).latest?.latest
     ).toBe('1.31.8');
+    // the official images are listed once a day
+    expect(requested().filter(url => url === officialNames)).toHaveLength(1);
   });
 
   it('reads the tags of gcr.io images from the API of Artifact Registry, page by page', async () => {
@@ -163,19 +217,102 @@ describe('lookupImageVersion', () => {
     ]);
   });
 
-  it('reads the newest version of other Docker Hub images from shields.io', async () => {
+  it('reads the newest version of other Docker Hub images from shields.io when allowed', async () => {
     answers[shields('example/server')] = { label: 'version', value: 'v2026.2.1' };
     answers[shields('team/app')] = { label: 'version', value: 'v1.4.0' };
     answers[shields('team/tool')] = { label: 'version', value: 'invalid response data' };
-    expect((await lookupImageVersion('example/server:2026.1.3-linux')).latest).toEqual({
+    const possiblyPrivate = { possiblyPrivate: possiblyPrivatePermit() };
+    expect(
+      (await lookupImageVersion('example/server:2026.1.3-linux', possiblyPrivate)).latest
+    ).toEqual({
       latest: '2026.2.1',
       source: {
         name: 'Docker Hub',
         url: 'https://hub.docker.com/r/example/server/tags',
       },
     });
-    expect((await lookupImageVersion('team/app:v1.2.0')).latest?.latest).toBe('v1.4.0');
-    expect((await lookupImageVersion('team/tool:1.0.0')).latest).toBeUndefined();
+    expect((await lookupImageVersion('team/app:v1.2.0', possiblyPrivate)).latest?.latest).toBe(
+      'v1.4.0'
+    );
+    expect((await lookupImageVersion('team/tool:1.0.0', possiblyPrivate)).latest).toBeUndefined();
+  });
+
+  it('only asks about the Upbound packages of Upbound and the Crossplane community', async () => {
+    answers[jsdelivr('crossplane-contrib/provider-upjet-gcp')] = {
+      versions: [{ version: 'v2.1.0' }],
+    };
+    const provider = await lookupImageVersion(
+      'xpkg.upbound.io/upbound/provider-gcp-secretmanager:v2.0.0'
+    );
+    expect(provider.latest?.latest).toBe('v2.1.0');
+    answers[jsdelivr('crossplane-contrib/provider-kubernetes')] = {
+      versions: [{ version: 'v1.2.0' }],
+    };
+    const contrib = await lookupImageVersion(
+      'xpkg.upbound.io/crossplane-contrib/provider-kubernetes:v1.1.0'
+    );
+    expect(contrib.latest?.latest).toBe('v1.2.0');
+
+    // others may be in private repositories of the Upbound marketplace
+    await lookupImageVersion('xpkg.upbound.io/acme/configuration-platform:v1.0.0', {
+      source: 'https://github.com/acme/platform',
+    });
+    expect(requestedAt('https://data.jsdelivr.com')).toEqual([
+      jsdelivr('crossplane-contrib/provider-upjet-gcp'),
+      jsdelivr('crossplane-contrib/provider-kubernetes'),
+    ]);
+  });
+
+  it('never sends the name of a Docker Hub image that may be private to shields.io', async () => {
+    // Docker Hub cannot be asked whether the repository is public
+    answers[shields('acme/secret-app')] = { label: 'version', value: 'v1.4.0' };
+    expect(await lookupImageVersion('acme/secret-app:v1.2.0')).toEqual({});
+    expect(requested()).toEqual([identifiers, products]);
+  });
+
+  it('sends no more names that may be private once the setting is switched off', async () => {
+    let answer!: () => void;
+    const answered = new Promise<void>(resolve => (answer = resolve));
+    const repositories = [1, 2, 3, 4, 5, 6, 7].map(n => `acme/private-${n}`);
+    for (const repository of repositories) {
+      answers[shields(repository)] = async () => {
+        await answered;
+        return new Response(JSON.stringify({ label: 'version', value: 'v1.4.0' }));
+      };
+    }
+    const permit = possiblyPrivatePermit();
+    const lookups = repositories.map(repository =>
+      lookupImageVersion(`${repository}:v1.2.0`, { possiblyPrivate: permit })
+    );
+    await new Promise(resolve => setTimeout(resolve, 10));
+    // four requests at a time, so the others wait their turn
+    const sent = requestedAt('https://img.shields.io');
+    expect(sent).toHaveLength(4);
+
+    stopPossiblyPrivateLookups();
+    expect(permit.aborted).toBe(true);
+    answer();
+    const found = await Promise.all(lookups);
+    expect(requestedAt('https://img.shields.io')).toEqual(sent);
+    expect(found.filter(version => version.latest)).toHaveLength(4);
+    // the requests after them still go out
+    expect(requested()).toContain(products);
+
+    // a stopped lookup is not kept as a failure, so it is asked again once the setting allows it
+    const again = await lookupImageVersion('acme/private-7:v1.2.0', {
+      possiblyPrivate: possiblyPrivatePermit(),
+    });
+    expect(again.latest?.latest).toBe('v1.4.0');
+  });
+
+  it('sends no name that may be private with a permit that was revoked', async () => {
+    const permit = possiblyPrivatePermit();
+    stopPossiblyPrivateLookups();
+    answers[shields('acme/secret-app')] = { label: 'version', value: 'v1.4.0' };
+    expect(await lookupImageVersion('acme/secret-app:v1.2.0', { possiblyPrivate: permit })).toEqual(
+      {}
+    );
+    expect(requestedAt('https://img.shields.io')).toEqual([]);
   });
 
   it('reads the release line and the newest release of a well-known product', async () => {
@@ -202,6 +339,7 @@ describe('lookupImageVersion', () => {
   });
 
   it('prefers the registry or project for the newest version and still reads the line', async () => {
+    answers[githubRepository('cloudnative-pg/postgresql')] = { private: false };
     answers[jsdelivr('cloudnative-pg/postgresql')] = undefined;
     answers[products] = { result: [{ name: 'postgresql', aliases: ['postgres'] }] };
     answers[endOfLife('postgresql')] = {
@@ -250,8 +388,10 @@ describe('lookupImageVersion', () => {
     answers[jsdelivr('example-org/server')] = {
       versions: [{ version: 'v1.4.1' }, { version: 'chart-2.0.0' }, { version: 'v1.2.0' }],
     };
+    // shields.io knowing it shows that the image is public
     const found = await lookupImageVersion('example/server:v1.2.0', {
       source: 'https://github.com/example-org/server.git',
+      possiblyPrivate: possiblyPrivatePermit(),
     });
     // the releases of the project go before shields.io
     expect(found.latest).toEqual({
@@ -272,9 +412,21 @@ describe('lookupImageVersion', () => {
     // a Docker Hub repository that shields.io does not know is private
     answers[shields('team/app')] = { label: 'version', value: 'repository or tag not found' };
     await lookupImageVersion('team/app:1.2.0', { source });
+    await lookupImageVersion('team/app:1.2.0', {
+      source,
+      possiblyPrivate: possiblyPrivatePermit(),
+    });
     // as is a repository of Artifact Registry that does not answer
     await lookupImageVersion('europe-docker.pkg.dev/team-project/images/app:1.2.0', { source });
+    // and a ghcr.io image of a project that GitHub does not show
+    await lookupImageVersion('ghcr.io/team/app:1.2.0', { source });
+    // and an image without a publisher that Docker does not build, such as one built locally,
+    // whose name goes nowhere: only the list of official images is read
+    await lookupImageVersion('app:1.2.0', { source });
+    expect(requested()).toContain(officialNames);
+    expect(requested().filter(url => url.includes('app') && !url.includes('team'))).toEqual([]);
     expect(requested()).not.toContain(jsdelivr('team/secret-app'));
+    expect(requested()).not.toContain(jsdelivr('team/app'));
   });
 
   it('does not look up tags that are not versions', async () => {
