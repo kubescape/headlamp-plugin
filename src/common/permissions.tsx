@@ -81,6 +81,30 @@ export function useCanI(check: AccessCheck | null, cluster?: string | null): boo
   return check ? allowed : undefined;
 }
 
+/**
+ * The first of the checks that the user is denied, or undefined while asking, or when every check
+ * is allowed or unanswered.
+ */
+function useDeniedCheck(checks: AccessCheck[], cluster?: string | null): AccessCheck | undefined {
+  const [denied, setDenied] = useState<AccessCheck | undefined>();
+  const key = JSON.stringify([cluster, checks]);
+
+  useEffect(() => {
+    let active = true;
+    const target = cluster === undefined ? getCluster() : cluster;
+    Promise.all(checks.map(check => canI(check, target))).then(answers => {
+      if (active) setDenied(checks[answers.indexOf(false)]);
+    });
+    return () => {
+      active = false;
+    };
+    // key covers checks and cluster, which may be new objects on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return denied;
+}
+
 /** Explains which permission the user is missing. */
 export function deniedMessage(check: AccessCheck): string {
   const resource = check.subresource ? `${check.resource}/${check.subresource}` : check.resource;
@@ -90,21 +114,25 @@ export function deniedMessage(check: AccessCheck): string {
 }
 
 /**
- * Renders an action, disabled with an explanation when the user may not do it. While the
- * answer is unknown the action stays enabled, so an unanswered check never blocks the user.
+ * Renders an action, disabled with an explanation when the user may not do it; an action that
+ * needs several permissions names the first one missing. While the answer is unknown the action
+ * stays enabled, so an unanswered check never blocks the user.
  */
 export function Permitted(
   props: Readonly<{
-    check: AccessCheck | null;
+    check: AccessCheck | AccessCheck[] | null;
     cluster?: string | null;
     children: (allowed: boolean) => ReactElement;
   }>
 ) {
   const { check, cluster, children } = props;
-  const allowed = useCanI(check, cluster);
-  if (allowed === false && check) {
+  let checks: AccessCheck[] = [];
+  if (Array.isArray(check)) checks = check;
+  else if (check) checks = [check];
+  const denied = useDeniedCheck(checks, cluster);
+  if (denied) {
     return (
-      <Tooltip title={deniedMessage(check)}>
+      <Tooltip title={deniedMessage(denied)}>
         <span>{children(false)}</span>
       </Tooltip>
     );

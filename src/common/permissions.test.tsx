@@ -13,7 +13,10 @@ const createCommand: AccessCheck = {
   namespace: 'kubescape',
 };
 
-beforeEach(() => post.mockReset());
+// a function returned here would be called as a cleanup after each test
+beforeEach(() => {
+  post.mockReset();
+});
 
 it('asks the API server once per check and cluster', async () => {
   post.mockResolvedValue({ status: { allowed: true } });
@@ -78,4 +81,23 @@ it('disables an action the user may not do, and leaves unknown ones enabled', as
   );
   await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
   expect(screen.getByRole('button', { name: 'Delete' })).toHaveProperty('disabled', false);
+});
+
+it('names the first missing permission of an action that needs several', async () => {
+  const listCommands = { ...createCommand, verb: 'list', namespace: 'several' };
+  post.mockImplementation(async (_url: string, review: any) => ({
+    status: { allowed: review.spec.resourceAttributes.verb !== 'list' },
+  }));
+  render(
+    <Permitted check={[{ ...createCommand, namespace: 'several' }, listCommands]}>
+      {allowed => <button disabled={!allowed}>Install</button>}
+    </Permitted>
+  );
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Install' })).toHaveProperty('disabled', true)
+  );
+  expect(
+    screen.getByLabelText('You are not allowed to list operatorcommands in namespace several.')
+  ).toBeTruthy();
+  expect(post).toHaveBeenCalledTimes(2);
 });

@@ -1,6 +1,8 @@
 /*
   Installing a playground policy in the cluster with a binding that only warns or audits, so
-  it can be tried on real requests without rejecting any.
+  it can be tried on real requests without rejecting any. A binding that denies may already refer
+  to the name of the policy, also before the policy exists, and would then enforce the policy of
+  the editor as soon as it is installed; such a policy is not installed.
 */
 import { post, put, request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 
@@ -9,7 +11,8 @@ export type ValidationAction = 'Warn' | 'Audit';
 // The parameters that the Kubescape library policies are written for
 export const paramsName = 'basic-control-configuration';
 const paramsCollection = '/apis/kubescape.io/v1/controlconfigurations';
-const managedBy = { 'app.kubernetes.io/managed-by': 'headlamp-kubescape-plugin' };
+const managedByLabel = 'app.kubernetes.io/managed-by';
+const managedBy = { [managedByLabel]: 'headlamp-kubescape-plugin' };
 
 export interface PolicyObject {
   apiVersion: string;
@@ -138,9 +141,109 @@ function withoutServerFields(policy: PolicyObject) {
   };
 }
 
+function plural(count: number, one: string, more: string) {
+  return count === 1 ? one : more;
+}
+
+/** Every ValidatingAdmissionPolicyBinding of the cluster. */
+async function listBindings(policy: PolicyObject, cluster?: string): Promise<any[]> {
+  try {
+    const list = await request(
+      collectionOf(policy.apiVersion, 'validatingadmissionpolicybindings'),
+      cluster ? { cluster } : {}
+    );
+    return list?.items ?? [];
+  } catch (error: any) {
+    // a cluster that does not serve the bindings has none
+    if (error?.status !== 404) throw error;
+    return [];
+  }
+}
+
+function policyProblem(policy: PolicyObject, bindings: any[]): string | null {
+  const name = policy.metadata.name;
+  const denying = bindings
+    .filter(
+      binding =>
+        binding?.spec?.policyName === name &&
+        (binding.spec.validationActions ?? []).includes('Deny')
+    )
+    .map(binding => binding.metadata?.name);
+  if (denying.length) {
+    return (
+      `${plural(denying.length, 'The binding', 'The bindings')} ${denying.join(', ')} ` +
+      `${plural(denying.length, 'rejects', 'reject')} requests that violate ${name}, so ` +
+      'installing would change what it enforces. Give the policy another name in the editor to ' +
+      'try it.'
+    );
+  }
+  const own = bindings.find(binding => binding?.metadata?.name === bindingName(policy));
+  if (
+    own &&
+    (own.spec?.policyName !== name ||
+      own.metadata?.labels?.[managedByLabel] !== managedBy[managedByLabel])
+  ) {
+    return (
+      `The binding ${bindingName(policy)} exists and was not installed for this policy by the ` +
+      'plugin, so installing would replace it. Give the policy another name in the editor to try ' +
+      'it.'
+    );
+  }
+  return null;
+}
+
+/**
+ * Why installing the policy could reject requests or replace a binding that the plugin did not
+ * install, or null. A binding that denies with the name of the policy would enforce the policy of
+ * the editor, also outside the namespace chosen here; the plugin's own binding is one of them once
+ * it is switched to Deny with kubectl. A binding with the name of the plugin's binding that the
+ * plugin did not install, or that binds another policy, would be replaced.
+ */
+export async function installProblem(
+  policy: PolicyObject,
+  cluster?: string
+): Promise<string | null> {
+  return policyProblem(policy, await listBindings(policy, cluster));
+}
+
+function paramsProblem(bindings: any[]): string | null {
+  const reading = bindings
+    .filter(
+      binding =>
+        (binding?.spec?.validationActions ?? []).includes('Deny') &&
+        (binding.spec.paramRef?.name === paramsName || binding.spec.paramRef?.selector)
+    )
+    .map(binding => binding.metadata?.name);
+  if (!reading.length) return null;
+  return (
+    `${plural(reading.length, 'The binding', 'The bindings')} ${reading.join(', ')} ` +
+    `${plural(reading.length, 'rejects', 'reject')} requests and may read the parameters ` +
+    `${paramsName}, so creating them here could change what ` +
+    `${plural(reading.length, 'it enforces', 'they enforce')}. Create them with kubectl when ` +
+    'that is intended.'
+  );
+}
+
+/**
+ * Why creating the missing parameters could reject requests, or null. The parameters are shared
+ * with the policies of the Kubescape library, so a binding that denies and reads them, by their
+ * name or by a selector, would start to enforce its policy with them.
+ */
+export async function paramsCreationProblem(
+  policy: PolicyObject,
+  cluster?: string
+): Promise<string | null> {
+  return paramsProblem(await listBindings(policy, cluster));
+}
+
+/** The policy was installed, but its binding was not. */
+export class BindingNotInstalledError extends Error {}
+
 /**
  * Installs the policy, its warn or audit binding and, when given, the parameters it reads.
- * Objects that exist are replaced.
+ * Objects that exist are replaced. Nothing is written when installProblem, or for the parameters
+ * paramsCreationProblem, finds a problem, which is checked again here, as the bindings may have
+ * changed since the dialog opened.
  */
 export async function installPolicy(
   policy: PolicyObject,
@@ -148,6 +251,9 @@ export async function installPolicy(
   params: any | null,
   cluster?: string
 ) {
+  const bindings = await listBindings(policy, cluster);
+  const problem = policyProblem(policy, bindings) ?? (params ? paramsProblem(bindings) : null);
+  if (problem) throw new Error(problem);
   if (params) {
     await post(
       paramsCollection,
@@ -161,9 +267,19 @@ export async function installPolicy(
     withoutServerFields(policy),
     cluster
   );
-  await createOrReplace(
-    collectionOf(policy.apiVersion, 'validatingadmissionpolicybindings'),
-    binding,
-    cluster
-  );
+  // every binding of the policy only warns or audits, so a policy without its new binding
+  // rejects nothing either
+  try {
+    await createOrReplace(
+      collectionOf(policy.apiVersion, 'validatingadmissionpolicybindings'),
+      binding,
+      cluster
+    );
+  } catch (error: any) {
+    throw new BindingNotInstalledError(
+      `Installed ${policy.metadata.name}, but not its binding ${binding.metadata.name}: ${
+        error?.message ?? String(error)
+      }`
+    );
+  }
 }

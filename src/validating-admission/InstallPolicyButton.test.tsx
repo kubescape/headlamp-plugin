@@ -93,6 +93,115 @@ it('explains that a policy with parameters needs the ControlConfiguration CRD', 
   expect(screen.getByRole('button', { name: 'Install' })).toHaveProperty('disabled', true);
 });
 
+it('says that the policy was installed when its binding fails', async () => {
+  mocks.post.mockImplementation(async (url: string) => {
+    if (url.includes('selfsubjectaccessreviews')) return { status: { allowed } };
+    if (url.endsWith('/validatingadmissionpolicybindings')) {
+      throw new Error('admission webhook denied the request');
+    }
+    return {};
+  });
+  renderButton();
+  fireEvent.click(screen.getByRole('button', { name: 'Install in cluster' }));
+  const install = screen.getByRole('button', { name: 'Install' });
+  await waitFor(() => expect(install).toHaveProperty('disabled', false));
+  fireEvent.click(install);
+
+  expect(
+    await screen.findByText(
+      'Installed kubescape-c-0016, but not its binding kubescape-c-0016-binding: admission webhook denied the request. Close this dialog and install again to add the binding.'
+    )
+  ).toBeTruthy();
+  expect(screen.queryByText(/Unable to install/)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
+});
+
+it('does not install a policy that a binding in the cluster denies with', async () => {
+  const discovery = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation(async (url: string, options: any) =>
+    url === '/apis/admissionregistration.k8s.io/v1/validatingadmissionpolicybindings'
+      ? {
+          items: [
+            {
+              metadata: { name: 'enforce-c-0016' },
+              spec: { policyName: 'kubescape-c-0016', validationActions: ['Deny'] },
+            },
+          ],
+        }
+      : discovery(url, options)
+  );
+  renderButton();
+  fireEvent.click(screen.getByRole('button', { name: 'Install in cluster' }));
+
+  expect(
+    await screen.findByText(/^The binding enforce-c-0016 rejects requests that violate/)
+  ).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Install' })).toHaveProperty('disabled', true);
+});
+
+it('does not create parameters that a binding in the cluster denies with', async () => {
+  const discovery = mocks.request.getMockImplementation()!;
+  mocks.request.mockImplementation(async (url: string, options: any) =>
+    url === '/apis/admissionregistration.k8s.io/v1/validatingadmissionpolicybindings'
+      ? {
+          items: [
+            {
+              metadata: { name: 'kubescape-library-deny' },
+              spec: {
+                policyName: 'kubescape-c-0017',
+                validationActions: ['Deny'],
+                paramRef: { name: 'basic-control-configuration', parameterNotFoundAction: 'Allow' },
+              },
+            },
+          ],
+        }
+      : discovery(url, options)
+  );
+  renderButton();
+  fireEvent.click(screen.getByRole('button', { name: 'Install in cluster' }));
+
+  expect(
+    await screen.findByText(/^The binding kubescape-library-deny rejects requests and may read/)
+  ).toBeTruthy();
+  const createParams = screen.getByRole('checkbox', {
+    name: /Create the ControlConfiguration basic-control-configuration/,
+  });
+  expect(createParams).toHaveProperty('checked', false);
+  expect(createParams).toHaveProperty('disabled', true);
+
+  // the policy is installed without them
+  const install = screen.getByRole('button', { name: 'Install' });
+  await waitFor(() => expect(install).toHaveProperty('disabled', false));
+  fireEvent.click(install);
+  expect(await screen.findByText(/^Installed kubescape-c-0016 with binding/)).toBeTruthy();
+  const created = mocks.post.mock.calls
+    .filter(([url]) => !url.includes('selfsubjectaccessreviews'))
+    .map(([url]) => url);
+  expect(created).toEqual([
+    '/apis/admissionregistration.k8s.io/v1/validatingadmissionpolicies',
+    '/apis/admissionregistration.k8s.io/v1/validatingadmissionpolicybindings',
+  ]);
+});
+
+it('is not offered without permission to list the bindings it checks', async () => {
+  cluster.name = 'cluster-without-list';
+  mocks.post.mockImplementation(async (url: string, review: any) =>
+    url.includes('selfsubjectaccessreviews')
+      ? { status: { allowed: review.spec.resourceAttributes.verb !== 'list' } }
+      : {}
+  );
+  renderButton();
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Install in cluster' })).toHaveProperty(
+      'disabled',
+      true
+    )
+  );
+  expect(
+    screen.getByLabelText('You are not allowed to list validatingadmissionpolicybindings.')
+  ).toBeTruthy();
+});
+
 it('is not offered without permission to create policies', async () => {
   cluster.name = 'cluster-without-permission';
   allowed = false;

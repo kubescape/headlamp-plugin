@@ -18,9 +18,12 @@ import { Permitted } from '../common/permissions';
 import {
   bindingFor,
   bindingName,
+  BindingNotInstalledError,
   checkPolicy,
   installPolicy,
+  installProblem,
   isInstalled,
+  paramsCreationProblem,
   paramsName,
   ParamsState,
   paramsState,
@@ -33,6 +36,14 @@ const createCheck = (resource: string) => ({
   resource,
   verb: 'create',
 });
+
+// installing reads every binding first, to find those that would enforce the policy
+// (installProblem)
+const listBindingsCheck = {
+  group: 'admissionregistration.k8s.io',
+  resource: 'validatingadmissionpolicybindings',
+  verb: 'list',
+};
 
 function errorText(error: any) {
   return error?.message ?? String(error);
@@ -69,7 +80,7 @@ export function InstallPolicyButton(
 
   return (
     <>
-      <Permitted check={createCheck('validatingadmissionpolicies')}>
+      <Permitted check={[createCheck('validatingadmissionpolicies'), listBindingsCheck]}>
         {allowed => (
           <Button
             variant="outlined"
@@ -103,16 +114,30 @@ function InstallDialog(
   const [namespace, setNamespace] = useState('');
   const [paramsStatus, setParamsStatus] = useState<ParamsState | null>(null);
   const [createParams, setCreateParams] = useState(true);
+  // why creating the missing parameters could reject requests, null when it cannot or they are
+  // not created, undefined while it is checked
+  const [paramsConflict, setParamsConflict] = useState<string | null | undefined>(undefined);
   const [installed, setInstalled] = useState<boolean | null>(null);
+  // why installing could reject requests, null when it cannot, undefined while it is checked
+  const [conflict, setConflict] = useState<string | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ severity: 'success' | 'error'; text: string } | null>(
-    null
-  );
+  const [result, setResult] = useState<{
+    severity: 'success' | 'warning' | 'error';
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     if (problem) return;
     paramsState(policy)
-      .then(setParamsStatus)
+      .then(status => {
+        setParamsStatus(status);
+        if (status !== 'missing' || !params) return setParamsConflict(null);
+        return paramsCreationProblem(policy).then(setParamsConflict, error =>
+          setParamsConflict(
+            `Unable to check the bindings that read ${paramsName}: ${errorText(error)}`
+          )
+        );
+      })
       .catch(error =>
         setResult({
           severity: 'error',
@@ -122,15 +147,28 @@ function InstallDialog(
     isInstalled(policy)
       .then(setInstalled)
       .catch(() => setInstalled(null));
+    installProblem(policy)
+      .then(setConflict)
+      .catch(error =>
+        setConflict(`Unable to check the bindings of the policy: ${errorText(error)}`)
+      );
     // the dialog is opened for one policy
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const chosen = (Object.keys(actions) as ValidationAction[]).filter(action => actions[action]);
   const paramsProblem = paramsStatus ? paramsProblems[paramsStatus] : undefined;
-  const willCreateParams = paramsStatus === 'missing' && createParams && !!params;
+  const willCreateParams =
+    paramsStatus === 'missing' && createParams && !!params && paramsConflict === null;
   const ready =
-    !problem && paramsStatus !== null && !paramsProblem && chosen.length > 0 && !busy && !result;
+    !problem &&
+    paramsStatus !== null &&
+    !paramsProblem &&
+    paramsConflict !== undefined &&
+    conflict === null &&
+    chosen.length > 0 &&
+    !busy &&
+    !result;
 
   const install = async () => {
     setBusy(true);
@@ -147,7 +185,14 @@ function InstallDialog(
           '.',
       });
     } catch (error) {
-      setResult({ severity: 'error', text: `Unable to install the policy: ${errorText(error)}` });
+      setResult(
+        error instanceof BindingNotInstalledError
+          ? {
+              severity: 'warning',
+              text: `${error.message}. Close this dialog and install again to add the binding.`,
+            }
+          : { severity: 'error', text: `Unable to install the policy: ${errorText(error)}` }
+      );
     } finally {
       setBusy(false);
     }
@@ -167,7 +212,8 @@ function InstallDialog(
               rejected. Deny is not offered here: change the binding with kubectl once the warnings
               show that the policy is right.
             </Typography>
-            {installed && (
+            {conflict && <Alert severity="error">{conflict}</Alert>}
+            {installed && !conflict && (
               <Alert severity="info">
                 The policy is installed already; installing replaces it and its binding.
               </Alert>
@@ -194,12 +240,15 @@ function InstallDialog(
               helperText="Only check requests in this namespace; empty for all namespaces."
             />
             {paramsProblem && <Alert severity="warning">{paramsProblem}</Alert>}
+            {paramsStatus === 'missing' && paramsConflict && (
+              <Alert severity="warning">{paramsConflict}</Alert>
+            )}
             {paramsStatus === 'missing' && (
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={createParams && !!params}
-                    disabled={!params}
+                    checked={createParams && !!params && !paramsConflict}
+                    disabled={!params || !!paramsConflict}
                     onChange={(_, checked) => setCreateParams(checked)}
                   />
                 }
@@ -215,7 +264,9 @@ function InstallDialog(
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>{result?.severity === 'success' ? 'Close' : 'Cancel'}</Button>
+        <Button onClick={onClose}>
+          {result && result.severity !== 'error' ? 'Close' : 'Cancel'}
+        </Button>
         {!problem && (
           <Permitted check={createCheck('validatingadmissionpolicybindings')}>
             {allowed => (
