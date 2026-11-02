@@ -14,6 +14,7 @@ import { useHistory } from 'react-router-dom';
 import { ClusterErrors } from '../common/ClusterErrors';
 import { clusterColumns, rejectedClusters } from '../common/clusters';
 import { getAlertmanagerUrl, kubescapeConfigStore } from '../common/config-store';
+import { ConfirmDeleteDialog } from '../common/ConfirmDeleteDialog';
 import { PermittedIconButton } from '../common/permissions';
 import { SetupCheck } from '../common/SetupCheck';
 import HeadlampTable from '../common/Table';
@@ -471,13 +472,21 @@ function profileId(profile: ContainerProfile) {
 
 // ── Rules ─────────────────────────────────────────────────────────────────────
 
+interface RulesRow {
+  crdName: string;
+  namespace: string;
+  cluster?: string;
+  ruleCount: number;
+}
+
 function RulesTab() {
   const clusters = useHLSelectedClusters();
   const [rulesCRDs] = rulesClass.useList({ clusters }) as any;
   const history = useHistory();
-  const [error, setError] = useState('');
+  // the Rules object to delete once the user confirms
+  const [deleting, setDeleting] = useState<RulesRow | null>(null);
 
-  const items =
+  const items: RulesRow[] =
     rulesCRDs?.map((crd: any) => ({
       crdName: crd.jsonData.metadata.name,
       namespace: crd.jsonData.metadata.namespace,
@@ -486,16 +495,11 @@ function RulesTab() {
     })) ?? [];
 
   // The list is watched, so a successful delete removes the row without a reload.
-  const handleDelete = async (namespace: string, crdName: string, cluster?: string) => {
-    try {
-      await remove(
-        `/apis/kubescape.io/v1/namespaces/${namespace}/rules/${crdName}`,
-        cluster ? { cluster } : undefined
-      );
-    } catch (err: any) {
-      setError(err?.message ?? String(err));
-    }
-  };
+  const deleteRules = ({ namespace, crdName, cluster }: RulesRow) =>
+    remove(
+      `/apis/kubescape.io/v1/namespaces/${namespace}/rules/${crdName}`,
+      cluster ? { cluster } : undefined
+    );
 
   return (
     <>
@@ -504,16 +508,34 @@ function RulesTab() {
           <code>kubescape.io/v1 Rules</code> CRDs deployed in the cluster. Click a name to open the
           rule editor.
         </Typography>
-        <Tooltip title="Add new rule">
-          <IconButton onClick={() => history.push(createRouteURL(RoutingName.RuleNew))}>
-            <Icon icon="mdi:add-circle" />
-          </IconButton>
-        </Tooltip>
+        {/* the rule editor creates new Rules objects in the kubescape namespace by default */}
+        <PermittedIconButton
+          check={{
+            group: 'kubescape.io',
+            resource: 'rules',
+            verb: 'create',
+            namespace: 'kubescape',
+          }}
+          title="Add new rule"
+          onClick={() => history.push(createRouteURL(RoutingName.RuleNew))}
+        >
+          <Icon icon="mdi:add-circle" />
+        </PermittedIconButton>
       </Stack>
-      {error && (
-        <Alert severity="error" sx={{ mb: 1 }}>
-          {error}
-        </Alert>
+      {deleting && (
+        <ConfirmDeleteDialog
+          target={{
+            kind: 'Rules object',
+            name: deleting.crdName,
+            namespace: deleting.namespace,
+            cluster: deleting.cluster,
+          }}
+          consequence={`Runtime detection no longer uses the ${deleting.ruleCount} ${
+            deleting.ruleCount === 1 ? 'rule' : 'rules'
+          } it holds.`}
+          onDelete={() => deleteRules(deleting)}
+          onClose={() => setDeleting(null)}
+        />
       )}
       <HeadlampTable
         data={items}
@@ -559,9 +581,7 @@ function RulesTab() {
                 cluster={row.original.cluster}
                 title="Delete"
                 ariaLabel={`Delete ${row.original.crdName}`}
-                onClick={() =>
-                  handleDelete(row.original.namespace, row.original.crdName, row.original.cluster)
-                }
+                onClick={() => setDeleting(row.original)}
               >
                 <Icon icon="mdi:delete-outline" />
               </PermittedIconButton>
@@ -601,7 +621,8 @@ function RuleBindingsTab() {
   const clustersKey = clusters.join(',');
   const [items, setItems] = useState<any[]>([]);
   const [errors, setErrors] = useState<ClusterError[]>([]);
-  const [error, setError] = useState('');
+  // the binding to delete once the user confirms
+  const [deleting, setDeleting] = useState<{ name: string; cluster: string } | null>(null);
 
   const load = () =>
     Promise.allSettled(
@@ -619,13 +640,9 @@ function RuleBindingsTab() {
     load();
   }, [clustersKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleDelete = async (name: string, cluster: string) => {
-    try {
-      await remove(`${RULE_BINDING_API}/${name}`, { cluster });
-      load();
-    } catch (err: any) {
-      setError(err?.message ?? String(err));
-    }
+  const deleteBinding = async ({ name, cluster }: { name: string; cluster: string }) => {
+    await remove(`${RULE_BINDING_API}/${name}`, { cluster });
+    load();
   };
 
   return (
@@ -643,10 +660,13 @@ function RuleBindingsTab() {
           <Icon icon="mdi:add-circle" />
         </PermittedIconButton>
       </Stack>
-      {error && (
-        <Alert severity="error" sx={{ mb: 1 }}>
-          {error}
-        </Alert>
+      {deleting && (
+        <ConfirmDeleteDialog
+          target={{ kind: 'rule binding', name: deleting.name, cluster: deleting.cluster }}
+          consequence="The rules it binds no longer alert for the workloads it selects, unless another binding selects them."
+          onDelete={() => deleteBinding(deleting)}
+          onClose={() => setDeleting(null)}
+        />
       )}
       <ClusterErrors errors={errors} what="the rule bindings" />
       <HeadlampTable
@@ -709,7 +729,9 @@ function RuleBindingsTab() {
                 cluster={row.original.cluster}
                 title="Delete"
                 ariaLabel={`Delete ${cell.getValue()}`}
-                onClick={() => handleDelete(cell.getValue(), row.original.cluster)}
+                onClick={() =>
+                  setDeleting({ name: cell.getValue(), cluster: row.original.cluster })
+                }
               >
                 <Icon icon="mdi:delete-outline" />
               </PermittedIconButton>

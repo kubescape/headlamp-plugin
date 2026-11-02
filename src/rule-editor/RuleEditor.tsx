@@ -38,6 +38,7 @@ import {
 import Autocomplete from '@mui/material/Autocomplete';
 import * as yaml from 'js-yaml';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AccessCheck, PermittedIconButton } from '../common/permissions';
 import { TabPanel } from '../common/TabPanel';
 import { useEditorTheme } from '../common/theme';
 import { getURLSegments } from '../common/url';
@@ -300,6 +301,17 @@ function RuleFormPage({
 
   const isReadOnly =
     isEdit && initialMeta?.name === 'default-rules' && initialMeta?.namespace === 'kubescape';
+  // an edit replaces the object it was opened from; a new one is created where the form says
+  const saveNamespace = (isEdit && initialMeta?.namespace) || ruleMeta.namespace;
+  const saveCheck: AccessCheck | null = saveNamespace
+    ? {
+        group: 'kubescape.io',
+        resource: 'rules',
+        verb: isEdit ? 'update' : 'create',
+        namespace: saveNamespace,
+        ...(isEdit && { name: initialMeta?.name ?? ruleMeta.name }),
+      }
+    : null;
 
   return (
     <SectionBox backLink>
@@ -308,11 +320,14 @@ function RuleFormPage({
           {isEdit ? 'Edit Rule' : 'New Rule'}
         </Typography>
         {!isReadOnly && (
-          <Tooltip title="Save to cluster">
-            <IconButton onClick={handleSave}>
-              <Icon icon="mdi:content-save" />
-            </IconButton>
-          </Tooltip>
+          <PermittedIconButton
+            check={saveCheck}
+            title="Save to cluster"
+            size="medium"
+            onClick={handleSave}
+          >
+            <Icon icon="mdi:content-save" />
+          </PermittedIconButton>
         )}
         <Tooltip title="Test rule in playground">
           <IconButton onClick={() => setPlaygroundOpen(true)}>

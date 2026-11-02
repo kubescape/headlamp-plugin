@@ -34,6 +34,7 @@ import { useState } from 'react';
 import { ErrorContainer } from '../common/ErrorContainer';
 import { ErrorMessage } from '../common/ErrorMessage';
 import { saveToFile } from '../common/filedialog';
+import { frameworkCheck, PermittedIconButton } from '../common/permissions';
 import { getKubescapePluginUrl } from '../common/PluginHelper';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
 import { getURLSegments } from '../common/url';
@@ -210,11 +211,18 @@ function FrameworkEditor(
         <Typography variant="h4" sx={{ marginRight: 4, fontWeight: 'bold' }}>
           Custom Framework
         </Typography>
-        <Tooltip title="Save policy as a Configmap in k8s cluster">
-          <IconButton onClick={() => handleSave()}>
-            <Icon icon="mdi:database" />
-          </IconButton>
-        </Tooltip>
+        <PermittedIconButton
+          check={
+            configMap?.metadata.uid
+              ? frameworkCheck('update', configMap.metadata.namespace, configMap.metadata.name)
+              : frameworkCheck('create', kubeScapeNamespace)
+          }
+          title="Save policy as a Configmap in k8s cluster"
+          size="medium"
+          onClick={() => handleSave()}
+        >
+          <Icon icon="mdi:database" />
+        </PermittedIconButton>
         <Tooltip title="Download custom framework file">
           <IconButton onClick={() => handleDownload()}>
             <Icon icon="mdi:file-download" />

@@ -147,22 +147,24 @@ export function PermittedIconButton(
     cluster?: string | null;
     title: string;
     ariaLabel?: string;
+    // small in tables, medium next to a page title
+    size?: 'small' | 'medium';
     onClick: () => void;
     children: ReactNode;
   }>
 ) {
-  const { check, cluster, title, ariaLabel = title, onClick, children } = props;
+  const { check, cluster, title, ariaLabel = title, size = 'small', onClick, children } = props;
   return (
     <Permitted check={check} cluster={cluster}>
       {allowed =>
         allowed ? (
           <Tooltip title={title}>
-            <IconButton size="small" aria-label={ariaLabel} onClick={onClick}>
+            <IconButton size={size} aria-label={ariaLabel} onClick={onClick}>
               {children}
             </IconButton>
           </Tooltip>
         ) : (
-          <IconButton size="small" aria-label={ariaLabel} disabled>
+          <IconButton size={size} aria-label={ariaLabel} disabled>
             {children}
           </IconButton>
         )
@@ -176,4 +178,17 @@ export function createExceptionCheck(namespace?: string): AccessCheck {
   return namespace
     ? { group: 'kubescape.io', resource: 'securityexceptions', verb: 'create', namespace }
     : { group: 'kubescape.io', resource: 'clustersecurityexceptions', verb: 'create' };
+}
+
+/**
+ * Creating, changing or deleting a custom framework, a ConfigMap in the Kubescape namespace;
+ * nothing to check while the namespace is not known.
+ */
+export function frameworkCheck(
+  verb: string,
+  namespace?: string,
+  name?: string
+): AccessCheck | null {
+  if (!namespace) return null;
+  return { group: '', resource: 'configmaps', verb, namespace, ...(name && { name }) };
 }

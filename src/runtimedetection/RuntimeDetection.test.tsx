@@ -20,7 +20,14 @@ const mocks = vi.hoisted(() => ({
   clusters: ['cluster-a'],
   alertmanagerUrl: '',
   ruleObjects: [] as any[],
+  // the current cluster when a test needs its own, as permission answers are kept per cluster
+  currentCluster: undefined as string | undefined,
 }));
+
+vi.mock('@kinvolk/headlamp-plugin/lib/Utils', async importOriginal => {
+  const original = await importOriginal<typeof import('@kinvolk/headlamp-plugin/lib/Utils')>();
+  return { ...original, getCluster: () => mocks.currentCluster ?? original.getCluster() };
+});
 
 vi.mock('../index', () => ({
   RoutingName: {
@@ -161,6 +168,7 @@ beforeEach(() => {
   mocks.clusters = ['cluster-a'];
   mocks.alertmanagerUrl = '';
   mocks.ruleObjects = [];
+  mocks.currentCluster = undefined;
 });
 afterEach(cleanup);
 
@@ -656,11 +664,57 @@ it('lists and deletes the rule bindings of each selected cluster', async () => {
   expect(await screen.findByText('binding-cluster-b')).toBeTruthy();
   expect(screen.getByText('binding-cluster-a')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Delete binding-cluster-b' }));
+  // after a confirmation that names the binding and its cluster
+  const dialog = screen.getByRole('dialog', { name: 'Delete rule binding?' });
+  expect(dialog.textContent).toMatch(
+    /Deletes the rule binding binding-cluster-b of cluster cluster-b/
+  );
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
   await waitFor(() =>
     expect(mocks.remove).toHaveBeenCalledWith(
       '/apis/kubescape.io/v1/runtimerulealertbindings/binding-cluster-b',
       { cluster: 'cluster-b' }
     )
+  );
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+});
+
+it('deletes a Rules object only after a confirmation that names it', async () => {
+  mocks.clusters = ['cluster-a', 'cluster-b'];
+  mocks.ruleObjects = [
+    {
+      cluster: 'cluster-b',
+      jsonData: {
+        metadata: { name: 'default-rules', namespace: 'kubescape' },
+        spec: { rules: [{ id: 'R0001' }, { id: 'R0005' }] },
+      },
+    },
+  ];
+  mocks.remove.mockRejectedValueOnce(new Error('rules.kubescape.io is forbidden'));
+
+  renderRuntimeDetection();
+  fireEvent.click(screen.getByRole('tab', { name: 'Rules' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete default-rules' }));
+
+  const dialog = screen.getByRole('dialog', { name: 'Delete Rules object?' });
+  expect(dialog.textContent).toBe(
+    'Delete Rules object?Deletes the Rules object default-rules in namespace kubescape of cluster ' +
+      'cluster-b. Runtime detection no longer uses the 2 rules it holds.CancelDelete'
+  );
+  // nothing is deleted until the user confirms
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(mocks.remove).not.toHaveBeenCalled();
+
+  // a failed delete keeps the dialog open with the error
+  fireEvent.click(screen.getByRole('button', { name: 'Delete default-rules' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }));
+  expect(await screen.findByText('rules.kubescape.io is forbidden')).toBeTruthy();
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(mocks.remove).toHaveBeenLastCalledWith(
+    '/apis/kubescape.io/v1/namespaces/kubescape/rules/default-rules',
+    { cluster: 'cluster-b' }
   );
 });
 
@@ -726,4 +780,22 @@ it('shows how to apply an installed seccomp profile and explains a missing one',
     screen.getByText(/localhostProfile: kubescape\/shop\/deployment-web\/web\.json/)
   ).toBeTruthy();
   expect(screen.getByText(/has not installed this profile on the nodes yet/)).toBeTruthy();
+});
+
+it('offers no new rule without permission to create Rules objects', async () => {
+  mocks.currentCluster = 'cluster-without-rules';
+  mocks.post.mockImplementation(async (url: string, review: any) =>
+    url.includes('selfsubjectaccessreviews')
+      ? { status: { allowed: review.spec.resourceAttributes.resource !== 'rules' } }
+      : {}
+  );
+  renderRuntimeDetection();
+  fireEvent.click(screen.getByRole('tab', { name: 'Rules' }));
+
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Add new rule' })).toHaveProperty('disabled', true)
+  );
+  expect(
+    screen.getByLabelText('You are not allowed to create rules in namespace kubescape.')
+  ).toBeTruthy();
 });
