@@ -206,10 +206,11 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
           label="Show the newest version of images"
         />
         <Typography variant="body2" color="text.secondary" sx={{ ml: 6, mt: -0.5 }}>
-          Asks Quay, Google&apos;s Artifact Registry, GitHub, jsDelivr (for projects on GitHub and
-          Docker&apos;s official images) and endoflife.date about public images, and reads
-          version-checker in clusters that run it. The name of an image only goes to its own
-          registry, or elsewhere once it is known to be public; answers are kept for a day.
+          Asks Quay and Google&apos;s Artifact Registry about their own images, jsDelivr about
+          GitHub projects and Docker&apos;s official images, and endoflife.date about the products
+          it lists, and reads version-checker in clusters that run it. Unless the setting below is
+          on, the name of an image only goes to its own registry, or elsewhere once it is known to
+          be public. Answers are kept for a day.
         </Typography>
         <FormControlLabel
           sx={{ ml: 4 }}
@@ -225,8 +226,14 @@ export function KubescapeSettings({ data, onDataChange }: Readonly<SettingsProps
               }
             />
           }
-          label="Also look up Docker Hub, GHCR and Upbound images that may be private, which sends their names to shields.io and jsDelivr"
+          label="Also look up Docker Hub, GHCR and Upbound images that may be private"
         />
+        <Typography variant="body2" color="warning.main" sx={{ ml: 10, mt: -0.5 }}>
+          Off by default. The browser cannot tell whether these images are public, so turning this
+          on sends their names, internal ones included, to shields.io and jsDelivr, outside your own
+          registries. An image name can reveal internal projects, teams or customers, which for some
+          organisations is a security risk. Leave it off if your image names are confidential.
+        </Typography>
         <FormControlLabel
           sx={{ ml: 4 }}
           control={

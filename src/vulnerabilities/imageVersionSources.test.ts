@@ -110,12 +110,13 @@ describe('lookupImageVersion', () => {
     expect((await lookupImageVersion('quay.io/team/app:v1.0.0')).latest).toBeUndefined();
   });
 
-  it('reads the versions of the public GitHub project of a ghcr.io image from jsDelivr', async () => {
-    answers[githubRepository('external-secrets/external-secrets')] = { private: false };
+  it('reads the versions of the GitHub project of a ghcr.io image from jsDelivr with the opt-in', async () => {
     answers[jsdelivr('external-secrets/external-secrets')] = {
       versions: [{ version: '2.14.0' }, { version: 'helm-chart-2.14.0' }, { version: '2.8.0' }],
     };
-    const found = await lookupImageVersion('ghcr.io/external-secrets/external-secrets:v2.8.0');
+    const found = await lookupImageVersion('ghcr.io/external-secrets/external-secrets:v2.8.0', {
+      possiblyPrivate: possiblyPrivatePermit(),
+    });
     expect(found.latest).toEqual({
       latest: '2.14.0',
       source: {
@@ -123,42 +124,27 @@ describe('lookupImageVersion', () => {
         url: 'https://github.com/external-secrets/external-secrets/releases',
       },
     });
-    // GitHub, which runs ghcr.io, is asked whether the project is public first
     expect(requested().filter(url => !url.startsWith('https://endoflife.date'))).toEqual([
-      githubRepository('external-secrets/external-secrets'),
       jsdelivr('external-secrets/external-secrets'),
     ]);
   });
 
-  it('never sends the name of a private ghcr.io image to jsDelivr', async () => {
-    // GitHub does not show a private project to others
-    const found = await lookupImageVersion('ghcr.io/acme/secret-project:v1.2.3');
-    expect(found).toEqual({});
-    expect(requested()).toContain(githubRepository('acme/secret-project'));
-    expect(requested()).not.toContainEqual(expect.stringContaining('jsdelivr'));
+  it('never sends the name of a ghcr.io image without the opt-in, even with a public repository of that name', async () => {
+    // GitHub sets the visibility of a package apart from its repository: acme/app is a public
+    // repository, while the package ghcr.io/acme/app is private
+    answers[githubRepository('acme/app')] = { private: false };
+    answers[jsdelivr('acme/app')] = { versions: [{ version: '1.3.0' }] };
+    expect(await lookupImageVersion('ghcr.io/acme/app:v1.2.3')).toEqual({});
+    // neither GitHub nor jsDelivr is asked; only the whole product lists of endoflife.date are read
+    expect(requested()).toEqual([identifiers, products]);
 
     // unless the settings allow names of images that may be private
-    answers[jsdelivr('acme/secret-project')] = { versions: [{ version: '1.3.0' }] };
-    const allowed = await lookupImageVersion('ghcr.io/acme/secret-project:v1.2.3', {
+    const allowed = await lookupImageVersion('ghcr.io/acme/app:v1.2.3', {
       possiblyPrivate: possiblyPrivatePermit(),
     });
     expect(allowed.latest?.latest).toBe('1.3.0');
-  });
-
-  it('asks GitHub again after an hour when it refuses to answer', async () => {
-    const now = Date.now();
-    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
-    // the 60 requests an hour are used up
-    answers[githubRepository('team/app')] = () => new Response('{}', { status: 403 });
-    expect(await lookupImageVersion('ghcr.io/team/app:1.0.0')).toEqual({});
-    expect(await lookupImageVersion('ghcr.io/team/app:1.0.0')).toEqual({});
-    expect(requestedAt('https://api.github.com')).toHaveLength(1);
-    expect(requested()).not.toContain(jsdelivr('team/app'));
-
-    answers[githubRepository('team/app')] = { private: false };
-    answers[jsdelivr('team/app')] = { versions: [{ version: '1.1.0' }] };
-    clock.mockReturnValue(now + 3600 * 1000 + 1);
-    expect((await lookupImageVersion('ghcr.io/team/app:1.0.0')).latest?.latest).toBe('1.1.0');
+    expect(requested()).toContain(jsdelivr('acme/app'));
+    expect(requestedAt('https://api.github.com')).toEqual([]);
   });
 
   it('reads the tags of an official Docker Hub image from the files Docker builds it from', async () => {
@@ -339,7 +325,6 @@ describe('lookupImageVersion', () => {
   });
 
   it('prefers the registry or project for the newest version and still reads the line', async () => {
-    answers[githubRepository('cloudnative-pg/postgresql')] = { private: false };
     answers[jsdelivr('cloudnative-pg/postgresql')] = undefined;
     answers[products] = { result: [{ name: 'postgresql', aliases: ['postgres'] }] };
     answers[endOfLife('postgresql')] = {
@@ -350,10 +335,19 @@ describe('lookupImageVersion', () => {
         ],
       },
     };
-    const found = await lookupImageVersion('ghcr.io/cloudnative-pg/postgresql:17.5');
+    // the project is not on jsDelivr, so the newest version comes from endoflife.date
+    const found = await lookupImageVersion('ghcr.io/cloudnative-pg/postgresql:17.5', {
+      possiblyPrivate: possiblyPrivatePermit(),
+    });
     expect(found.latest?.latest).toBe('18.6');
     expect(found.line).toMatchObject({ name: '17', latest: '17.11', eolFrom: '2029-11-08' });
     expect(requested()).toContain(jsdelivr('cloudnative-pg/postgresql'));
+
+    // as it does without the opt-in, which names no ghcr.io image
+    fetchMock.mockClear();
+    const withoutOptIn = await lookupImageVersion('ghcr.io/cloudnative-pg/postgresql:17.5');
+    expect(withoutOptIn).toEqual(found);
+    expect(requested()).not.toContain(jsdelivr('cloudnative-pg/postgresql'));
   });
 
   it('finds products by the image names that endoflife.date lists', async () => {
@@ -418,7 +412,7 @@ describe('lookupImageVersion', () => {
     });
     // as is a repository of Artifact Registry that does not answer
     await lookupImageVersion('europe-docker.pkg.dev/team-project/images/app:1.2.0', { source });
-    // and a ghcr.io image of a project that GitHub does not show
+    // and a ghcr.io image, whose visibility the browser cannot learn
     await lookupImageVersion('ghcr.io/team/app:1.2.0', { source });
     // and an image without a publisher that Docker does not build, such as one built locally,
     // whose name goes nowhere: only the list of official images is read
