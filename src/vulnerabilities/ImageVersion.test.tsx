@@ -33,8 +33,11 @@ const line = {
   url: 'https://endoflife.date/nginx',
 };
 
+// both are off until they are switched on
+const switchedOn = { imageVersions: true, endOfLife: true };
+
 beforeEach(() => {
-  mocks.config = {};
+  mocks.config = switchedOn;
   mocks.checked = new Map();
   mocks.lookup.mockReset();
   mocks.lookup.mockResolvedValue({
@@ -66,9 +69,10 @@ it('takes the newest version from version-checker when it runs in the cluster', 
   render(<Details image="nginx:1.29.3" />);
   await waitFor(() => expect(screen.getByText('1.31.9')).toBeTruthy());
   expect(screen.getByText(/version-checker has 1.31.9, which is newer than 1.29.3/)).toBeTruthy();
-  // only the end of life is looked up elsewhere, and only for images known to be public
+  // only the end of life is looked up elsewhere
   expect(mocks.lookup).toHaveBeenCalledWith('nginx:1.29.3', {
     latest: false,
+    endOfLife: true,
     possiblyPrivate: undefined,
   });
   expect(screen.getByText('End of life')).toBeTruthy();
@@ -80,15 +84,17 @@ it('looks up images that may be private only when the settings allow it', async 
   expect(mocks.lookup).toHaveBeenCalledTimes(1);
   expect(mocks.lookup).toHaveBeenLastCalledWith('team/app:1.2.0', {
     latest: true,
+    endOfLife: true,
     possiblyPrivate: undefined,
   });
 
   // switching the setting on looks the image up again
-  mocks.config = { possiblyPrivateImages: true };
+  mocks.config = { ...switchedOn, possiblyPrivateImages: true };
   view.rerender(<Details image="team/app:1.2.0" />);
   await waitFor(() => expect(mocks.lookup).toHaveBeenCalledTimes(2));
   expect(mocks.lookup).toHaveBeenLastCalledWith('team/app:1.2.0', {
     latest: true,
+    endOfLife: true,
     possiblyPrivate: expect.any(AbortSignal),
   });
 
@@ -119,19 +125,27 @@ it('stops the lookups of images that may be private once the settings no longer 
   expect(next.aborted).toBe(true);
 });
 
-it('leaves out the end of life when it is switched off', async () => {
-  mocks.config = { endOfLife: false };
+it('neither shows nor asks endoflife.date when the end of life is not switched on', async () => {
+  mocks.config = { imageVersions: true };
   render(<Details image="nginx:1.29.3" />);
   await waitFor(() => expect(screen.getByText('Latest version')).toBeTruthy());
   expect(screen.queryByText('End of life')).toBeNull();
+  expect(mocks.lookup).toHaveBeenCalledWith('nginx:1.29.3', {
+    latest: true,
+    endOfLife: false,
+    possiblyPrivate: undefined,
+  });
 });
 
-it('looks nothing up when the newest versions are switched off', async () => {
-  mocks.config = { imageVersions: false };
-  render(<Details image="nginx:1.29.3" />);
-  await new Promise(resolve => setTimeout(resolve, 50));
-  expect(mocks.lookup).not.toHaveBeenCalled();
-  expect(screen.queryByText('Latest version')).toBeNull();
+it('looks nothing up until the newest versions are switched on', async () => {
+  for (const config of [{}, { imageVersions: false, endOfLife: true }]) {
+    mocks.config = config;
+    const view = render(<Details image="nginx:1.29.3" />);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.lookup).not.toHaveBeenCalled();
+    expect(screen.queryByText('Latest version')).toBeNull();
+    view.unmount();
+  }
 });
 
 it('marks a release line that ends within 90 days', () => {

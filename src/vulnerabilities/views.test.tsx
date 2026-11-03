@@ -28,8 +28,9 @@ const mocks = vi.hoisted(() => ({
   saveToFile: vi.fn(),
   lookupImageVersion: vi.fn(),
 }));
+// the image versions and their end of life are off until they are switched on
 vi.mock('../common/config-store', () => ({
-  kubescapeConfigStore: { useConfig: () => () => ({}) },
+  kubescapeConfigStore: { useConfig: () => () => ({ imageVersions: true, endOfLife: true }) },
 }));
 vi.mock('./imageVersionSources', async importOriginal => ({
   ...(await importOriginal<typeof import('./imageVersionSources')>()),
@@ -815,6 +816,7 @@ it('shows the newest version of the image of a workload and the end of its relea
   await waitFor(() => expect(valueFor('Latest version').textContent).toContain('2.0.1'));
   expect(mocks.lookupImageVersion).toHaveBeenCalledWith('example:1.2.3', {
     latest: true,
+    endOfLife: true,
     possiblyPrivate: undefined,
   });
   expect(valueFor('Latest version').textContent).toContain(

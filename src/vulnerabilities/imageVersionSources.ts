@@ -20,7 +20,8 @@
   (possiblyPrivate); so do the projects of Upbound packages of other publishers than Upbound and
   the Crossplane community. Switching that setting off stops those requests that were not sent yet
   (possiblyPrivatePermit). The project an image's labels name is only asked about when the image
-  is public. Answers are kept for a day, in localStorage where they are small.
+  is public. endoflife.date only gets the names of products on its own lists, and only when the
+  settings show the end of life. Answers are kept for a day, in localStorage where they are small.
 */
 import { request } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
 import { githubProjectOfSource } from './imageSource';
@@ -765,13 +766,16 @@ async function endOfLifeOf(
 
 /**
  * The newest version of a public image and the release line of its tag. Images whose tag is not
- * a version, such as latest, are not looked up.
+ * a version, such as latest, are not looked up. Without the end of life, endoflife.date is not
+ * asked, also not for the newest version.
  */
 export async function lookupImageVersion(
   image: string,
   options: {
     // false when version-checker already knows the newest version
     latest?: boolean;
+    // false when the settings leave out the end of life, so that endoflife.date is not asked
+    endOfLife?: boolean;
     // the source repository the labels of the image name (imageSourceLabel)
     source?: string;
     // the permit to send the names of images that may be private to shields.io and jsDelivr
@@ -784,15 +788,18 @@ export async function lookupImageVersion(
   if (!reference || !tag || !parseVersion(tag)) return {};
   const sourceProject = githubProjectOfSource(options.source);
   // a service that fails leaves out what it would tell
+  const noEndOfLife: { line?: ReleaseLine; newest?: LatestVersion } = {};
   const [latest, endOfLife] = await Promise.all([
     options.latest === false
       ? null
       : registryOrProjectLatest(reference, tag, sourceProject, options.possiblyPrivate).catch(
           () => null
         ),
-    endOfLifeOf(reference, tag, githubProject(reference) ?? sourceProject).catch(
-      () => ({} as Awaited<ReturnType<typeof endOfLifeOf>>)
-    ),
+    options.endOfLife === false
+      ? noEndOfLife
+      : endOfLifeOf(reference, tag, githubProject(reference) ?? sourceProject).catch(
+          () => noEndOfLife
+        ),
   ]);
   return { latest: latest ?? endOfLife.newest, line: endOfLife.line };
 }

@@ -14,9 +14,9 @@ export type KubescapeConfig = {
   notifications?: boolean;
   // Prometheus service with the metrics of the Kubescape exporter, as namespace/service:port
   prometheusUrl?: string;
-  // the newest version of images, looked up at public services, on unless false
+  // the newest version of images, looked up at public services, off unless true
   imageVersions?: boolean;
-  // the end of life of the release line of images, on unless false
+  // the end of life of the release line of images, from endoflife.date, off unless true
   endOfLife?: boolean;
   // also looking up images that may be private, whose names then go to shields.io and jsDelivr,
   // off unless true

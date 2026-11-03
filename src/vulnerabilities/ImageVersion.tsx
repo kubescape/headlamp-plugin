@@ -1,6 +1,7 @@
 /*
   The newest version of images and the end of life of their release line, for the image list and
-  the pages of an image and a workload. Both can be switched off in the plugin settings.
+  the pages of an image and a workload. Both are off until they are switched on in the plugin
+  settings, as they ask services outside the cluster.
 */
 import { Icon } from '@iconify/react';
 import { Box, Link, Stack, Tooltip, Typography } from '@mui/material';
@@ -26,12 +27,13 @@ export interface ImageVersion {
   line?: ReleaseLine;
 }
 
+/** The settings of the image versions: each one is off until it is switched on. */
 export function useImageVersionSettings() {
   const config = kubescapeConfigStore.useConfig()() as KubescapeConfig | undefined;
-  const enabled = config?.imageVersions !== false;
+  const enabled = config?.imageVersions === true;
   return {
     enabled,
-    endOfLife: enabled && config?.endOfLife !== false,
+    endOfLife: enabled && config?.endOfLife === true,
     possiblyPrivate: enabled && config?.possiblyPrivateImages === true,
   };
 }
@@ -65,12 +67,18 @@ const noVersions = new Map<string, ImageVersion>();
 
 async function findVersion(
   { image, cluster, source }: ImageInCluster,
+  endOfLife: boolean,
   possiblyPrivate: AbortSignal | undefined
 ): Promise<ImageVersion> {
   const tag = imageTag(image);
   const key = imageVersionKey(image);
   const checked = key ? (await versionCheckerResults(cluster)).get(key) : undefined;
-  const found = await lookupImageVersion(image, { latest: !checked, source, possiblyPrivate });
+  const found = await lookupImageVersion(image, {
+    latest: !checked,
+    endOfLife,
+    source,
+    possiblyPrivate,
+  });
   if (checked) {
     return {
       tag,
@@ -95,7 +103,7 @@ async function findVersion(
  * version are left out. Empty when the setting is off.
  */
 export function useImageVersions(images: ImageInCluster[]): Map<string, ImageVersion> {
-  const { enabled, possiblyPrivate } = useImageVersionSettings();
+  const { enabled, endOfLife, possiblyPrivate } = useImageVersionSettings();
   // the images to look up, with the source their labels name
   const wanted = useMemo(
     () =>
@@ -124,6 +132,7 @@ export function useImageVersions(images: ImageInCluster[]): Map<string, ImageVer
         const image = rest.join('|');
         const version = await findVersion(
           { cluster, image, source: source || undefined },
+          endOfLife,
           permit
         ).catch(() => null);
         if (!version?.latest && !version?.line) return;
@@ -139,7 +148,7 @@ export function useImageVersions(images: ImageInCluster[]): Map<string, ImageVer
       active = false;
       if (timer) clearTimeout(timer);
     };
-  }, [enabled, possiblyPrivate, wanted]);
+  }, [enabled, endOfLife, possiblyPrivate, wanted]);
 
   return enabled ? versions : noVersions;
 }

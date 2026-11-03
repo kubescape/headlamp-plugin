@@ -51,7 +51,8 @@ vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', async () => {
 const tableTheme = createTheme(theme, { palette: { tables: { head: { borderColor: '#ddd' } } } });
 afterEach(cleanup);
 beforeEach(() => {
-  versions.config = {};
+  // both are off until they are switched on
+  versions.config = { imageVersions: true, endOfLife: true };
   versions.lookup.mockReset();
   versions.lookup.mockResolvedValue({});
 });
@@ -172,18 +173,23 @@ it('shows the tag, the newest version and the end of life of each image', async 
 });
 
 it('leaves out the end of life, or all version columns, as the settings say', async () => {
-  versions.config = { endOfLife: false };
+  versions.config = { imageVersions: true };
   const view = renderImages([workload('redis:5.0.7')]);
   expect(screen.getByRole('columnheader', { name: /Latest/ })).toBeTruthy();
   expect(screen.queryByRole('columnheader', { name: /End of life/ })).toBeNull();
   await waitFor(() => expect(versions.lookup).toHaveBeenCalled());
+  expect(versions.lookup.mock.calls[0][1]).toMatchObject({ endOfLife: false });
   view.unmount();
 
-  versions.lookup.mockClear();
-  versions.config = { imageVersions: false, endOfLife: true };
-  renderImages([workload('redis:5.0.7')]);
-  expect(screen.queryByRole('columnheader', { name: /Tag/ })).toBeNull();
-  expect(screen.queryByRole('columnheader', { name: /Latest/ })).toBeNull();
-  expect(screen.queryByRole('columnheader', { name: /End of life/ })).toBeNull();
-  expect(versions.lookup).not.toHaveBeenCalled();
+  // nothing is switched on by default
+  for (const config of [{}, { imageVersions: false, endOfLife: true }]) {
+    versions.lookup.mockClear();
+    versions.config = config;
+    const next = renderImages([workload('redis:5.0.7')]);
+    expect(screen.queryByRole('columnheader', { name: /Tag/ })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: /Latest/ })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: /End of life/ })).toBeNull();
+    expect(versions.lookup).not.toHaveBeenCalled();
+    next.unmount();
+  }
 });

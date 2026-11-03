@@ -370,6 +370,29 @@ describe('lookupImageVersion', () => {
     expect(requested().filter(url => url === identifiers)).toHaveLength(1);
   });
 
+  it('asks endoflife.date nothing when the end of life is switched off', async () => {
+    answers[products] = { result: [{ name: 'redis', aliases: [] }] };
+    answers[endOfLife('redis')] = redisReleases;
+    answers[quay('team/redis')] = { tags: [{ name: 'v8.10.3' }], has_additional: false };
+    const found = await lookupImageVersion('quay.io/team/redis:v8.2.0', { endOfLife: false });
+    expect(found).toEqual({
+      latest: {
+        latest: 'v8.10.3',
+        source: { name: 'Quay', url: 'https://quay.io/repository/team/redis?tab=tags' },
+      },
+      line: undefined,
+    });
+    expect(requestedAt('https://endoflife.date')).toEqual([]);
+
+    // which it asks with the end of life, for the product only
+    await lookupImageVersion('quay.io/team/redis:v8.2.0');
+    expect(requestedAt('https://endoflife.date')).toEqual([
+      identifiers,
+      products,
+      endOfLife('redis'),
+    ]);
+  });
+
   it('never sends the name of an image that no service knows', async () => {
     const found = await lookupImageVersion('registry.example.com/team/private/app:1.2.3');
     expect(found).toEqual({});
