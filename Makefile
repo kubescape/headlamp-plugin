@@ -13,8 +13,10 @@ vap_test_files:=\
 
 .PHONY: wasm-download kubescape-cel-admission-library-download kubescape-rego-download download build local
 
+# wasm_exec.js must come from the Go release that builds main.wasm, so it is copied from
+# the toolchain selected by go/go.mod instead of being downloaded.
 wasm-download:
-	curl -fL https://raw.githubusercontent.com/golang/go/refs/heads/master/lib/wasm/wasm_exec.js -o src/wasm/wasm_exec.js
+	cp "$$(go -C go env GOROOT)/lib/wasm/wasm_exec.js" src/wasm/wasm_exec.js
 
 kubescape-cel-admission-library-download:
 	mkdir -p public

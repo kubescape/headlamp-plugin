@@ -1,5 +1,6 @@
 import {
   Box,
+  Checkbox,
   FormControl,
   FormControlLabel,
   InputLabel,
@@ -10,8 +11,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { useCurrentUser } from '../common/currentUser';
 import {
   VulnerabilityJustification,
+  VulnerabilityResponse,
   VulnerabilityStatus,
 } from '../softwarecomposition/SecurityException';
 
@@ -93,15 +96,64 @@ export function MetadataFields(
         value={reason}
         onChange={e => onReasonChange(e.target.value)}
       />
+      <ExpiryField expiresDate={expiresDate} onExpiresDateChange={onExpiresDateChange} />
+      <RecordedAs />
+    </>
+  );
+}
+
+// A date in the local time zone, as a date input shows it
+export function dateInDays(days: number, now: Date = new Date()): string {
+  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + days);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/**
+ * When the exception expires, or that it never does, which an empty date means. Choosing an
+ * expiry proposes a date a month ahead.
+ */
+function ExpiryField(
+  props: Readonly<{ expiresDate: string; onExpiresDateChange: (v: string) => void }>
+) {
+  const { expiresDate, onExpiresDateChange } = props;
+  const neverExpires = expiresDate === '';
+  return (
+    <Stack direction="row" spacing={2} alignItems="center">
       <TextField
         label="Expires at"
         type="date"
         fullWidth
+        disabled={neverExpires}
         InputLabelProps={{ shrink: true }}
+        inputProps={{ min: dateInDays(0) }}
         value={expiresDate}
         onChange={e => onExpiresDateChange(e.target.value)}
+        helperText={neverExpires ? 'The exception applies until it is deleted.' : undefined}
       />
-    </>
+      <FormControlLabel
+        sx={{ whiteSpace: 'nowrap' }}
+        control={
+          <Checkbox
+            checked={neverExpires}
+            onChange={(_, checked) => onExpiresDateChange(checked ? '' : dateInDays(30))}
+          />
+        }
+        label="Never expires"
+      />
+    </Stack>
+  );
+}
+
+// Tells the user under which name the change is recorded in the history of the exception
+function RecordedAs() {
+  const user = useCurrentUser();
+  return (
+    <Typography variant="body2" color="text.secondary">
+      {user
+        ? `The change is recorded in the history of the exception as ${user}.`
+        : 'The cluster does not tell who you are, so the change is recorded without a name.'}
+    </Typography>
   );
 }
 
@@ -138,6 +190,14 @@ export function VulnerabilityStatusSelect({
             </Typography>
           </Box>
         </MenuItem>
+        <MenuItem value="affected">
+          <Box>
+            <Typography variant="body2">affected</Typography>
+            <Typography variant="caption" color="text.secondary">
+              The CVE applies; with can't fix or won't fix the risk is accepted
+            </Typography>
+          </Box>
+        </MenuItem>
         <MenuItem value="not_affected">
           <Box>
             <Typography variant="body2">not_affected</Typography>
@@ -159,6 +219,14 @@ export function VulnerabilityStatusSelect({
   );
 }
 
+export const RESPONSE_OPTIONS: { value: VulnerabilityResponse; label: string }[] = [
+  { value: 'can_not_fix', label: "Can't fix: no fix or upgrade is possible" },
+  { value: 'will_not_fix', label: "Won't fix: the risk is accepted as it is" },
+  { value: 'update', label: 'Update: an upgrade is planned' },
+  { value: 'rollback', label: 'Rollback: going back to an unaffected version' },
+  { value: 'workaround_available', label: 'Workaround available' },
+];
+
 export function VulnExceptionFields(
   props: Readonly<{
     status: VulnerabilityStatus;
@@ -169,6 +237,11 @@ export function VulnExceptionFields(
     onImpactStatementChange: (v: string) => void;
     expiredOnFix: boolean;
     onExpiredOnFixChange: (v: boolean) => void;
+    // for affected
+    response?: VulnerabilityResponse;
+    onResponseChange?: (v: VulnerabilityResponse) => void;
+    actionStatement?: string;
+    onActionStatementChange?: (v: string) => void;
   }>
 ) {
   const {
@@ -180,10 +253,48 @@ export function VulnExceptionFields(
     onImpactStatementChange,
     expiredOnFix,
     onExpiredOnFixChange,
+    response,
+    onResponseChange,
+    actionStatement,
+    onActionStatementChange,
   } = props;
   return (
     <>
       <VulnerabilityStatusSelect value={status} onChange={onStatusChange} />
+
+      {status === 'affected' && onResponseChange && (
+        <>
+          <FormControl fullWidth>
+            <InputLabel>Response</InputLabel>
+            <Select
+              value={response ?? ''}
+              label="Response"
+              onChange={e => onResponseChange(e.target.value as VulnerabilityResponse)}
+            >
+              {RESPONSE_OPTIONS.map(option => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            label="Action statement"
+            required
+            fullWidth
+            multiline
+            value={actionStatement ?? ''}
+            onChange={e => onActionStatementChange?.(e.target.value)}
+            helperText="What is done about it, such as a mitigation, or why it cannot be fixed."
+          />
+          {response && response !== 'can_not_fix' && response !== 'will_not_fix' && (
+            <Typography variant="caption" color="text.secondary">
+              The finding stays in the scan results until it is fixed; only can't fix and won't fix
+              accept the risk.
+            </Typography>
+          )}
+        </>
+      )}
 
       {status === 'not_affected' && (
         <FormControl fullWidth>
@@ -203,12 +314,14 @@ export function VulnExceptionFields(
         </FormControl>
       )}
 
-      <TextField
-        label="Impact statement"
-        fullWidth
-        value={impactStatement}
-        onChange={e => onImpactStatementChange(e.target.value)}
-      />
+      {status !== 'affected' && (
+        <TextField
+          label="Impact statement"
+          fullWidth
+          value={impactStatement}
+          onChange={e => onImpactStatementChange(e.target.value)}
+        />
+      )}
 
       <FormControlLabel
         control={

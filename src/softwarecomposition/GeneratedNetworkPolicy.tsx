@@ -5,7 +5,16 @@ import { Metadata } from './Metadata';
 
 export interface GeneratedNetworkPolicy {
   metadata: Metadata;
+  // a NetworkPolicy
   spec: {
+    apiVersion?: string;
+    kind?: string;
+    metadata?: {
+      name?: string;
+      namespace?: string;
+      labels?: { [key: string]: string };
+      annotations?: { [key: string]: string };
+    };
     spec: NetworkPolicy.NetworkPolicySpec;
   };
   policyRef: PolicyRef[];

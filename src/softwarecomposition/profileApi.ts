@@ -9,9 +9,15 @@ export interface ProfileResource {
 
 const apiVersionPath = '/apis/spdx.softwarecomposition.kubescape.io/v1beta1';
 
-/** Prefer the unified API while retaining the documented older Storage releases. */
-export async function discoverProfileResource(view: ProfileView): Promise<ProfileResource> {
-  const discovery = await request(apiVersionPath);
+/**
+ * Prefer the unified API while retaining the documented older Storage releases.
+ * @param cluster - The cluster to look in, the current cluster by default.
+ */
+export async function discoverProfileResource(
+  view: ProfileView,
+  cluster?: string
+): Promise<ProfileResource> {
+  const discovery = await request(apiVersionPath, cluster ? { cluster } : {});
   if (!Array.isArray(discovery?.resources)) {
     throw new Error('Storage returned invalid software composition API discovery');
   }

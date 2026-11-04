@@ -1,4 +1,4 @@
-import { getVulnerabilityReportCreatedAt } from './reportTimestamp';
+import { getScanTime, getVulnerabilityReportCreatedAt } from './reportTimestamp';
 import { manifest, T0, T1, T2 } from './testFixtures';
 
 it.each([
@@ -54,4 +54,20 @@ it('advances only the report date when an updated record is supplied', () => {
   report.spec.metadata!.report!.createdAt = T2;
   expect(getVulnerabilityReportCreatedAt(report)).toBe(T2);
   expect(report.metadata.creationTimestamp).toBe(T0);
+});
+
+it('reads the scan time that kubevuln stamps on a summary', () => {
+  const stamped = (timestamp?: string) => ({
+    metadata: {
+      annotations: (timestamp ? { 'kubescape.io/timestamp': timestamp } : {}) as Record<
+        string,
+        string
+      >,
+    },
+  });
+  expect(getScanTime(stamped('1793384272'))).toBe('2026-10-30T18:17:52.000Z');
+  expect(getScanTime(stamped())).toBeUndefined();
+  expect(getScanTime(stamped('soon'))).toBeUndefined();
+  expect(getScanTime(stamped('0'))).toBeUndefined();
+  expect(getScanTime(null)).toBeUndefined();
 });

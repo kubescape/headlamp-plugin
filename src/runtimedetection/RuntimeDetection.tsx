@@ -5,36 +5,92 @@ import {
   Link as HeadlampLink,
   SectionBox,
   ShowHideLabel,
-  Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { localeDate } from '@kinvolk/headlamp-plugin/lib/Utils';
 import { TabContext, TabList } from '@mui/lab';
 import { Alert, Chip, IconButton, Stack, Tab, Tooltip, Typography } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { useHistory } from 'react-router-dom';
-import { getAlertmanagerUrl } from '../common/config-store';
+import { ClusterErrors } from '../common/ClusterErrors';
+import { clusterColumns, rejectedClusters } from '../common/clusters';
+import { getAlertmanagerUrl, kubescapeConfigStore } from '../common/config-store';
+import { ConfirmDeleteDialog } from '../common/ConfirmDeleteDialog';
+import { PermittedIconButton } from '../common/permissions';
+import { SetupCheck } from '../common/SetupCheck';
+import HeadlampTable from '../common/Table';
 import { TabPanel } from '../common/TabPanel';
-import { RoutingName } from '../index';
+import { RoutingName, useHLSelectedClusters } from '../index';
 import {
   applicationProfileClass,
+  ClusterError,
   containerProfileClass,
   listQuery,
-  networkNeighborhoodsClass,
   rulesClass,
 } from '../model';
 import { ContainerProfile } from '../softwarecomposition/ContainerProfile';
-import { discoverProfileResource } from '../softwarecomposition/profileApi';
-import { AlertMessagePopup } from './AlertMessagePopup';
+import { discoverProfileResource, ProfileResource } from '../softwarecomposition/profileApi';
+import { AlertDetailsDialog } from './AlertDetails';
+import {
+  alertMessage,
+  alertNamespace,
+  alertPod,
+  alertRule,
+  alertSeverity,
+  alertWorkload,
+  indexRules,
+  ruleDescription,
+  severityColor,
+  severityRank,
+} from './alertFields';
+import {
+  AlertmanagerAlert,
+  detectAlertmanager,
+  fetchKubescapeAlerts,
+  fetchKubescapeSilences,
+  Silence,
+} from './alertmanager';
+import { isPartial } from './relearn';
+import { RelearnButton } from './RelearnDialog';
+import { SeccompProfilesTab } from './SeccompProfiles';
+import { SilenceButton, SilenceList, SilenceNotice } from './Silences';
 
 const { createRouteURL } = Router;
 
-interface AlertmanagerAlert {
-  labels: Record<string, string>;
-  annotations: Record<string, string>;
-  startsAt: string;
-  endsAt: string;
-  status: { state: string };
-  fingerprint: string;
+// Offers to use the Alertmanager found in the cluster when none is configured
+function AlertmanagerSuggestion(props: Readonly<{ cluster: string }>) {
+  const { cluster } = props;
+  const [addresses, setAddresses] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    detectAlertmanager(cluster)
+      .catch(() => [])
+      .then(found => {
+        if (active) setAddresses(found);
+      });
+    return () => {
+      active = false;
+    };
+  }, [cluster]);
+
+  return (
+    <Alert severity="warning" variant="filled">
+      Alertmanager URL is not configured. Please set it in the Kubescape plugin settings.
+      {addresses && addresses.length > 0 && (
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }} flexWrap="wrap">
+          <span>Found in cluster {cluster}:</span>
+          {addresses.map(address => (
+            <Chip
+              key={address}
+              label={`Use ${address}`}
+              size="small"
+              onClick={() => kubescapeConfigStore.update({ alertmanagerUrl: address })}
+            />
+          ))}
+        </Stack>
+      )}
+    </Alert>
+  );
 }
 
 export function RuntimeDetection() {
@@ -42,11 +98,12 @@ export function RuntimeDetection() {
 
   return (
     <SectionBox title="Runtime Detection">
+      <SetupCheck features={['runtime']} />
       <TabContext value={tabValue}>
         <TabList onChange={(_: any, v: string) => setTabValue(v)} sx={{ mb: 1 }}>
           <Tab label="Alerts" value="alerts" />
           <Tab label="Application Profiles" value="profiles" />
-          <Tab label="Network Neighborhoods" value="networks" />
+          <Tab label="Seccomp Profiles" value="seccomp" />
           <Tab label="Rules" value="rules" />
           <Tab label="Rule Bindings" value="bindings" />
         </TabList>
@@ -56,9 +113,7 @@ export function RuntimeDetection() {
         <TabPanel value="profiles">
           {tabValue === 'profiles' && <ApplicationProfilesTab />}
         </TabPanel>
-        <TabPanel value="networks">
-          {tabValue === 'networks' && <NetworkNeighborhoodsTab />}
-        </TabPanel>
+        <TabPanel value="seccomp">{tabValue === 'seccomp' && <SeccompProfilesTab />}</TabPanel>
         <TabPanel value="rules">
           <RulesTab />
         </TabPanel>
@@ -73,40 +128,71 @@ export function RuntimeDetection() {
 // ── Alerts ────────────────────────────────────────────────────────────────────
 
 function AlertsTab() {
+  const clusters = useHLSelectedClusters();
+  const clustersKey = clusters.join(',');
   const [alerts, setAlerts] = useState<AlertmanagerAlert[]>([]);
+  const [silences, setSilences] = useState<Silence[]>([]);
+  const [notice, setNotice] = useState<SilenceNotice | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<ClusterError[]>([]);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [selected, setSelected] = useState<AlertmanagerAlert | null>(null);
+  // the rules of the clusters, for what each alert's rule detects
+  const [ruleObjects] = rulesClass.useList({ clusters }) as any;
+  const rules = useMemo(
+    () =>
+      indexRules(
+        (ruleObjects ?? []).map((object: any) => ({
+          cluster: object.cluster,
+          rules: object.jsonData?.spec?.rules,
+        }))
+      ),
+    [ruleObjects]
+  );
+  // re-render when the Alertmanager address is configured
+  kubescapeConfigStore.useConfig()();
   const alertmanagerUrl = getAlertmanagerUrl();
 
   const fetchAlerts = () => {
     if (!alertmanagerUrl) return;
     setLoading(true);
-    setError('');
-    const url = `${alertmanagerUrl}/api/v2/alerts?filter=alertname%3D%22KubescapeRuleViolated%22&active=true&silenced=false&inhibited=false`;
-    request(url)
-      .then((data: any) => {
-        const items: AlertmanagerAlert[] = Array.isArray(data) ? data : [];
-        items.sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime());
-        setAlerts(items);
+    Promise.all([
+      Promise.allSettled(clusters.map(cluster => fetchKubescapeAlerts(cluster))),
+      // the silences only add to the alerts, so failing to read them is not reported
+      Promise.allSettled(clusters.map(cluster => fetchKubescapeSilences(cluster))),
+    ])
+      .then(([results, silenceResults]) => {
+        setAlerts(
+          results
+            .flatMap(result => (result.status === 'fulfilled' ? result.value : []))
+            .sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime())
+        );
+        setSilences(
+          silenceResults.flatMap(result => (result.status === 'fulfilled' ? result.value : []))
+        );
+        setErrors(rejectedClusters(clusters, results));
         setLastRefresh(new Date());
       })
-      .catch((err: any) => setError(err?.message ?? String(err)))
       .finally(() => setLoading(false));
+  };
+
+  // a silenced alert leaves the list, and an ended silence brings its alerts back
+  const onSilenceChange = (change: SilenceNotice) => {
+    setNotice(change);
+    if (change.severity === 'success') fetchAlerts();
   };
 
   useEffect(() => {
     fetchAlerts();
-    const interval = setInterval(fetchAlerts, 60_000);
+    // no refreshing while Headlamp is minimized or in a background tab
+    const interval = setInterval(() => {
+      if (!document.hidden) fetchAlerts();
+    }, 60_000);
     return () => clearInterval(interval);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [alertmanagerUrl, clustersKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!alertmanagerUrl) {
-    return (
-      <Alert severity="warning" variant="filled">
-        Alertmanager URL is not configured. Please set it in the Kubescape plugin settings.
-      </Alert>
-    );
+    return <AlertmanagerSuggestion cluster={clusters[0]} />;
   }
 
   return (
@@ -124,15 +210,21 @@ function AlertsTab() {
         )}
       </Stack>
 
-      {error && (
-        <Typography color="error" variant="body2" sx={{ mb: 1 }}>
-          {error}
-        </Typography>
+      <ClusterErrors errors={errors} what="the alerts" />
+      {notice && (
+        <Alert severity={notice.severity} onClose={() => setNotice(null)} sx={{ mb: 1 }}>
+          {notice.text}
+        </Alert>
       )}
 
       <HeadlampTable
         data={alerts}
+        // a click on an alert shows its details
+        onRowClick={setSelected}
+        // the cells of a row keep what the row first showed, so each alert is a row of its own
+        getRowId={(a: AlertmanagerAlert) => `${a.cluster}/${a.fingerprint}/${a.startsAt}`}
         columns={[
+          ...clusterColumns<AlertmanagerAlert>(clusters, alert => alert.cluster),
           {
             id: 'time',
             header: 'Time',
@@ -147,131 +239,165 @@ function AlertsTab() {
           },
           {
             header: 'Rule',
-            accessorFn: (a: AlertmanagerAlert) => a.labels.rule_name ?? a.labels.alertname,
+            // with what the rule detects, which the search also finds; Headlamp only redraws a
+            // cell when its value changes, so rules read after the alerts are part of it
+            accessorFn: (a: AlertmanagerAlert) =>
+              [a.labels.rule_name ?? a.labels.alertname, ruleDescription(alertRule(rules, a))]
+                .filter(Boolean)
+                .join('\n'),
+            Cell: ({ cell }: any) => {
+              const [name, description] = String(cell.getValue()).split('\n');
+              return description ? (
+                <Tooltip title={description}>
+                  <span>{name}</span>
+                </Tooltip>
+              ) : (
+                name
+              );
+            },
+            // the details can also be opened with the keyboard
+            muiTableBodyCellProps: ({ row }: any) => ({
+              tabIndex: 0,
+              onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setSelected(row.original);
+                }
+              },
+            }),
             gridTemplate: 'auto',
           },
           {
+            id: 'severity',
             header: 'Severity',
-            accessorFn: (a: AlertmanagerAlert) => a.labels.severity,
+            accessorFn: (a: AlertmanagerAlert) => alertSeverity(a) ?? '',
+            sortingFn: (a: any, b: any) =>
+              (severityRank[alertSeverity(a.original) ?? 'None'] ?? 0) -
+              (severityRank[alertSeverity(b.original) ?? 'None'] ?? 0),
             Cell: ({ cell }: any) => {
-              const v = cell.getValue();
-              if (!v) return null;
-              const color: any = v === 'critical' ? 'error' : v === 'high' ? 'warning' : 'default';
-              return <Chip label={v} color={color} size="small" />;
+              const severity = cell.getValue();
+              if (!severity) return null;
+              return <Chip label={severity} color={severityColor(severity)} size="small" />;
             },
             gridTemplate: 'min-content',
           },
           {
             header: 'Pod',
-            accessorFn: (a: AlertmanagerAlert) => a.labels.pod ?? a.labels.pod_name,
+            accessorFn: (a: AlertmanagerAlert) => alertPod(a),
             gridTemplate: 'auto',
           },
           {
             header: 'Workload',
-            accessorFn: (a: AlertmanagerAlert) => a.labels.workload_name ?? a.labels.workload,
+            accessorFn: (a: AlertmanagerAlert) => alertWorkload(a),
             gridTemplate: 'auto',
           },
           {
             header: 'Namespace',
-            accessorFn: (a: AlertmanagerAlert) => a.labels.namespace ?? a.labels.workload_namespace,
+            accessorFn: (a: AlertmanagerAlert) => alertNamespace(a),
             gridTemplate: 'auto',
           },
           {
             header: 'Message',
-            accessorFn: (a: AlertmanagerAlert) =>
-              a.annotations.summary ?? a.annotations.description ?? a.annotations.message,
+            accessorFn: (a: AlertmanagerAlert) => alertMessage(a),
             Cell: ({ cell }: any) => <ShowHideLabel>{cell.getValue()}</ShowHideLabel>,
-            gridTemplate: '2fr',
+            gridTemplate: 'minmax(280px, 2fr)',
           },
           {
             header: '',
-            accessorFn: () => '...',
-            Cell: ({ row }: any) => (
-              <AlertMessagePopup
-                content={JSON.stringify(
-                  { labels: row.original.labels, annotations: row.original.annotations },
-                  null,
-                  2
-                )}
-              />
-            ),
+            accessorFn: (a: AlertmanagerAlert) => `${a.cluster}/${a.fingerprint}`,
+            Cell: ({ row }: any) => <SilenceButton alert={row.original} onDone={onSilenceChange} />,
             gridTemplate: 'min-content',
           },
         ]}
         initialState={{ sorting: [{ id: 'time', desc: true }] }}
       />
+      {selected && (
+        <AlertDetailsDialog
+          alert={selected}
+          rule={alertRule(rules, selected)}
+          onClose={() => setSelected(null)}
+          onSilenced={change => {
+            setSelected(null);
+            onSilenceChange(change);
+          }}
+        />
+      )}
+
+      <SilenceList silences={silences} showCluster={clusters.length > 1} onDone={onSilenceChange} />
     </>
   );
 }
 
-// ── Container Profile perspectives ───────────────────────────────────────────
+// ── Application profiles ─────────────────────────────────────────────────────
 
+// The profiles learned per version of each workload: behaviour and network traffic. The traffic
+// is shown on the profile page as the diagram of the workload's generated network policy.
 function ApplicationProfilesTab() {
-  return <ContainerProfilesTab view="behavior" />;
-}
-
-function NetworkNeighborhoodsTab() {
-  return <ContainerProfilesTab view="network" />;
-}
-
-function ContainerProfilesTab({ view }: Readonly<{ view: 'behavior' | 'network' }>) {
+  const clusters = useHLSelectedClusters();
+  const clustersKey = clusters.join(',');
   const [items, setItems] = useState<ContainerProfile[]>([]);
-  const [error, setError] = useState('');
+  // the profile resource of each cluster, for relearning
+  const [sources, setSources] = useState<Record<string, ProfileResource>>({});
+  const [errors, setErrors] = useState<ClusterError[]>([]);
   const [loading, setLoading] = useState(true);
+  // a relearn changes the profiles, so they are read again
+  const [reloads, setReloads] = useState(0);
 
   useEffect(() => {
     let active = true;
-    discoverProfileResource(view)
-      .then(source =>
-        listQuery(
-          source.modern
-            ? containerProfileClass
-            : view === 'behavior'
-            ? applicationProfileClass
-            : networkNeighborhoodsClass
-        )
+    // Each cluster may run another Storage release, so the resource is discovered per cluster
+    Promise.allSettled(
+      clusters.map(cluster =>
+        discoverProfileResource('behavior', cluster).then(async source => ({
+          cluster,
+          source,
+          profiles: (await listQuery(
+            source.modern ? containerProfileClass : applicationProfileClass,
+            cluster
+          )) as ContainerProfile[],
+        }))
       )
-      .then((profiles: ContainerProfile[]) => {
-        if (active) setItems(profiles);
-      })
-      .catch((err: any) => {
-        if (active) setError(err?.message ?? String(err));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    ).then(results => {
+      if (!active) return;
+      const found = results.flatMap(result =>
+        result.status === 'fulfilled' ? [result.value] : []
+      );
+      setItems(found.flatMap(result => result.profiles));
+      setSources(Object.fromEntries(found.map(result => [result.cluster, result.source])));
+      setErrors(rejectedClusters(clusters, results));
+      setLoading(false);
+    });
     return () => {
       active = false;
     };
-  }, [view]);
+  }, [clustersKey, reloads]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const behavior = view === 'behavior';
+  // With one cluster its error says enough; with several, the cluster is named
+  const error = clusters.length === 1 ? errors[0]?.message : undefined;
+  const failed = errors.length === clusters.length;
+
   return (
     <>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        {behavior ? (
-          <>
-            Workload behaviour baselines recorded by Kubescape. Used by <code>ap.*</code> CEL
-            functions in rules.
-          </>
-        ) : (
-          <>
-            Workload network baselines recorded by Kubescape. Used by <code>nn.*</code> CEL
-            functions in rules.
-          </>
-        )}
+        The behaviour and network traffic Kubescape learned per version of each workload, used by
+        the <code>ap.*</code> and <code>nn.*</code> CEL functions in rules. A profile shows its
+        traffic as a network graph.
       </Typography>
-      {error && (
+      {error ? (
         <Alert severity="error" sx={{ mb: 1 }}>
           {error}
         </Alert>
+      ) : (
+        <ClusterErrors errors={errors} what="the profiles" />
       )}
-      {!loading && !error && items.length === 0 && (
+      {!loading && errors.length === 0 && items.length === 0 && (
         <Typography variant="body2">No profiles found.</Typography>
       )}
-      {!error && (
+      {!failed && (
         <HeadlampTable
           data={items}
+          // the cells of a row keep what the row first showed, so each profile is a row of its own
+          getRowId={profileId}
           columns={[
             {
               header: 'Name',
@@ -279,9 +405,8 @@ function ContainerProfilesTab({ view }: Readonly<{ view: 'behavior' | 'network' 
                 p.metadata.labels?.['kubescape.io/workload-name'] ?? p.metadata.name,
               Cell: ({ cell, row }: any) => (
                 <HeadlampLink
-                  routeName={
-                    behavior ? RoutingName.RuntimeDetection : RoutingName.NetworkNeighborhoodDetail
-                  }
+                  routeName={RoutingName.RuntimeDetection}
+                  activeCluster={row.original.metadata.cluster}
                   params={{
                     name: row.original.metadata.name,
                     namespace: row.original.metadata.namespace,
@@ -292,6 +417,7 @@ function ContainerProfilesTab({ view }: Readonly<{ view: 'behavior' | 'network' 
               ),
               gridTemplate: 'auto',
             },
+            ...clusterColumns<ContainerProfile>(clusters, p => p.metadata.cluster),
             {
               header: 'Kind',
               accessorFn: (p: ContainerProfile) =>
@@ -311,8 +437,27 @@ function ContainerProfilesTab({ view }: Readonly<{ view: 'behavior' | 'network' 
             },
             {
               header: 'Status',
-              accessorFn: (p: ContainerProfile) => p.metadata.annotations?.['kubescape.io/status'],
+              // a partial profile missed the start of its container
+              accessorFn: (p: ContainerProfile) =>
+                [p.metadata.annotations?.['kubescape.io/status'], isPartial(p) ? '(partial)' : '']
+                  .filter(Boolean)
+                  .join(' '),
               gridTemplate: 'auto',
+            },
+            {
+              header: '',
+              accessorFn: profileId,
+              Cell: ({ row }: any) => {
+                const source = sources[row.original.metadata.cluster ?? ''];
+                return source ? (
+                  <RelearnButton
+                    profile={row.original}
+                    source={source}
+                    onDone={() => setReloads(count => count + 1)}
+                  />
+                ) : null;
+              },
+              gridTemplate: 'min-content',
             },
           ]}
         />
@@ -321,18 +466,40 @@ function ContainerProfilesTab({ view }: Readonly<{ view: 'behavior' | 'network' 
   );
 }
 
+function profileId(profile: ContainerProfile) {
+  return `${profile.metadata.cluster ?? ''}/${profile.metadata.namespace}/${profile.metadata.name}`;
+}
+
 // ── Rules ─────────────────────────────────────────────────────────────────────
 
-function RulesTab() {
-  const [rulesCRDs] = rulesClass.useList() as any;
-  const history = useHistory();
+interface RulesRow {
+  crdName: string;
+  namespace: string;
+  cluster?: string;
+  ruleCount: number;
+}
 
-  const items =
+function RulesTab() {
+  const clusters = useHLSelectedClusters();
+  const [rulesCRDs] = rulesClass.useList({ clusters }) as any;
+  const history = useHistory();
+  // the Rules object to delete once the user confirms
+  const [deleting, setDeleting] = useState<RulesRow | null>(null);
+
+  const items: RulesRow[] =
     rulesCRDs?.map((crd: any) => ({
       crdName: crd.jsonData.metadata.name,
       namespace: crd.jsonData.metadata.namespace,
+      cluster: crd.cluster,
       ruleCount: crd.jsonData.spec?.rules?.length ?? 0,
     })) ?? [];
+
+  // The list is watched, so a successful delete removes the row without a reload.
+  const deleteRules = ({ namespace, crdName, cluster }: RulesRow) =>
+    remove(
+      `/apis/kubescape.io/v1/namespaces/${namespace}/rules/${crdName}`,
+      cluster ? { cluster } : undefined
+    );
 
   return (
     <>
@@ -341,12 +508,35 @@ function RulesTab() {
           <code>kubescape.io/v1 Rules</code> CRDs deployed in the cluster. Click a name to open the
           rule editor.
         </Typography>
-        <Tooltip title="Add new rule">
-          <IconButton onClick={() => history.push(createRouteURL(RoutingName.RuleNew))}>
-            <Icon icon="mdi:add-circle" />
-          </IconButton>
-        </Tooltip>
+        {/* the rule editor creates new Rules objects in the kubescape namespace by default */}
+        <PermittedIconButton
+          check={{
+            group: 'kubescape.io',
+            resource: 'rules',
+            verb: 'create',
+            namespace: 'kubescape',
+          }}
+          title="Add new rule"
+          onClick={() => history.push(createRouteURL(RoutingName.RuleNew))}
+        >
+          <Icon icon="mdi:add-circle" />
+        </PermittedIconButton>
       </Stack>
+      {deleting && (
+        <ConfirmDeleteDialog
+          target={{
+            kind: 'Rules object',
+            name: deleting.crdName,
+            namespace: deleting.namespace,
+            cluster: deleting.cluster,
+          }}
+          consequence={`Runtime detection no longer uses the ${deleting.ruleCount} ${
+            deleting.ruleCount === 1 ? 'rule' : 'rules'
+          } it holds.`}
+          onDelete={() => deleteRules(deleting)}
+          onClose={() => setDeleting(null)}
+        />
+      )}
       <HeadlampTable
         data={items}
         columns={[
@@ -357,6 +547,7 @@ function RulesTab() {
             Cell: ({ cell, row }: any) => (
               <HeadlampLink
                 routeName={RoutingName.RuleEdit}
+                activeCluster={row.original.cluster}
                 params={{ namespace: row.original.namespace, name: row.original.crdName }}
               >
                 {cell.getValue()}
@@ -369,9 +560,32 @@ function RulesTab() {
             accessorKey: 'namespace',
             gridTemplate: 'auto',
           },
+          ...clusterColumns<any>(clusters, item => item.cluster),
           {
             header: 'Rules',
             accessorKey: 'ruleCount',
+            gridTemplate: 'min-content',
+          },
+          {
+            header: '',
+            accessorFn: (item: any) => item.crdName,
+            Cell: ({ row }: any) => (
+              <PermittedIconButton
+                check={{
+                  group: 'kubescape.io',
+                  resource: 'rules',
+                  verb: 'delete',
+                  namespace: row.original.namespace,
+                  name: row.original.crdName,
+                }}
+                cluster={row.original.cluster}
+                title="Delete"
+                ariaLabel={`Delete ${row.original.crdName}`}
+                onClick={() => setDeleting(row.original)}
+              >
+                <Icon icon="mdi:delete-outline" />
+              </PermittedIconButton>
+            ),
             gridTemplate: 'min-content',
           },
         ]}
@@ -399,35 +613,36 @@ function formatSelector(selector: any): string {
   return parts.length ? parts.join(', ') : '(all)';
 }
 
-function severityColor(severity: string | undefined): 'error' | 'warning' | 'default' {
-  if (severity === 'Critical' || severity === 'High') return 'error';
-  if (severity === 'Medium') return 'warning';
-  return 'default';
-}
-
 const RULE_BINDING_API = '/apis/kubescape.io/v1/runtimerulealertbindings';
 
 function RuleBindingsTab() {
   const history = useHistory();
+  const clusters = useHLSelectedClusters();
+  const clustersKey = clusters.join(',');
   const [items, setItems] = useState<any[]>([]);
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<ClusterError[]>([]);
+  // the binding to delete once the user confirms
+  const [deleting, setDeleting] = useState<{ name: string; cluster: string } | null>(null);
 
   const load = () =>
-    request(RULE_BINDING_API)
-      .then((res: any) => setItems(res.items ?? []))
-      .catch((err: any) => setError(err?.message ?? String(err)));
+    Promise.allSettled(
+      clusters.map(cluster =>
+        request(RULE_BINDING_API, { cluster }).then((res: any) =>
+          (res.items ?? []).map((item: any) => ({ ...item, cluster }))
+        )
+      )
+    ).then(results => {
+      setItems(results.flatMap(result => (result.status === 'fulfilled' ? result.value : [])));
+      setErrors(rejectedClusters(clusters, results));
+    });
 
   useEffect(() => {
     load();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [clustersKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleDelete = async (name: string) => {
-    try {
-      await remove(`${RULE_BINDING_API}/${name}`);
-      load();
-    } catch (err: any) {
-      setError(err?.message ?? String(err));
-    }
+  const deleteBinding = async ({ name, cluster }: { name: string; cluster: string }) => {
+    await remove(`${RULE_BINDING_API}/${name}`, { cluster });
+    load();
   };
 
   return (
@@ -437,17 +652,23 @@ function RuleBindingsTab() {
           <code>RuntimeRuleAlertBinding</code> objects bind runtime rules to workloads by namespace
           and pod selectors.
         </Typography>
-        <Tooltip title="Add rule binding">
-          <IconButton onClick={() => history.push(createRouteURL(RoutingName.RuleBindingNew))}>
-            <Icon icon="mdi:add-circle" />
-          </IconButton>
-        </Tooltip>
+        <PermittedIconButton
+          check={{ group: 'kubescape.io', resource: 'runtimerulealertbindings', verb: 'create' }}
+          title="Add rule binding"
+          onClick={() => history.push(createRouteURL(RoutingName.RuleBindingNew))}
+        >
+          <Icon icon="mdi:add-circle" />
+        </PermittedIconButton>
       </Stack>
-      {error && (
-        <Alert severity="error" sx={{ mb: 1 }}>
-          {error}
-        </Alert>
+      {deleting && (
+        <ConfirmDeleteDialog
+          target={{ kind: 'rule binding', name: deleting.name, cluster: deleting.cluster }}
+          consequence="The rules it binds no longer alert for the workloads it selects, unless another binding selects them."
+          onDelete={() => deleteBinding(deleting)}
+          onClose={() => setDeleting(null)}
+        />
       )}
+      <ClusterErrors errors={errors} what="the rule bindings" />
       <HeadlampTable
         data={items}
         columns={[
@@ -458,6 +679,7 @@ function RuleBindingsTab() {
             Cell: ({ cell, row }: any) => (
               <HeadlampLink
                 routeName={RoutingName.RuleBindingEdit}
+                activeCluster={row.original.cluster}
                 params={{ name: row.original.metadata.name }}
               >
                 {cell.getValue()}
@@ -465,6 +687,7 @@ function RuleBindingsTab() {
             ),
             gridTemplate: 'auto',
           },
+          ...clusterColumns<any>(clusters, item => item.cluster),
           {
             header: 'Namespace Selector',
             accessorFn: (b: any) => formatSelector(b.spec?.namespaceSelector),
@@ -495,10 +718,23 @@ function RuleBindingsTab() {
           {
             header: '',
             accessorFn: (b: any) => b.metadata.name,
-            Cell: ({ cell }: any) => (
-              <IconButton size="small" onClick={() => handleDelete(cell.getValue())}>
+            Cell: ({ cell, row }: any) => (
+              <PermittedIconButton
+                check={{
+                  group: 'kubescape.io',
+                  resource: 'runtimerulealertbindings',
+                  verb: 'delete',
+                  name: cell.getValue(),
+                }}
+                cluster={row.original.cluster}
+                title="Delete"
+                ariaLabel={`Delete ${cell.getValue()}`}
+                onClick={() =>
+                  setDeleting({ name: cell.getValue(), cluster: row.original.cluster })
+                }
+              >
                 <Icon icon="mdi:delete-outline" />
-              </IconButton>
+              </PermittedIconButton>
             ),
             gridTemplate: 'min-content',
           },

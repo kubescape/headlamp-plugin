@@ -5,11 +5,11 @@ import {
   Link as HeadlampLink,
   NameValueTable,
   SectionBox,
-  Table,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
 import { Box, Stack } from '@mui/material';
 import { useState } from 'react';
+import Table from '../common/Table';
 import { getLastURLSegment } from '../common/url';
 import { RoutingName } from '../index';
 import { configurationScanSummariesClass } from '../model';

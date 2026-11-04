@@ -6,11 +6,12 @@ import {
   Link as HeadlampLink,
   NameValueTable,
   SectionBox,
-  Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { IconButton, Link, Tooltip } from '@mui/material';
 import { useEffect, useState } from 'react';
+import { createExceptionCheck, PermittedIconButton } from '../common/permissions';
 import { StatusLabel, StatusLabelProps } from '../common/StatusLabel';
+import HeadlampTable from '../common/Table';
 import { getURLSegments } from '../common/url';
 import { GuidedComplianceExceptionForm } from '../exceptions/GuidedComplianceExceptionForm';
 import { RoutingName } from '../index';
@@ -177,23 +178,23 @@ function Controls(props: Readonly<{ workloadConfigurationScan: WorkloadConfigura
                     Fix
                   </HeadlampLink>
                 )}
-                <Tooltip
-                  title={
-                    canCreateException
-                      ? 'Create Security Exception'
-                      : 'Workload labels missing — cannot create exception'
-                  }
-                >
-                  <span>
-                    <IconButton
-                      size="small"
-                      disabled={!canCreateException}
-                      onClick={() => setExceptionControl(control)}
-                    >
-                      <Icon icon="mdi:shield-plus-outline" />
-                    </IconButton>
-                  </span>
-                </Tooltip>
+                {canCreateException ? (
+                  <PermittedIconButton
+                    check={createExceptionCheck(workloadNamespace)}
+                    title="Create Security Exception"
+                    onClick={() => setExceptionControl(control)}
+                  >
+                    <Icon icon="mdi:shield-plus-outline" />
+                  </PermittedIconButton>
+                ) : (
+                  <Tooltip title="Workload labels missing — cannot create exception">
+                    <span>
+                      <IconButton size="small" disabled>
+                        <Icon icon="mdi:shield-plus-outline" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
               </span>
             ),
             gridTemplate: 'min-content',

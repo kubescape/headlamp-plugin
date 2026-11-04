@@ -1,15 +1,21 @@
 /*
   Show workload configuration scans. This view is part of the main Vulnerabilities page.
 */
-import {
-  Link,
-  SectionBox,
-  Table as HeadlampTable,
-  TableColumn,
-} from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { Box, Stack, Tooltip } from '@mui/material';
+import { Icon } from '@iconify/react';
+import { Link, SectionBox, TableColumn } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { useMemo, useState } from 'react';
 import { makeNamespaceLink } from '../common/Namespace';
+import { createExceptionCheck, PermittedIconButton } from '../common/permissions';
+import { severityColors, SeverityCountStack } from '../common/SeverityCountBox';
+import HeadlampTable from '../common/Table';
+import { GuidedVulnerabilityExceptionForm } from '../exceptions/GuidedVulnerabilityExceptionForm';
+import {
+  summarizeWorkloadExceptions,
+  workloadCveExceptions,
+  WorkloadExceptions,
+} from '../exceptions/vulnerabilityExceptions';
 import { RoutingName, useHLSelectedClusters } from '../index';
+import { AcceptedChip, useSecurityExceptions } from './exceptionChips';
 import { WorkloadScan } from './Vulnerabilities';
 
 export default function WorkloadScanListView(
@@ -19,18 +25,76 @@ export default function WorkloadScanListView(
 ) {
   const { workloadScans } = props;
   const clusters = useHLSelectedClusters();
+  const kinds = useMemo(() => (workloadScans ?? []).map(w => w.kind), [workloadScans]);
+  const { exceptions, reload } = useSecurityExceptions(clusters, kinds);
+  const [accepting, setAccepting] = useState<{ workloadScan: WorkloadScan; cveIds: string[] }>();
+
+  // what the exceptions say about the CVEs of each workload
+  const exceptionSummaries = useMemo(() => {
+    const summaries = new Map<WorkloadScan, WorkloadExceptions>();
+    for (const workloadScan of workloadScans ?? []) {
+      const data = exceptions.get(workloadScan.cluster);
+      const imageScan = workloadScan.imageScan;
+      if (!data || !imageScan) continue;
+      const covered = workloadCveExceptions(data, {
+        kind: workloadScan.kind,
+        name: workloadScan.name,
+        namespace: workloadScan.namespace,
+        image: imageScan.imageName,
+      });
+      if (covered.size === 0) continue;
+      summaries.set(
+        workloadScan,
+        summarizeWorkloadExceptions(covered, imageScan.matches, imageScan.ignoredMatches)
+      );
+    }
+    return summaries;
+  }, [workloadScans, exceptions]);
 
   if (!workloadScans) {
     return <></>;
   }
 
   const filteredWorkloadScans = workloadScans.filter(w => w.name && w.namespace);
+  const acceptedCount = (workloadScan: WorkloadScan) =>
+    exceptionSummaries.get(workloadScan)?.accepted.size ?? 0;
+  // the CVEs that no exception covers yet
+  const openCves = (workloadScan: WorkloadScan) =>
+    exceptionSummaries.get(workloadScan)?.open ?? [
+      ...new Set(workloadScan.imageScan?.matches.map(match => match.vulnerability.id)),
+    ];
 
   return (
     <>
       <h5>{filteredWorkloadScans.length} resources</h5>
       <SectionBox>
         <HeadlampTable
+          csvExport={{
+            fileName: 'kubescape-vulnerable-resources.csv',
+            header: [
+              'Name',
+              'Container',
+              'Kind',
+              'Namespace',
+              'Cluster',
+              'Image',
+              ...Object.keys(severityColors),
+              'Relevant',
+              'Accepted',
+            ],
+            rows: () =>
+              filteredWorkloadScans.map(w => [
+                w.name,
+                w.container,
+                w.kind,
+                w.namespace,
+                w.cluster,
+                w.imageScan?.imageName,
+                ...Object.keys(severityColors).map(severity => countScans(w, severity)),
+                relevantSummary(w),
+                acceptedCount(w),
+              ]),
+          }}
           data={filteredWorkloadScans}
           columns={[
             {
@@ -87,23 +151,18 @@ export default function WorkloadScanListView(
             },
             {
               header: 'Relevant',
-              accessorFn: (workloadScan: WorkloadScan) => {
-                if (!workloadScan.imageScan) return 'Unknown';
-
-                if (workloadScan.relevant) {
-                  let count = 0;
-                  for (const match of workloadScan.imageScan.matches) {
-                    if (
-                      workloadScan.relevant.matches.some(
-                        r => r.vulnerability.id === match.vulnerability.id
-                      )
-                    ) {
-                      count++;
-                    }
-                  }
-                  return `${count} of ${workloadScan.imageScan.matches.length}`;
-                }
-                return `? of ${workloadScan.imageScan.matches.length}`;
+              accessorFn: relevantSummary,
+              gridTemplate: 'min-content',
+            },
+            {
+              id: 'Accepted',
+              header: 'Accepted',
+              accessorFn: acceptedCount,
+              Cell: ({ row }: any) => {
+                const summary = exceptionSummaries.get(row.original);
+                return summary ? (
+                  <AcceptedChip summary={summary} cluster={row.original.cluster} />
+                ) : null;
               },
               gridTemplate: 'min-content',
             },
@@ -130,6 +189,30 @@ export default function WorkloadScanListView(
               },
               gridTemplate: 'min-content',
             },
+            {
+              header: '',
+              accessorFn: () => '',
+              // rendered for the rows on the page only
+              Cell: ({ row }: any) => {
+                const workloadScan: WorkloadScan = row.original;
+                const cveIds = openCves(workloadScan);
+                return (
+                  cveIds.length > 0 && (
+                    <PermittedIconButton
+                      check={createExceptionCheck(workloadScan.namespace)}
+                      cluster={workloadScan.cluster}
+                      title={`Accept the risk of the ${
+                        cveIds.length === 1 ? 'open CVE' : `${cveIds.length} open CVEs`
+                      }`}
+                      onClick={() => setAccepting({ workloadScan, cveIds })}
+                    >
+                      <Icon icon="mdi:shield-check-outline" />
+                    </PermittedIconButton>
+                  )
+                );
+              },
+              gridTemplate: 'min-content',
+            },
           ]}
           initialState={{
             sorting: [
@@ -142,8 +225,36 @@ export default function WorkloadScanListView(
           reflectInURL="resources"
         />
       </SectionBox>
+
+      {accepting && (
+        <GuidedVulnerabilityExceptionForm
+          acceptRisk
+          cveIds={accepting.cveIds}
+          imageRef={accepting.workloadScan.imageScan?.imageName}
+          workloadName={accepting.workloadScan.name}
+          workloadNamespace={accepting.workloadScan.namespace}
+          workloadKind={accepting.workloadScan.kind}
+          cluster={accepting.workloadScan.cluster}
+          onClose={() => setAccepting(undefined)}
+          onCreated={reload}
+        />
+      )}
     </>
   );
+}
+
+// Number of relevant findings of the total, e.g. "3 of 40"
+function relevantSummary(workloadScan: WorkloadScan): string {
+  if (!workloadScan.imageScan) return 'Unknown';
+
+  const total = workloadScan.imageScan.matches.length;
+  if (!workloadScan.relevant) return `? of ${total}`;
+
+  const relevantIds = new Set(workloadScan.relevant.matches.map(r => r.vulnerability.id));
+  const count = workloadScan.imageScan.matches.filter(match =>
+    relevantIds.has(match.vulnerability.id)
+  ).length;
+  return `${count} of ${total}`;
 }
 
 function countScans(workloadScan: WorkloadScan, severity: string): number {
@@ -163,33 +274,16 @@ function resultStack(workloadScan: WorkloadScan) {
   if (!workloadScan.imageScan) {
     return <div />;
   }
-  function box(color: string, severity: string) {
-    return (
-      <Box
-        sx={{
-          borderLeft: 2,
-          borderTop: 1,
-          borderRight: 1,
-          borderBottom: 1,
-          borderColor: `gray gray gray ${color}`,
-          textAlign: 'center',
-          width: 25,
-        }}
-      >
-        <Tooltip title={severity}>
-          <Box>{countScans(workloadScan, severity)}</Box>
-        </Tooltip>
-      </Box>
-    );
-  }
 
   return (
-    <Stack direction="row" spacing={1}>
-      {box('purple', 'Critical')}
-      {box('red', 'High')}
-      {box('orange', 'Medium')}
-      {box('yellow', 'Low')}
-    </Stack>
+    <SeverityCountStack
+      count={severity => countScans(workloadScan, severity)}
+      link={{
+        routeName: RoutingName.KubescapeVulnerabilityDetails,
+        params: { name: workloadScan.manifestName, namespace: workloadScan.namespace },
+        activeCluster: workloadScan.cluster,
+      }}
+    />
   );
 }
 

@@ -15,6 +15,9 @@ import {
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
+import { SetupCheck } from '../common/SetupCheck';
+import { ClusterSecurityException } from '../softwarecomposition/SecurityException';
+import { recordChangeByCurrentUser } from './history';
 import { ContextBadge, MetadataFields, sanitizeName } from './shared';
 
 export interface GuidedClusterComplianceExceptionFormProps {
@@ -47,12 +50,15 @@ export function GuidedClusterComplianceExceptionForm(
     };
 
     try {
-      await post('/apis/kubescape.io/v1beta1/clustersecurityexceptions', {
-        apiVersion: 'kubescape.io/v1beta1',
-        kind: 'ClusterSecurityException',
-        metadata: { name },
-        spec,
-      });
+      await post(
+        '/apis/kubescape.io/v1beta1/clustersecurityexceptions',
+        await recordChangeByCurrentUser<ClusterSecurityException>({
+          apiVersion: 'kubescape.io/v1beta1',
+          kind: 'ClusterSecurityException',
+          metadata: { name },
+          spec,
+        })
+      );
       enqueueSnackbar('Security exception created', { variant: 'success' });
       onClose();
     } catch (err: any) {
@@ -64,6 +70,7 @@ export function GuidedClusterComplianceExceptionForm(
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Exclude Control Cluster-wide</DialogTitle>
       <DialogContent>
+        <SetupCheck features={['exceptions']} />
         <Stack spacing={2} sx={{ mt: 1 }}>
           <MetadataFields
             name={name}

@@ -6,11 +6,13 @@ import * as yaml from 'js-yaml';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { getKubescapePluginUrl } from '../common/PluginHelper';
 import { TabPanel } from '../common/TabPanel';
+import { useEditorTheme } from '../common/theme';
 import { ValidatingAdmissionPolicy } from '../types/ValidatingAdmissionPolicy';
 import { loadWasm } from '../wasm/initWasmModule';
 import { ChoosePolicyButton } from './ChoosePolicyButton';
 import { ChooseTestResource } from './ChooseTestResource';
 import { EvaluationResultsTables } from './EvaluationResultsTables';
+import { InstallPolicyButton } from './InstallPolicyButton';
 
 type EvalContext = {
   resource: any;
@@ -77,8 +79,10 @@ export function ValidatingAdmissionPolicyEditor() {
             Policy Playground
           </Typography>
           <Typography component="div">
-            Choose a sample Validating Admission Policy and a test resource. You can also edit the
-            policy or the test resource and observe calculated results in the tables below.
+            Choose a sample Validating Admission Policy and a test resource, a sample or one from
+            the cluster. You can also edit the policy or the test resource and observe calculated
+            results in the tables below. Install in cluster tries the policy on real requests,
+            warning about violations without rejecting them.
           </Typography>
         </Stack>
       </Toolbar>
@@ -129,7 +133,14 @@ function AdmissionEvaluator() {
       <Grid container spacing={8}>
         <Grid container item xs={6} direction="column">
           <Toolbar>
-            <ChoosePolicyButton />
+            <Stack direction="row" spacing={1} alignItems="center">
+              <ChoosePolicyButton />
+              <InstallPolicyButton
+                disabled={!validatingAdmissionPolicy}
+                getPolicyYaml={() => policyEditorRef.current?.getValue()}
+                getParamsYaml={() => paramsEditorRef.current?.getValue()}
+              />
+            </Stack>
           </Toolbar>
           <TabContext value={policyTabValue}>
             <TabList
@@ -199,6 +210,7 @@ function AdmissionEvaluator() {
 
 function YAMLEditor(props: { editorRef: any; submitFn: any; value: string; handleChange?: any }) {
   const { editorRef, submitFn, value, handleChange } = props;
+  const editorTheme = useEditorTheme();
   const lastCodeCheckHandler = useRef(0);
 
   const [errors, setErrors] = useState('');
@@ -233,7 +245,7 @@ function YAMLEditor(props: { editorRef: any; submitFn: any; value: string; handl
           editorRef.current = editor;
           editor.onDidChangeModelContent(onChange);
         }}
-        theme={localStorage.headlampThemePreference === 'dark' ? 'vs-dark' : ''}
+        theme={editorTheme}
         value={value}
         height={600}
       />

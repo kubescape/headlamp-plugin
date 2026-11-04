@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useHistory } from 'react-router-dom';
+import { Permitted } from '../common/permissions';
 import { getURLSegments } from '../common/url';
 
 const SEVERITIES = ['', 'Critical', 'High', 'Medium', 'Low'];
@@ -372,9 +373,20 @@ function RuleBindingForm({
         </Box>
 
         <Stack direction="row" spacing={1}>
-          <Button variant="contained" onClick={handleSave}>
-            Save
-          </Button>
+          <Permitted
+            check={{
+              group: 'kubescape.io',
+              resource: 'runtimerulealertbindings',
+              verb: isEdit ? 'update' : 'create',
+              ...(isEdit && { name: name.trim() }),
+            }}
+          >
+            {allowed => (
+              <Button variant="contained" disabled={!allowed} onClick={handleSave}>
+                Save
+              </Button>
+            )}
+          </Permitted>
           <Button onClick={() => history.goBack()}>Cancel</Button>
         </Stack>
       </Stack>

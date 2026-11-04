@@ -2,9 +2,11 @@
   Registration of menu and routes in headlamp. 
 */
 import {
+  registerAppBarAction,
   // @ts-ignore
   registerDetailsViewSectionsProcessor,
   registerPluginSettings,
+  registerResourceTableColumnsProcessor,
   registerRoute,
   registerSidebarEntry,
 } from '@kinvolk/headlamp-plugin/lib';
@@ -19,6 +21,7 @@ const compliance: string = 'compliance';
 export const useHLSelectedClusters = useSelectedClusters ?? (() => [getCluster()]); //For backwards compatibility
 
 namespace RoutingPath {
+  export const Overview = '/kubescape/overview';
   export const ComplianceView = '/kubescape/compliance';
   export const KubescapeConfigurationScanNamespaceSummary = '/kubescape/compliance/:namespace';
   export const KubescapeWorkloadConfigurationScanDetails =
@@ -43,17 +46,17 @@ namespace RoutingPath {
   export const KubescapeNetworkPolicyDiagram = '/kubescape/networkpolicies/:namespace/:name';
   export const KubescapeSBOMDetails = '/kubescape/sbom/:namespace/:name';
   export const VAP = '/kubescape/vap';
-  export const RuleList = '/kubescape/rules';
   export const RuleNew = '/kubescape/rule/new';
   export const RuleEdit = '/kubescape/rule/:namespace/:name';
   export const ApplicationProfiles = '/kubescape/applicationprofiles';
   export const RuntimeDetection = '/kubescape/runtimedetection/:namespace/:name';
-  export const NetworkNeighborhoodDetail = '/kubescape/networkneighborhood/:namespace/:name';
+  export const SeccompProfileDetail = '/kubescape/seccompprofiles/:namespace/:name';
   export const RuleBindingNew = '/kubescape/rulebinding/new';
   export const RuleBindingEdit = '/kubescape/rulebinding/:name';
 }
 
 export namespace RoutingName {
+  export const Overview = 'Kubescape Overview';
   export const ApplicationProfiles = 'Application Profile';
   export const ComplianceView = 'Compliance';
   export const ImageVulnerabilityDetails = 'Image Vulnerabilities';
@@ -75,9 +78,8 @@ export namespace RoutingName {
   export const KubescapeWorkloadConfigurationScanDetails = 'Configuration Scan';
   export const KubescapeWorkloadConfigurationScanFixes = 'Workload Configuration Fixes';
   export const RuntimeDetection = 'Runtime Detection';
-  export const NetworkNeighborhoodDetail = 'Network Neighborhood Detail';
+  export const SeccompProfileDetail = 'Seccomp Profile';
   export const VAP = 'Validation Admission Policies';
-  export const RuleList = 'Rule List';
   export const RuleNew = 'New Rule';
   export const RuleEdit = 'Edit Rule';
   export const RuleBindingNew = 'New Rule Binding';
@@ -91,7 +93,14 @@ registerSidebarEntry({
   name: kubescape,
   label: 'Kubescape',
   icon: 'mdi:shield-search',
-  url: RoutingPath.ComplianceView,
+  url: RoutingPath.Overview,
+});
+
+registerSidebarEntry({
+  parent: kubescape,
+  name: 'overview',
+  label: 'Overview',
+  url: RoutingPath.Overview,
 });
 
 registerSidebarEntry({
@@ -155,6 +164,16 @@ function withRegoData(Component: React.ComponentType) {
     );
   };
 }
+
+import KubescapeOverview from './overview/Overview';
+
+registerRoute({
+  path: RoutingPath.Overview,
+  sidebar: 'overview',
+  component: withRegoData(KubescapeOverview),
+  exact: true,
+  name: RoutingName.Overview,
+});
 
 registerRoute({
   path: RoutingPath.ComplianceView,
@@ -326,19 +345,10 @@ registerRoute({
 });
 
 import { RuleEdit, RuleNew } from './rule-editor/RuleEditor';
-import { RuleList } from './rule-editor/RuleList';
-
-registerRoute({
-  path: RoutingPath.RuleList,
-  sidebar: 'rule-editor',
-  component: () => <RuleList />,
-  exact: true,
-  name: RoutingName.RuleList,
-});
 
 registerRoute({
   path: RoutingPath.RuleNew,
-  sidebar: 'rule-editor',
+  sidebar: 'runtime-detection',
   component: () => <RuleNew />,
   exact: true,
   name: RoutingName.RuleNew,
@@ -346,7 +356,7 @@ registerRoute({
 
 registerRoute({
   path: RoutingPath.RuleEdit,
-  sidebar: 'rule-editor',
+  sidebar: 'runtime-detection',
   component: () => <RuleEdit />,
   exact: true,
   name: RoutingName.RuleEdit,
@@ -390,14 +400,14 @@ registerRoute({
   name: RoutingName.RuleBindingEdit,
 });
 
-import { NetworkNeighborhoodDetail } from './runtimedetection/NetworkNeighborhoodDetail';
+import { SeccompProfileDetail } from './runtimedetection/SeccompProfiles';
 
 registerRoute({
-  path: RoutingPath.NetworkNeighborhoodDetail,
+  path: RoutingPath.SeccompProfileDetail,
   sidebar: 'runtime-detection',
-  component: () => <NetworkNeighborhoodDetail />,
+  component: () => <SeccompProfileDetail />,
   exact: true,
-  name: RoutingName.NetworkNeighborhoodDetail,
+  name: RoutingName.SeccompProfileDetail,
 });
 
 import { FrameworksPage } from './framework/FrameworkList';
@@ -448,8 +458,25 @@ import addKubescapeNamespaceSection from './sections/NamespaceSection';
 
 registerDetailsViewSectionsProcessor(addKubescapeNamespaceSection);
 
+// Columns in the Headlamp lists of workloads and pods, on Headlamp versions that support them
+import { addKubescapeColumns } from './sections/tableColumns';
+
+if (typeof registerResourceTableColumnsProcessor === 'function') {
+  registerResourceTableColumnsProcessor(addKubescapeColumns);
+}
+
+// Notifications for critical runtime alerts and expiring exceptions
+import { startNotifications } from './common/notifications';
+
+startNotifications();
+
 // Register plugin settings
 import { PLUGIN_NAME } from './common/config-store';
 import { KubescapeSettings } from './common/Settings';
 
 registerPluginSettings(PLUGIN_NAME, KubescapeSettings, true);
+
+// Headlamp's own search only finds Kubernetes objects and pages, so the plugin adds its own
+import { KubescapeSearchButton } from './search/KubescapeSearch';
+
+registerAppBarAction({ id: 'kubescape-search', action: <KubescapeSearchButton /> });

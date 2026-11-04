@@ -5,10 +5,10 @@ import {
   Link as HeadlampLink,
   NameValueTable,
   SectionBox,
-  Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
 import { useState } from 'react';
+import HeadlampTable from '../common/Table';
 import { getLastURLSegment } from '../common/url';
 import { RoutingName } from '../index';
 import { vulnerabilitySummaryClass } from '../model';

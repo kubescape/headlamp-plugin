@@ -7,24 +7,15 @@ import {
   Link as HeadlampLink,
   SectionBox,
   ShowHideLabel,
-  Table as HeadlampTable,
   Tabs as HeadlampTabs,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { getAllowedNamespaces } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
-import {
-  Box,
-  Button,
-  FormControlLabel,
-  IconButton,
-  Stack,
-  Switch,
-  Tooltip,
-  Typography,
-} from '@mui/material';
-import { useEffect, useRef, useState } from 'react';
+import { Box, Button, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { isAllowedNamespaceUpdated } from '../common/clusterContext';
 import { KubescapeConfig, kubescapeConfigStore } from '../common/config-store';
 import { ErrorMessage } from '../common/ErrorMessage';
+import { createExceptionCheck, Permitted, PermittedIconButton } from '../common/permissions';
 import { ProgressIndicator } from '../common/ProgressIndicator';
 import {
   getItemFromSessionStorage,
@@ -32,13 +23,16 @@ import {
   setItemInSessionStorage,
   useSessionStorage,
 } from '../common/sessionStorage';
+import { SetupCheck } from '../common/SetupCheck';
 import makeSeverityLabel from '../common/SeverityLabel';
+import HeadlampTable from '../common/Table';
 import { GuidedClusterVulnerabilityExceptionForm } from '../exceptions/GuidedClusterVulnerabilityExceptionForm';
 import { RoutingName, useHLSelectedClusters } from '../index';
 import { vulnerabilityManifestClass, vulnerabilityManifestSummaryClass } from '../model';
 import { handleListPaginationTasks, QueryTask } from '../query';
 import { VulnerabilityManifest } from '../softwarecomposition/VulnerabilityManifest';
 import { VulnerabilityManifestSummary } from '../softwarecomposition/VulnerabilityManifestSummary';
+import { CVEScan, getCVEList } from './cveList';
 import ImageListView from './ImageList';
 import WorkloadScanListView from './ResourceList';
 import {
@@ -50,20 +44,12 @@ import {
   VulnerabilityContext,
   WorkloadScan,
 } from './scanData';
+import UpgradeListView from './UpgradeList';
 
 export type { ImageScan, WorkloadScan } from './scanData';
 
-interface CVEScan {
-  CVE: string;
-  description: string;
-  severity: string;
-  baseScore: number;
-  workloads: Set<string>;
-  images: Set<string>;
-  artifacts: Set<string>;
-  fixed: boolean;
-  relevant: boolean | undefined;
-}
+// A VulnerabilityManifestSummary holds counts and two references, about a kilobyte
+const summaryPageSize = 500;
 
 // workloadScans are cached in global scope because it is an expensive query for the API server
 export const vulnerabilityContext: VulnerabilityContext = {
@@ -85,11 +71,15 @@ export default function KubescapeVulnerabilities() {
 
   useEffect(() => {
     const fetchData = async () => {
-      initQueryTasks(clusters, setProgressMessage, kubescapeConfig);
-
-      await handleListPaginationTasks(vulnerabilityContext.queryTasks, continueReading, setLoading);
-
-      setWorkloadScanData([...vulnerabilityContext.workloadScans]);
+      setWorkloadScanData(
+        await readVulnerabilityScans(
+          clusters,
+          kubescapeConfig,
+          continueReading,
+          setLoading,
+          setProgressMessage
+        )
+      );
     };
 
     fetchData().catch(error => setError(error));
@@ -101,6 +91,7 @@ export default function KubescapeVulnerabilities() {
   return (
     <>
       <h1>Vulnerabilities</h1>
+      <SetupCheck features={['vulnerabilities']} />
       {error && <ErrorMessage error={error} />}
       {!error && !loading && (
         <Stack direction="row" spacing={2}>
@@ -110,13 +101,15 @@ export default function KubescapeVulnerabilities() {
           {vulnerabilityContext.queryTasks.some(q => q.continuation !== undefined) && (
             <Button
               onClick={() => {
-                setTimeout(() => {
+                // show the scans that were read in addition to the ones already shown
+                setTimeout(async () => {
                   continueReading.current = true;
-                  handleListPaginationTasks(
+                  await handleListPaginationTasks(
                     vulnerabilityContext.queryTasks,
                     continueReading,
                     setLoading
                   );
+                  setWorkloadScanData([...vulnerabilityContext.workloadScans]);
                 });
               }}
               variant="contained"
@@ -153,6 +146,10 @@ export default function KubescapeVulnerabilities() {
               label: 'Images',
               component: <ImageListView workloadScans={workloadScanData} />,
             },
+            {
+              label: 'Upgrades',
+              component: <UpgradeListView workloadScans={workloadScanData} />,
+            },
           ]}
           ariaLabel="Navigation Tabs"
         />
@@ -171,38 +168,75 @@ function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
     KubescapeSettings.FixedCVEs,
     false
   );
-  const [selectedCve, setSelectedCve] = useState<string | null>(null);
+  const [exceptionCves, setExceptionCves] = useState<string[] | null>(null);
+  // clears the selection once the exception for the selected CVEs exists
+  const clearSelection = useRef<() => void>(() => {});
 
-  const cveList = getCVEList(workloadScans);
-
-  let cveListFiltered = cveList;
-  if (isRelevantCVESwitchChecked)
-    cveListFiltered = cveListFiltered.filter(cve => cve.relevant === undefined || cve.relevant);
-  if (isFixedCVESwitchChecked) cveListFiltered = cveListFiltered.filter(cve => cve.fixed);
+  // built once per set of scans; selecting rows or opening a dialog renders again
+  const cveList = useMemo(() => getCVEList(workloadScans), [workloadScans]);
+  const cveListFiltered = useMemo(
+    () =>
+      cveList.filter(
+        cve =>
+          (!isRelevantCVESwitchChecked || cve.relevant === undefined || cve.relevant) &&
+          (!isFixedCVESwitchChecked || cve.fixed)
+      ),
+    [cveList, isRelevantCVESwitchChecked, isFixedCVESwitchChecked]
+  );
 
   return (
     <>
       <h5>
         {workloadScans.length} workload scans, {cveListFiltered.length} CVE issues
       </h5>
-      <FormControlLabel
-        checked={isRelevantCVESwitchChecked}
-        control={<Switch color="primary" />}
-        label={'Relevant'}
-        onChange={(event: any, checked: boolean) => {
-          setIsRelevantCVESwitchChecked(checked);
-        }}
-      />
-      <FormControlLabel
-        checked={isFixedCVESwitchChecked}
-        control={<Switch color="primary" />}
-        label={'Fixed'}
-        onChange={(event: any, checked: boolean) => {
-          setIsFixedCVESwitchChecked(checked);
-        }}
-      />
       <SectionBox>
         <HeadlampTable
+          toolbarStart={
+            <>
+              <FormControlLabel
+                checked={isRelevantCVESwitchChecked}
+                control={<Switch color="primary" />}
+                label={'Relevant'}
+                onChange={(event: any, checked: boolean) => {
+                  setIsRelevantCVESwitchChecked(checked);
+                }}
+              />
+              <FormControlLabel
+                checked={isFixedCVESwitchChecked}
+                control={<Switch color="primary" />}
+                label={'Fixed'}
+                onChange={(event: any, checked: boolean) => {
+                  setIsFixedCVESwitchChecked(checked);
+                }}
+              />
+            </>
+          }
+          csvExport={{
+            fileName: 'kubescape-cves.csv',
+            header: [
+              'CVE',
+              'Severity',
+              'CVSS',
+              'Components',
+              'Relevant',
+              'Fixed',
+              'Images',
+              'Workloads',
+              'Description',
+            ],
+            rows: () =>
+              cveListFiltered.map(cve => [
+                cve.CVE,
+                cve.severity,
+                cve.baseScore,
+                Array.from(cve.artifacts).join('; '),
+                cve.relevant === undefined ? 'Unknown' : cve.relevant ? 'Yes' : 'No',
+                cve.fixed ? 'Yes' : 'No',
+                Array.from(cve.images).join('; '),
+                Array.from(cve.workloads).join('; '),
+                cve.description,
+              ]),
+          }}
           data={cveListFiltered}
           columns={[
             {
@@ -234,10 +268,10 @@ function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
             },
             {
               header: 'Component',
-              accessorFn: (item: CVEScan) => (
-                <div style={{ whiteSpace: 'pre-line' }}>
-                  {Array.from(item.artifacts).join('\n')}
-                </div>
+              // text, so the table can search and sort it
+              accessorFn: (item: CVEScan) => Array.from(item.artifacts).join('\n'),
+              Cell: ({ cell }: any) => (
+                <div style={{ whiteSpace: 'pre-line' }}>{cell.getValue()}</div>
               ),
               gridTemplate: 'auto',
             },
@@ -280,12 +314,16 @@ function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
             },
             {
               header: '',
-              accessorFn: (item: CVEScan) => (
-                <Tooltip title="Exclude CVE cluster-wide">
-                  <IconButton size="small" onClick={() => setSelectedCve(item.CVE)}>
-                    <Icon icon="mdi:shield-plus-outline" />
-                  </IconButton>
-                </Tooltip>
+              accessorFn: () => '',
+              // rendered for the rows on the page only, not for every CVE
+              Cell: ({ row }: any) => (
+                <PermittedIconButton
+                  check={createExceptionCheck()}
+                  title="Exclude CVE cluster-wide"
+                  onClick={() => setExceptionCves([row.original.CVE])}
+                >
+                  <Icon icon="mdi:shield-plus-outline" />
+                </PermittedIconButton>
               ),
               gridTemplate: 'min-content',
             },
@@ -299,71 +337,56 @@ function CVEListView(props: Readonly<{ workloadScans: WorkloadScan[] }>) {
             ],
           }}
           reflectInURL="cve"
+          enableRowSelection
+          getRowId={(item: CVEScan) => item.CVE}
+          renderRowSelectionToolbar={({ table }) => {
+            const selected = table.getSelectedRowModel().rows.map(row => row.original.CVE);
+            clearSelection.current = () => table.resetRowSelection();
+            return (
+              <Permitted check={createExceptionCheck()}>
+                {allowed => (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    disabled={!allowed}
+                    startIcon={<Icon icon="mdi:shield-plus-outline" />}
+                    onClick={() => setExceptionCves(selected)}
+                  >
+                    Exclude {selected.length} {selected.length === 1 ? 'CVE' : 'CVEs'} cluster-wide
+                  </Button>
+                )}
+              </Permitted>
+            );
+          }}
         />
       </SectionBox>
 
-      {selectedCve && (
+      {exceptionCves && (
         <GuidedClusterVulnerabilityExceptionForm
-          cveId={selectedCve}
-          onClose={() => setSelectedCve(null)}
+          cveIds={exceptionCves}
+          onClose={() => setExceptionCves(null)}
+          onCreated={() => clearSelection.current()}
         />
       )}
     </>
   );
 }
 
-// create a list of CVE-ID with affected workloads and images
-function getCVEList(workloadScans: WorkloadScan[]): CVEScan[] {
-  const vulnerabilityList: CVEScan[] = [];
-
-  for (const workloadScan of workloadScans) {
-    if (workloadScan.imageScan?.matches) {
-      for (const match of workloadScan.imageScan.matches) {
-        const cve = vulnerabilityList.find(element => element.CVE === match.vulnerability.id);
-
-        const isRelevant = workloadScan.relevant?.matches?.some(
-          match => match.vulnerability.id === cve?.CVE
-        );
-
-        if (cve) {
-          cve.workloads.add(workloadScan.name + '/' + workloadScan.container);
-          cve.images.add(workloadScan.imageScan.imageName);
-          cve.artifacts.add(match.artifact.name + ' ' + match.artifact.version);
-
-          cve.fixed = cve.fixed || !!match.vulnerability.fix?.versions;
-          cve.relevant = cve.relevant || isRelevant;
-        } else {
-          const newCve: CVEScan = {
-            CVE: match.vulnerability.id,
-            description: match.vulnerability.description,
-            severity: match.vulnerability.severity,
-            baseScore: match.vulnerability.cvss ? match.vulnerability.cvss[0].metrics.baseScore : 0,
-            workloads: new Set<string>(),
-            images: new Set<string>(),
-            artifacts: new Set<string>(),
-            fixed: !!match.vulnerability.fix?.versions,
-            relevant: isRelevant,
-          };
-
-          // if vulnerability has no description, try get it from related
-          if (!newCve.description && match.relatedVulnerabilities) {
-            newCve.description = match.relatedVulnerabilities
-              .filter(rv => rv.id === newCve.CVE)
-              .map(rv => rv.description)
-              .join();
-          }
-
-          newCve.workloads.add(workloadScan.name + '/' + workloadScan.container);
-          newCve.images.add(workloadScan.imageScan.imageName);
-          newCve.artifacts.add(match.artifact.name + ' ' + match.artifact.version);
-
-          vulnerabilityList.push(newCve);
-        }
-      }
-    }
-  }
-
-  return vulnerabilityList;
+/**
+ * Reads the vulnerability scans of the clusters into the cache, which other pages share.
+ *
+ * @returns A copy of the cached workload scans.
+ */
+export async function readVulnerabilityScans(
+  clusters: string[],
+  kubescapeConfig: KubescapeConfig,
+  continueReading: React.MutableRefObject<boolean>,
+  setLoading: (loading: boolean) => void,
+  setProgressMessage: React.Dispatch<React.SetStateAction<string>>
+): Promise<WorkloadScan[]> {
+  initQueryTasks(clusters, setProgressMessage, kubescapeConfig);
+  await handleListPaginationTasks(vulnerabilityContext.queryTasks, continueReading, setLoading);
+  return [...vulnerabilityContext.workloadScans];
 }
 
 function initQueryTasks(
@@ -406,7 +429,7 @@ function initQueryTasks(
       const task = {
         cluster: cluster,
         allowedNamespaces: getAllowedNamespaces(cluster),
-        continuation: 0,
+        continuation: '',
         pageSize: kubescapeConfig?.pageSize || 50,
       };
       vulnerabilityContext.queryTasks.push({
@@ -416,6 +439,8 @@ function initQueryTasks(
       });
       vulnerabilityContext.queryTasks.push({
         ...task,
+        // summaries are small, so they are read in larger pages than the manifests
+        pageSize: Math.max(task.pageSize, summaryPageSize),
         objectClass: vulnerabilityManifestSummaryClass,
         handleData: storeVulnerabilityManifestSummaries,
       });

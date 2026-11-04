@@ -5,14 +5,15 @@ import './style.css';
 import {
   Link as HeadlampLink,
   SectionBox,
-  Table as HeadlampTable,
   Tabs as HeadlampTabs,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { getCluster } from '@kinvolk/headlamp-plugin/lib/Utils';
-import { useEffect, useState } from 'react';
+import { KubeObjectClass } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
+import { ClusterErrors } from '../common/ClusterErrors';
+import { clusterColumns, useItemsInClusters } from '../common/clusters';
+import { SetupCheck } from '../common/SetupCheck';
+import HeadlampTable from '../common/Table';
 import { RoutingName } from '../index';
 import { generatedNetworkPolicyClass, knownServersClass, listQuery } from '../model';
-import { paginatedListQuery } from '../query';
 import { GeneratedNetworkPolicy } from '../softwarecomposition/GeneratedNetworkPolicy';
 import { KnownServer } from '../softwarecomposition/KnownServer';
 
@@ -20,6 +21,7 @@ export default function KubescapeNetworkPolicies() {
   return (
     <>
       <h1>Generated Network Policies</h1>
+      <SetupCheck features={['networkPolicies']} />
       <HeadlampTabs
         tabs={[
           {
@@ -37,24 +39,21 @@ export default function KubescapeNetworkPolicies() {
   );
 }
 
+// Lists the objects of the class in all selected clusters
+function useListInClusters<T>(objectClass: KubeObjectClass) {
+  return useItemsInClusters<T>(cluster => listQuery(objectClass, cluster), objectClass.pluralName);
+}
+
 function NetworkPolicyList() {
-  const [networkPolicies, setNetworkPolicies] = useState<GeneratedNetworkPolicy[]>([]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      listQuery(generatedNetworkPolicyClass).then((result: any) => {
-        setNetworkPolicies(result);
-      });
-    };
-    fetchData().catch(console.error);
-  }, []);
-
-  if (!networkPolicies) {
-    return <></>;
-  }
+  const {
+    items: networkPolicies,
+    errors,
+    clusters,
+  } = useListInClusters<GeneratedNetworkPolicy>(generatedNetworkPolicyClass);
 
   return (
     <SectionBox>
+      <ClusterErrors errors={errors} what="generated network policies" />
       <HeadlampTable
         data={networkPolicies}
         columns={[
@@ -64,6 +63,7 @@ function NetworkPolicyList() {
               return (
                 <HeadlampLink
                   routeName={RoutingName.KubescapeNetworkPolicyDiagram}
+                  activeCluster={networkPolicy.metadata.cluster}
                   params={{
                     name: networkPolicy.metadata.name,
                     namespace: networkPolicy.metadata.namespace,
@@ -75,6 +75,7 @@ function NetworkPolicyList() {
             },
             gridTemplate: 'auto',
           },
+          ...clusterColumns<GeneratedNetworkPolicy>(clusters, policy => policy.metadata.cluster),
           {
             header: 'Kind',
             accessorFn: (networkPolicy: GeneratedNetworkPolicy) =>
@@ -116,30 +117,19 @@ class KnownServerEntry {
 }
 
 function KnownServerList() {
-  const [knownServers, setKnownServers]: [KnownServer[], any] = useState<KnownServer[]>([]);
-
-  useEffect(() => {
-    async function fetchData() {
-      const cluster = getCluster();
-      if (cluster) {
-        await paginatedListQuery(cluster, knownServersClass, 0, 50).then((result: any) => {
-          setKnownServers(result.items);
-        });
-      }
-    }
-    fetchData().catch(console.error);
-  }, []);
-
-  if (!knownServers) {
-    return <></>;
-  }
+  const {
+    items: knownServers,
+    errors,
+    clusters,
+  } = useListInClusters<KnownServer>(knownServersClass);
 
   const serverEntries = knownServers.flatMap(ks =>
-    ks.spec.map(entry => new KnownServerEntry(ks, entry))
+    (ks.spec ?? []).map(entry => new KnownServerEntry(ks, entry))
   );
 
   return (
     <SectionBox>
+      <ClusterErrors errors={errors} what="known servers" />
       <HeadlampTable
         data={serverEntries}
         columns={[
@@ -148,6 +138,7 @@ function KnownServerList() {
             accessorFn: (item: KnownServerEntry) => item.knownServer.metadata.name,
             gridTemplate: 'auto',
           },
+          ...clusterColumns<KnownServerEntry>(clusters, item => item.knownServer.metadata.cluster),
           {
             header: 'Name',
             accessorFn: (item: KnownServerEntry) => item.entry.name,

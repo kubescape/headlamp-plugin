@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strings"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
@@ -51,6 +52,7 @@ type AdmissionPolicyEvaluator struct {
 	policy          ValidatingAdmissionPolicy
 	object          ObjectData
 	oldObject       ObjectData
+	request         ObjectData
 	paramsObject    ObjectData
 	namespaceObject ObjectData
 
@@ -61,7 +63,7 @@ type AdmissionPolicyEvaluator struct {
 
 // 'object' - The object from the incoming request. The value is null for DELETE requests.
 // 'oldObject' - The existing object. The value is null for CREATE requests.
-// 'request' - Attributes of the admission request.
+// 'request' - Attributes of the admission request. Missing attributes are those of the CREATE or UPDATE request for the object.
 // 'params' - Parameter resource referred to by the policy binding being evaluated. The value is null if ParamKind is not specified.
 // namespaceObject - The namespace, as a Kubernetes resource, that the incoming object belongs to. The value is null if the incoming object is cluster-scoped.
 // authorizer - A CEL Authorizer. May be used to perform authorization checks for the principal (authenticated user) of the request. See AuthzSelectors and Authz in the Kubernetes CEL library documentation for more details.
@@ -84,6 +86,20 @@ func NewAdmissionPolicyEvaluator(policy, object, oldObject, request, params, nam
 		return nil, fmt.Errorf("failed to parse oldObject YAML: %w", err)
 	}
 
+	if err := yaml.Unmarshal(request, &evaluator.request); err != nil {
+		return nil, fmt.Errorf("failed to parse request YAML: %w", err)
+	}
+	// Attributes missing from the request are those of the request for the object
+	defaults := evaluator.defaultRequest()
+	if evaluator.request == nil {
+		evaluator.request = defaults
+	}
+	for key, value := range defaults {
+		if _, found := evaluator.request[key]; !found {
+			evaluator.request[key] = value
+		}
+	}
+
 	if err := yaml.Unmarshal(params, &evaluator.paramsObject); err != nil {
 		return nil, fmt.Errorf("failed to parse params YAML: %w", err)
 	}
@@ -92,43 +108,80 @@ func NewAdmissionPolicyEvaluator(policy, object, oldObject, request, params, nam
 		return nil, fmt.Errorf("failed to parse namespace YAML: %w", err)
 	}
 
-	// Declare input data as variables
-	envOptions := celDefaultEnvOptions
+	// Declare input data as variables, policy variables are accessed as variables.<name>
+	envOptions := append([]cel.EnvOption{}, celDefaultEnvOptions...)
 	envOptions = append(envOptions,
 		cel.Variable("object", cel.DynType),
+		cel.Variable("oldObject", cel.DynType),
+		cel.Variable("request", cel.DynType),
 		cel.Variable("params", cel.DynType),
-		cel.Variable("namespaceObject", cel.DynType))
+		cel.Variable("namespaceObject", cel.DynType),
+		cel.Variable("variables", cel.MapType(cel.StringType, cel.DynType)))
 	// Init CEL environment
 	if celEnvironment, err := cel.NewEnv(envOptions...); err == nil {
 		evaluator.celEnvironment = celEnvironment
 	} else {
 		return nil, fmt.Errorf("failed to create CEL env: %w", err)
 	}
-	// Declare additional variables
-	var err error
-	for _, variable := range evaluator.policy.Spec.Variables {
-		evaluator.celEnvironment, err = evaluator.celEnvironment.Extend(cel.Variable(variable.Name, cel.DynType))
-		if err != nil {
-			return nil, fmt.Errorf("could not initialize variable %s: %w", variable.Name, err)
-		}
-	}
 
 	return &evaluator, nil
+}
+
+// defaultRequest returns the attributes of the request the API server would send when the
+// object is admitted: an UPDATE when there is an old object, a CREATE otherwise.
+func (evaluator *AdmissionPolicyEvaluator) defaultRequest() ObjectData {
+	apiVersion, _ := evaluator.object["apiVersion"].(string)
+	kind, _ := evaluator.object["kind"].(string)
+	group, version, found := strings.Cut(apiVersion, "/")
+	if !found {
+		group, version = "", apiVersion
+	}
+	metadata, _ := evaluator.object["metadata"].(map[string]any)
+	name, _ := metadata["name"].(string)
+	namespace, _ := metadata["namespace"].(string)
+
+	operation := "CREATE"
+	if evaluator.oldObject != nil {
+		operation = "UPDATE"
+	}
+	groupVersionKind := map[string]any{"group": group, "version": version, "kind": kind}
+	groupVersionResource := map[string]any{"group": group, "version": version, "resource": strings.ToLower(makePlural(kind))}
+
+	return ObjectData{
+		"kind":            groupVersionKind,
+		"resource":        groupVersionResource,
+		"requestKind":     groupVersionKind,
+		"requestResource": groupVersionResource,
+		"name":            name,
+		"namespace":       namespace,
+		"operation":       operation,
+		"userInfo":        map[string]any{},
+		"dryRun":          false,
+	}
 }
 
 func (evaluator *AdmissionPolicyEvaluator) Evaluate() {
 
 	// Input Variables
+	variables := map[string]any{}
 	inputData := map[string]any{
 		"object":          evaluator.object,
+		"oldObject":       nullIfEmpty(evaluator.oldObject),
+		"request":         evaluator.request,
 		"params":          evaluator.paramsObject,
 		"namespaceObject": evaluator.namespaceObject,
+		"variables":       variables,
 	}
 
-	// Policy variables
+	// Policy variables, which may refer to the variables defined before them
 	for _, variable := range evaluator.policy.Spec.Variables {
 		value, err := evaluator.evalExpression(inputData, variable.Expression)
-		inputData["variables."+variable.Name] = value
+		if err != nil {
+			// Expressions that use the variable fail with its error
+			variables[variable.Name] = types.WrapErr(err)
+		} else {
+			variables[variable.Name] = value
+		}
 
 		evaluator.Results.Variables = append(evaluator.Results.Variables, &EvalResult{
 			Name:   variable.Name,
@@ -138,6 +191,7 @@ func (evaluator *AdmissionPolicyEvaluator) Evaluate() {
 	}
 
 	// MatchConditions
+	matched := true
 	for _, matchCondition := range evaluator.policy.Spec.MatchConditions {
 		value, err := evaluator.evalExpression(inputData, matchCondition.Expression)
 		evaluator.Results.MatchConditions = append(evaluator.Results.MatchConditions, &EvalResult{
@@ -145,9 +199,10 @@ func (evaluator *AdmissionPolicyEvaluator) Evaluate() {
 			Result: getResult(value),
 			Error:  errorString(err),
 		})
+		matched = matched && err == nil && value != nil && value.Value() == true
 	}
 
-	if !evaluator.matchedOnConditions() {
+	if !matched {
 		return
 	}
 
@@ -187,6 +242,14 @@ func (evaluator *AdmissionPolicyEvaluator) Evaluate() {
 	}
 }
 
+// nullIfEmpty binds absent input as null, like the API server does for oldObject on CREATE
+func nullIfEmpty(data ObjectData) any {
+	if data == nil {
+		return nil
+	}
+	return data
+}
+
 func errorString(err error) string {
 	if err != nil {
 		return err.Error()
@@ -194,7 +257,10 @@ func errorString(err error) string {
 	return ""
 }
 
-// Note: celEnvironment.Check returns errors for variables in expressions
+// evalExpression parses and evaluates the expression. Unlike the API server, it does not
+// type-check: the Kubernetes CEL libraries (quantity, regex, ...) are not part of this
+// environment, and the checker would reject every expression that calls them, even when
+// evaluation never reaches the call.
 func (evaluator *AdmissionPolicyEvaluator) evalExpression(inputData map[string]any, expression string) (ref.Val, error) {
 	ast, issues := evaluator.celEnvironment.Parse(expression)
 	if issues != nil && issues.Err() != nil {
@@ -212,15 +278,6 @@ func (evaluator *AdmissionPolicyEvaluator) evalExpression(inputData map[string]a
 		return nil, err
 	}
 	return result, nil
-}
-
-func (evaluator *AdmissionPolicyEvaluator) matchedOnConditions() bool {
-	for _, result := range evaluator.Results.MatchConditions {
-		if result.Result != true {
-			return false
-		}
-	}
-	return true
 }
 
 func getResult(val ref.Val) any {

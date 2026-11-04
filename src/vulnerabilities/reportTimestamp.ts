@@ -37,3 +37,16 @@ export function getVulnerabilityReportCreatedAt(
   const normalized = new Date(time).toISOString();
   return normalized === '0001-01-01T00:00:00.000Z' ? undefined : normalized;
 }
+
+/**
+ * When kubevuln last scanned the container, from the kubescape.io/timestamp annotation (Unix
+ * seconds) of the VulnerabilityManifestSummary. Recent kubevuln versions leave the evaluation
+ * time of the reports empty, and this is the only scan time they record.
+ */
+export function getScanTime(
+  summary?: { metadata?: { annotations?: Record<string, string> } } | null
+): string | undefined {
+  const seconds = Number(summary?.metadata?.annotations?.['kubescape.io/timestamp']);
+  if (!Number.isFinite(seconds) || seconds <= 0) return undefined;
+  return new Date(seconds * 1000).toISOString();
+}

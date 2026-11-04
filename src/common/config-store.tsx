@@ -8,6 +8,19 @@ export type KubescapeConfig = {
   activeFrameworks: string[];
   pageSize: number;
   alertmanagerUrl: string | undefined;
+  // Kubescape columns in the Headlamp workload and pod lists, on unless false
+  tableColumns?: boolean;
+  // Headlamp notifications for critical runtime alerts and expiring exceptions, on unless false
+  notifications?: boolean;
+  // Prometheus service with the metrics of the Kubescape exporter, as namespace/service:port
+  prometheusUrl?: string;
+  // the newest version of images, looked up at public services, off unless true
+  imageVersions?: boolean;
+  // the end of life of the release line of images, from endoflife.date, off unless true
+  endOfLife?: boolean;
+  // also looking up images that may be private, whose names then go to shields.io and jsDelivr,
+  // off unless true
+  possiblyPrivateImages?: boolean;
 };
 
 export const kubescapeConfigStore = new ConfigStore<KubescapeConfig>(PLUGIN_NAME);
@@ -43,4 +56,12 @@ export function getAlertmanagerUrl(): string | undefined {
 export function getPageSize(): number {
   const config = kubescapeConfigStore.get();
   return config?.pageSize || 50;
+}
+
+/** The API server proxy path of the configured Prometheus service. */
+export function getPrometheusUrl(): string | undefined {
+  const address = kubescapeConfigStore.get()?.prometheusUrl;
+  if (!address || !isValidAlertmanagerAddress(address)) return undefined;
+  const [namespace, serviceAndPort] = address.split('/');
+  return `/api/v1/namespaces/${namespace}/services/${serviceAndPort}/proxy`;
 }

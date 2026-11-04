@@ -5,7 +5,8 @@ export type QueryTask = {
   cluster: string;
   allowedNamespaces: string[];
   pageSize: number;
-  continuation: number | undefined;
+  // '' requests the first page, undefined means all pages have been read
+  continuation: string | undefined;
   objectClass: KubeObjectClass;
   handleData: (queryTask: QueryTask, items: any[]) => void;
 };
@@ -13,7 +14,10 @@ export type QueryTask = {
 /**
  * Handles paginated list queries for a set of query tasks. This function continues
  * fetching data for each task until the `continuation` token is undefined or
- * `continueReading` is set to false. It sets the loading state during the process.
+ * `continueReading` is set to false. Clusters are read in parallel. The tasks of one
+ * cluster are read in the given order, because a task may use the data of the tasks
+ * before it (vulnerability summaries refer to manifests). It sets the loading state
+ * during the process.
  *
  * @param queryTasks - An array of QueryTasks, each representing a task with details
  *                     for querying a paginated list.
@@ -30,25 +34,34 @@ export async function handleListPaginationTasks(
   if (queryTasks.some(task => task.continuation !== undefined)) {
     setLoading(true);
 
+    const tasksByCluster = new Map<string, QueryTask[]>();
     for (const task of queryTasks) {
-      while (continueReading.current && task.continuation !== undefined) {
-        await paginatedListQuery(
-          task.cluster,
-          task.objectClass,
-          task.continuation,
-          task.pageSize,
-          task.allowedNamespaces
-        )
-          .then(response => {
-            task.continuation = response.continuation;
-            task.handleData(task, response.items);
-          })
-          .catch(error => {
-            console.error(`Error fetching data in cluster ${task.cluster}:`, error);
-            task.continuation = undefined; // Stop further requests on error
-          });
-      }
+      tasksByCluster.set(task.cluster, [...(tasksByCluster.get(task.cluster) ?? []), task]);
     }
+
+    await Promise.all(
+      [...tasksByCluster.values()].map(async clusterTasks => {
+        for (const task of clusterTasks) {
+          while (continueReading.current && task.continuation !== undefined) {
+            await paginatedListQuery(
+              task.cluster,
+              task.objectClass,
+              task.continuation,
+              task.pageSize,
+              task.allowedNamespaces
+            )
+              .then(response => {
+                task.continuation = response.continuation;
+                task.handleData(task, response.items);
+              })
+              .catch(error => {
+                console.error(`Error fetching data in cluster ${task.cluster}:`, error);
+                task.continuation = undefined; // Stop further requests on error
+              });
+          }
+        }
+      })
+    );
   }
   setLoading(false);
 }
@@ -58,15 +71,16 @@ export async function handleListPaginationTasks(
  *
  * @param cluster - The name of the cluster to query.
  * @param objectClass - The class of objects to query.
- * @param continuation - An optional continuation token to fetch the next page of data.
+ * @param continuation - The continuation token of the page to fetch, '' for the first page.
  * @param pageSize - An optional page size to limit the number of items fetched.
  * @param allowedNamespaces - An optional list of namespaces to query.
- * @returns A promise that resolves with an object containing the list of items and the continuation token.
+ * @returns A promise that resolves with an object containing the list of items and the
+ *          continuation token, which is undefined when there are no more pages.
  */
 export async function paginatedListQuery(
   cluster: string,
   objectClass: KubeObjectClass,
-  continuation: number,
+  continuation: string,
   pageSize: number | undefined,
   allowedNamespaces: string[] = []
 ): Promise<any> {
@@ -74,31 +88,50 @@ export async function paginatedListQuery(
   const version = objectClass.apiEndpoint.apiInfo[0].version;
   const pluralName = objectClass.pluralName;
 
-  let queryFragment = `${pluralName}?resourceVersion=fullSpec&continue=${continuation}`;
+  let queryFragment = `${pluralName}?resourceVersion=fullSpec`;
   if (pageSize !== undefined) {
     queryFragment += `&limit=${pageSize}`;
   }
   if (allowedNamespaces.length > 0) {
-    const listOfLists: any[] = await Promise.all(
-      allowedNamespaces.map(namespace =>
-        request(`/apis/${group}/${version}/namespaces/${namespace}/${queryFragment}`, { cluster })
-      )
+    // each namespace is read to its last page, as one page of the task
+    const listOfItems: any[][] = await Promise.all(
+      allowedNamespaces.map(async namespace => {
+        const items: any[] = [];
+        let next = '';
+        do {
+          const fragment = next
+            ? `${queryFragment}&continue=${encodeURIComponent(next)}`
+            : queryFragment;
+          const list = await request(
+            `/apis/${group}/${version}/namespaces/${namespace}/${fragment}`,
+            { cluster }
+          );
+          items.push(...(list.items ?? []));
+          next = list.metadata?.continue || '';
+        } while (next);
+        return items;
+      })
     );
 
-    listOfLists.forEach(list => {
-      list.items.forEach((item: any) => {
-        item.metadata.cluster = cluster;
-      });
+    const items = listOfItems.flat();
+    items.forEach((item: any) => {
+      item.metadata.cluster = cluster;
     });
-    return { items: listOfLists.flatMap(list => list.items), continuation: undefined };
+    return { items, continuation: undefined };
   } else {
-    // await new Promise(resolve => setTimeout(resolve, 2000));
-    const overviewList = await request(`/apis/${group}/${version}/${queryFragment}`, {
+    const fragment = continuation
+      ? `${queryFragment}&continue=${encodeURIComponent(continuation)}`
+      : queryFragment;
+    const overviewList = await request(`/apis/${group}/${version}/${fragment}`, {
       cluster: cluster,
     });
     overviewList.items.forEach((item: any) => {
       item.metadata.cluster = cluster;
     });
-    return { items: overviewList.items, continuation: overviewList.metadata.continue };
+    // The API server signals the last page with an absent or empty continue token
+    return {
+      items: overviewList.items,
+      continuation: overviewList.metadata?.continue || undefined,
+    };
   }
 }

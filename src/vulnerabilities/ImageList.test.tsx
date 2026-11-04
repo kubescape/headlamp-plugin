@@ -9,6 +9,15 @@ import { toImageScan, WorkloadScan } from './scanData';
 import { manifest, T1, T2 } from './testFixtures';
 
 const request = vi.hoisted(() => vi.fn());
+const versions = vi.hoisted(() => ({ config: {} as Record<string, unknown>, lookup: vi.fn() }));
+vi.mock('../common/config-store', () => ({
+  kubescapeConfigStore: { useConfig: () => () => versions.config },
+}));
+vi.mock('./imageVersionSources', async importOriginal => ({
+  ...(await importOriginal<typeof import('./imageVersionSources')>()),
+  lookupImageVersion: versions.lookup,
+  versionCheckerResults: async () => new Map(),
+}));
 vi.mock('../index', () => ({
   RoutingName: { ImageVulnerabilityDetails: 'image', KubescapeSBOMDetails: 'sbom' },
 }));
@@ -41,6 +50,12 @@ vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', async () => {
 });
 const tableTheme = createTheme(theme, { palette: { tables: { head: { borderColor: '#ddd' } } } });
 afterEach(cleanup);
+beforeEach(() => {
+  // both are off until they are switched on
+  versions.config = { imageVersions: true, endOfLife: true };
+  versions.lookup.mockReset();
+  versions.lookup.mockResolvedValue({});
+});
 
 function workload(name: string, createdAt?: string): WorkloadScan {
   const image = manifest();
@@ -79,4 +94,102 @@ it('passes date sorting through Headlamp and keeps Unknown last in both directio
   expect(screen.getByText('Unknown')).toBeTruthy();
   expect(screen.getByText(T1).getAttribute('datetime')).toBe(T1);
   expect(request).not.toHaveBeenCalled();
+});
+
+function renderImages(workloadScans: WorkloadScan[]) {
+  return render(
+    <ThemeProvider theme={tableTheme}>
+      <ImageList workloadScans={workloadScans} />
+    </ThemeProvider>
+  );
+}
+
+function cellOf(image: string, column: string) {
+  const headers = screen.getAllByRole('columnheader').map(header => header.textContent);
+  const row = screen.getByText(image, { selector: 'a' }).closest('tr')!;
+  return within(row).getAllByRole('cell')[headers.findIndex(h => h?.startsWith(column))];
+}
+
+it('shows the tag, the newest version and the end of life of each image', async () => {
+  versions.lookup.mockImplementation(async (image: string) => {
+    if (image === 'quay.io/team/app:v1.0.0') {
+      return {
+        latest: {
+          latest: 'v1.2.0',
+          source: { name: 'Quay', url: 'https://quay.io/repository/team/app?tab=tags' },
+        },
+      };
+    }
+    if (image === 'redis:5.0.7') {
+      return {
+        latest: {
+          latest: '8.10.3',
+          source: { name: 'endoflife.date', url: 'https://endoflife.date/redis' },
+        },
+        line: {
+          product: 'redis',
+          name: '5.0',
+          latest: '5.0.14',
+          eol: true,
+          eolFrom: '2022-04-27',
+          url: 'https://endoflife.date/redis',
+        },
+      };
+    }
+    if (image === 'quay.io/team/current:v2.0.0') {
+      return { latest: { latest: 'v2.0.0', source: { name: 'Quay' } } };
+    }
+    return {};
+  });
+  renderImages([
+    workload('quay.io/team/app:v1.0.0'),
+    workload('redis:5.0.7'),
+    workload('quay.io/team/current:v2.0.0'),
+    workload('registry.example/private:main'),
+  ]);
+
+  await waitFor(() =>
+    expect(cellOf('redis:5.0.7', 'End of life').textContent).toBe('Ended 2022-04-27')
+  );
+  expect(cellOf('quay.io/team/app:v1.0.0', 'Tag').textContent).toBe('v1.0.0');
+  expect(cellOf('quay.io/team/app:v1.0.0', 'Latest').textContent).toBe('v1.2.0');
+  expect(
+    within(cellOf('quay.io/team/app:v1.0.0', 'Latest')).getByLabelText('Newer version available')
+  ).toBeTruthy();
+  expect(
+    within(cellOf('quay.io/team/current:v2.0.0', 'Latest')).getByLabelText('Up to date')
+  ).toBeTruthy();
+  expect(within(cellOf('redis:5.0.7', 'End of life')).getByLabelText('End of life')).toBeTruthy();
+  expect(cellOf('registry.example/private:main', 'Tag').textContent).toBe('main');
+  expect(cellOf('registry.example/private:main', 'Latest').textContent).toBe('');
+  expect(versions.lookup).toHaveBeenCalledTimes(4);
+
+  // images with a newer version first
+  const header = screen.getByRole('columnheader', { name: /Latest/ });
+  fireEvent.click(within(header).getByRole('button', { name: /Latest/ }));
+  await waitFor(() => expect(header.getAttribute('aria-sort')).toBe('descending'));
+  expect(imageOrder().slice(0, 2).sort()).toEqual(['quay.io/team/app:v1.0.0', 'redis:5.0.7']);
+  expect(imageOrder()[2]).toBe('quay.io/team/current:v2.0.0');
+});
+
+it('leaves out the end of life, or all version columns, as the settings say', async () => {
+  versions.config = { imageVersions: true };
+  const view = renderImages([workload('redis:5.0.7')]);
+  expect(screen.getByRole('columnheader', { name: /Latest/ })).toBeTruthy();
+  expect(screen.queryByRole('columnheader', { name: /End of life/ })).toBeNull();
+  await waitFor(() => expect(versions.lookup).toHaveBeenCalled());
+  expect(versions.lookup.mock.calls[0][1]).toMatchObject({ endOfLife: false });
+  view.unmount();
+
+  // nothing is switched on by default
+  for (const config of [{}, { imageVersions: false, endOfLife: true }]) {
+    versions.lookup.mockClear();
+    versions.config = config;
+    const next = renderImages([workload('redis:5.0.7')]);
+    expect(screen.queryByRole('columnheader', { name: /Tag/ })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: /Latest/ })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: /End of life/ })).toBeNull();
+    expect(versions.lookup).not.toHaveBeenCalled();
+    next.unmount();
+  }
 });

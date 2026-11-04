@@ -8,12 +8,17 @@
 
 .network-node .text {
   font-size: 12px;
+  overflow-wrap: anywhere; /* long label selectors wrap instead of overflowing the node */
 }
 
 .network-node .title {
   margin: 0;
   vertical-align: top;
   padding: 0px;
+}
+
+.network-node .title .count {
+  font-weight: bold;
 }
 
 .dark .network-node {

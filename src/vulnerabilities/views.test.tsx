@@ -1,9 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 import ImageDetails from './ImageDetails';
 import ImageList from './ImageList';
 import ResourceList from './ResourceList';
+import SBOMDetail from './SBOMDetail';
 import {
   getImageScanKey,
   invalidateScanClusters,
@@ -12,15 +14,31 @@ import {
   VulnerabilityContext,
   WorkloadScan,
 } from './scanData';
-import { manifest, match, summary, T0, T1, T2 } from './testFixtures';
+import { manifest, match, sbom, summary, T0, T1, T2 } from './testFixtures';
 import WorkloadDetails, { fetchVulnerabilityManifest } from './WorkloadScanDetails';
 
 const mocks = vi.hoisted(() => ({
   request: vi.fn(),
   imageGet: vi.fn(),
+  sbomGet: vi.fn(),
+  sbomFilteredGet: vi.fn(),
+  severity: null as string | null,
   cluster: 'cluster-a',
   name: 'workload-123',
+  saveToFile: vi.fn(),
+  lookupImageVersion: vi.fn(),
 }));
+// the image versions and their end of life are off until they are switched on
+vi.mock('../common/config-store', () => ({
+  kubescapeConfigStore: { useConfig: () => () => ({ imageVersions: true, endOfLife: true }) },
+}));
+vi.mock('./imageVersionSources', async importOriginal => ({
+  ...(await importOriginal<typeof import('./imageVersionSources')>()),
+  lookupImageVersion: mocks.lookupImageVersion,
+  versionCheckerResults: async () => new Map(),
+}));
+vi.mock('../common/filedialog', () => ({ saveToFile: mocks.saveToFile }));
+vi.mock('../common/clusterContext', () => ({ getAllowedNamespaces: () => [] }));
 vi.mock('../index', () => ({
   RoutingName: {
     ImageVulnerabilityDetails: 'image',
@@ -32,13 +50,20 @@ vi.mock('../index', () => ({
 vi.mock('../model', () => ({
   vulnerabilityManifestClass: { useApiGet: mocks.imageGet },
   vulnerabilityManifestSummaryClass: {},
+  sbomSyftClass: { useApiGet: mocks.sbomGet },
+  sbomSyftFilteredClass: { useApiGet: mocks.sbomFilteredGet },
 }));
-vi.mock('../common/url', () => ({ getURLSegments: () => [mocks.name, 'workloads'] }));
+vi.mock('../common/url', () => ({
+  getURLSegments: () => [mocks.name, 'workloads'],
+  useURLSearchParam: (name: string) => [name === 'severity' ? mocks.severity : null, () => {}],
+}));
 vi.mock('@kinvolk/headlamp-plugin/lib/ApiProxy', () => ({ request: mocks.request }));
 vi.mock('@kinvolk/headlamp-plugin/lib/Utils', () => ({ getCluster: () => mocks.cluster }));
 vi.mock('../exceptions/GuidedVulnerabilityExceptionForm', () => ({
-  GuidedVulnerabilityExceptionForm: ({ cveId }: { cveId: string }) => (
-    <div>Exception for {cveId}</div>
+  GuidedVulnerabilityExceptionForm: ({ cveIds, acceptRisk }: any) => (
+    <div>
+      {acceptRisk ? 'Accept risk of' : 'Exception for'} {cveIds.join(', ')}
+    </div>
   ),
 }));
 vi.mock('../exceptions/GuidedClusterVulnerabilityExceptionForm', () => ({
@@ -49,8 +74,13 @@ vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', () => ({
   SectionBox: ({ children }: { children: ReactNode }) => <section>{children}</section>,
   ShowHideLabel: ({ children }: { children: ReactNode }) => <>{children}</>,
   Tabs: () => null,
-  Link: ({ children, activeCluster, routeName, params }: any) => (
-    <a href={`/${activeCluster}/${routeName}/${params.namespace}/${params.name}`}>{children}</a>
+  Link: ({ children, activeCluster, routeName, params, search = '', ...rest }: any) => (
+    <a
+      {...rest}
+      href={`/${activeCluster}/${routeName}/${params.namespace}/${params.name}${search}`}
+    >
+      {children}
+    </a>
   ),
   NameValueTable: ({ rows }: any) => (
     <dl>
@@ -62,40 +92,54 @@ vi.mock('@kinvolk/headlamp-plugin/lib/CommonComponents', () => ({
       ))}
     </dl>
   ),
-  Table: ({ data = [], columns }: any) => (
-    <table>
-      <tbody>
-        {data.map((item: any, i: number) => (
-          <tr key={i}>
-            {columns
-              .filter((col: any) => col.header !== undefined)
-              .map((col: any, j: number) => {
-                const value = col.accessorFn
-                  ? col.accessorFn(item)
-                  : col.accessorKey?.split('.').reduce((v: any, k: string) => v?.[k], item);
-                return (
-                  <td key={j}>
-                    {col.Cell
-                      ? col.Cell({
-                          cell: { getValue: () => value, row: { original: item } },
-                          row: { original: item },
-                        })
-                      : value}
-                  </td>
-                );
-              })}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  ),
+  // like Headlamp's table: the toolbar with the filters and export of a view, and only a
+  // message without the toolbar when there are no rows
+  Table: ({ data = [], columns, renderTopToolbarCustomActions, emptyMessage }: any) =>
+    data.length === 0 ? (
+      <div>{emptyMessage ?? 'No data to be shown.'}</div>
+    ) : (
+      <>
+        {renderTopToolbarCustomActions?.({ table: {} })}
+        <table>
+          <tbody>
+            {data.map((item: any, i: number) => (
+              <tr key={i}>
+                {columns
+                  .filter((col: any) => col.header !== undefined)
+                  .map((col: any, j: number) => {
+                    const value = col.accessorFn
+                      ? col.accessorFn(item)
+                      : col.accessorKey?.split('.').reduce((v: any, k: string) => v?.[k], item);
+                    return (
+                      <td key={j}>
+                        {col.Cell
+                          ? col.Cell({
+                              cell: { getValue: () => value, row: { original: item } },
+                              row: { original: item },
+                            })
+                          : value}
+                      </td>
+                    );
+                  })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>
+    ),
 }));
 
 beforeEach(() => {
+  mocks.saveToFile.mockReset();
   mocks.request.mockReset();
   mocks.imageGet.mockReset();
+  mocks.sbomGet.mockReset();
+  mocks.sbomFilteredGet.mockReset();
+  mocks.lookupImageVersion.mockReset();
+  mocks.lookupImageVersion.mockResolvedValue({});
   mocks.cluster = 'cluster-a';
   mocks.name = 'workload-123';
+  mocks.severity = null;
 });
 afterEach(cleanup);
 
@@ -162,6 +206,31 @@ it.each(['all', 'relevant', 'both', 'neither'] as const)(
   }
 );
 
+it('reads a report from the operator namespace when it is not where the summary refers to', async () => {
+  window.sessionStorage.clear();
+  const s = summary();
+  s.spec.vulnerabilitiesRef.all = {
+    kind: 'vulnerabilitymanifests',
+    name: 'image-123',
+    namespace: 'workloads',
+  };
+  s.spec.vulnerabilitiesRef.relevant = undefined;
+  mocks.request.mockImplementation(async (url: string) => {
+    if (url.includes('summaries/')) return s;
+    if (url.startsWith('api/v1/pods?'))
+      return { items: [{ metadata: { namespace: 'kubescape' } }] };
+    if (url.includes('/namespaces/kubescape/vulnerabilitymanifests/image-123')) return manifest(T2);
+    throw Object.assign(new Error('not found'), { status: 404 });
+  });
+
+  const [, all] = await fetchVulnerabilityManifest('workload-123', 'workloads', 'cluster-a');
+
+  expect(all?.metadata.name).toBe('image-123');
+  expect(mocks.request.mock.calls.map(([url]) => url.split('?')[0])).toContain(
+    '/apis/spdx.softwarecomposition.kubescape.io/v1beta1/namespaces/workloads/vulnerabilitymanifests/image-123'
+  );
+});
+
 it.each(['all', 'relevant'] as const)(
   'renders the available date when the %s reference is absent',
   async missing => {
@@ -207,7 +276,7 @@ it('isolates failed reports and uses kubescape only for legacy references withou
 
 it('shows independent workload dates and preserves relevancy filtering and exception controls', async () => {
   const all = manifest();
-  all.spec.payload.matches.push(match('CVE-2'));
+  all.spec.payload.matches!.push(match('CVE-2'));
   mocks.request.mockImplementation(async (url: string) =>
     url.includes('summaries/') ? summary() : url.endsWith('/image-123') ? all : manifest(T2)
   );
@@ -218,8 +287,256 @@ it('shows independent workload dates and preserves relevancy filtering and excep
   expect(screen.queryByText('CVE-2')).toBeNull();
   fireEvent.click(screen.getByRole('checkbox'));
   expect(screen.getByText('CVE-2')).toBeTruthy();
-  fireEvent.click(screen.getAllByRole('button')[0]);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Create Vulnerability Exception' })[0]);
   expect(screen.getByText('Exception for CVE-1')).toBeTruthy();
+});
+
+it('exports the findings that are shown as CSV', async () => {
+  const all = manifest();
+  all.spec.payload.matches!.push(match('CVE-2'));
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? summary() : url.endsWith('/image-123') ? all : manifest(T2)
+  );
+  render(<WorkloadDetails />);
+  await waitFor(() => expect(screen.getByText('CVE-1')).toBeTruthy());
+
+  fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+
+  // the relevant findings, as the Relevant CVE switch is on
+  const [content, fileName] = mocks.saveToFile.mock.calls[0];
+  expect(fileName).toBe('kubescape-workloads-workload-cves.csv');
+  expect(content.split('\r\n')).toEqual([
+    'Severity,CVE,CVSS,Artifact,Version,Relevant,Fix,Fix in version,Exception,Description',
+    'High,CVE-1,8,package,1.0,Yes,fixed,2.0,,test finding',
+    '',
+  ]);
+});
+
+// A SecurityException that accepts the risk of CVEs of the workload of the summary fixture
+function acceptance(entries: { id: string; expiredOnFix?: boolean }[]) {
+  return {
+    kind: 'SecurityException',
+    metadata: { name: 'accept-it', namespace: 'workloads' },
+    spec: {
+      author: 'alice',
+      match: { resources: [{ kind: 'Deployment', name: 'workload' }] },
+      vulnerabilities: entries.map(({ id, expiredOnFix }) => ({
+        vulnerability: { id },
+        status: 'affected',
+        response: ['can_not_fix'],
+        actionStatement: 'No fix upstream',
+        expiredOnFix,
+      })),
+    },
+  };
+}
+
+it('marks the findings that exceptions cover and lists those that kubevuln hid', async () => {
+  const all = manifest();
+  all.spec.payload.matches!.push(match('CVE-2'));
+  all.spec.payload.ignoredMatches = [
+    {
+      ...match('CVE-3'),
+      appliedIgnoreRules: [
+        {
+          vulnerability: 'CVE-3',
+          'fix-state': 'not_affected',
+          sourceKind: 'ClusterSecurityException',
+          sourceName: 'clustersecurityexception//old',
+        },
+      ],
+    },
+  ];
+  mocks.request.mockImplementation(async (url: string) => {
+    if (url.endsWith('/clustersecurityexceptions') || url === '/api/v1/namespaces') {
+      return { items: [] };
+    }
+    if (url.endsWith('/securityexceptions')) {
+      // CVE-1 has a fix, which ends its exception
+      return { items: [acceptance([{ id: 'CVE-1', expiredOnFix: true }, { id: 'CVE-2' }])] };
+    }
+    return url.includes('summaries/') ? summary() : url.endsWith('/image-123') ? all : manifest(T2);
+  });
+  render(<WorkloadDetails />);
+  await waitFor(() => expect(screen.getByText('CVE-1')).toBeTruthy());
+  // all findings, also those that are not relevant
+  fireEvent.click(screen.getByRole('checkbox'));
+  await waitFor(() => expect(screen.getByText('Accepted')).toBeTruthy());
+  expect(screen.getByText('Not affected')).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+  expect(mocks.saveToFile.mock.calls[0][0].split('\r\n').slice(1, 4)).toEqual([
+    'High,CVE-1,8,package,1.0,Yes,fixed,2.0,,test finding',
+    'High,CVE-2,8,package,1.0,No,fixed,2.0,Accepted: accept-it,test finding',
+    'High,CVE-3,8,package,1.0,No,fixed,2.0,Not affected: old,test finding',
+  ]);
+});
+
+it('counts the accepted CVEs of a resource and accepts the risk of the others', async () => {
+  mocks.request.mockImplementation(async (url: string, options: { cluster?: string }) =>
+    url.endsWith('/securityexceptions') && options.cluster === 'cluster-a'
+      ? { items: [acceptance([{ id: 'CVE-2' }])] }
+      : { items: [] }
+  );
+  const image = toImageScan(manifest());
+  image.matches = [match('CVE-1'), match('CVE-2')];
+  render(
+    <ResourceList
+      workloadScans={[toWorkloadScan(summary(), new Map([[getImageScanKey(image), image]]))]}
+    />
+  );
+  expect(await screen.findByText('1 accepted')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Accept the risk of the open CVE' }));
+  expect(screen.getByText('Accept risk of CVE-1')).toBeTruthy();
+});
+
+it('accepts the risk of the open CVEs of a workload from its page', async () => {
+  const all = manifest();
+  all.spec.payload.matches!.push(match('CVE-2'), match('CVE-3'));
+  mocks.request.mockImplementation(async (url: string) => {
+    if (url.endsWith('/clustersecurityexceptions') || url === '/api/v1/namespaces') {
+      return { items: [] };
+    }
+    if (url.endsWith('/securityexceptions')) return { items: [acceptance([{ id: 'CVE-2' }])] };
+    return url.includes('summaries/') ? summary() : url.endsWith('/image-123') ? all : manifest(T2);
+  });
+  render(<WorkloadDetails />);
+
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Accept the risk of the 2 open CVEs' })
+  );
+  expect(screen.getByText('Accept risk of CVE-1, CVE-3')).toBeTruthy();
+});
+
+it('accepts the risk of the open CVEs of an image in the whole cluster from its page', async () => {
+  let receive: (item: any) => void = () => {};
+  mocks.imageGet.mockImplementation((callback: typeof receive) => {
+    receive = callback;
+  });
+  const imageException = (name: string, match: object) => ({
+    kind: 'ClusterSecurityException',
+    metadata: { name },
+    spec: {
+      match,
+      vulnerabilities: [
+        {
+          vulnerability: { id: 'CVE-2' },
+          status: 'affected',
+          response: ['will_not_fix'],
+          actionStatement: 'Replaced next quarter',
+        },
+      ],
+    },
+  });
+  mocks.request.mockImplementation(async (url: string) =>
+    url.endsWith('/clustersecurityexceptions')
+      ? {
+          items: [
+            imageException('example-everywhere', { images: ['example:*'] }),
+            // limited to a workload, so not for the image wherever it runs
+            imageException('example-in-one-workload', {
+              images: ['example:latest'],
+              resources: [{ kind: 'Deployment', name: 'workload' }],
+            }),
+          ],
+        }
+      : { items: [] }
+  );
+  render(<ImageDetails />);
+  const report = manifest();
+  report.spec.payload.matches = [match('CVE-1'), match('CVE-2')];
+  await act(async () => receive({ metadata: report.metadata, jsonData: report }));
+
+  expect(await screen.findByText('Accepted')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Accept the risk of the open CVE' }));
+  expect(screen.getByText('Accept risk of CVE-1')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+  expect(mocks.saveToFile.mock.calls[0][0].split('\r\n').slice(0, 3)).toEqual([
+    'Image,Severity,CVE,CVSS,Artifact,Version,Fix,Fix in version,Exception,Description',
+    'example:latest,High,CVE-1,8,package,1.0,fixed,2.0,,test finding',
+    'example:latest,High,CVE-2,8,package,1.0,fixed,2.0,Accepted: example-everywhere,test finding',
+  ]);
+});
+
+it('shows no relevant findings when the relevant manifest has no matches', async () => {
+  const relevant = manifest(T2);
+  relevant.spec.payload.matches = null;
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? summary() : url.endsWith('/image-123') ? manifest() : relevant
+  );
+  render(<WorkloadDetails />);
+  await waitFor(() => expect(valueFor('Relevant findings last evaluated').textContent).toBe(T2));
+  expect(screen.queryByText('CVE-1')).toBeNull();
+  expect(screen.getByText(/None of the 1 findings is relevant/)).toBeTruthy();
+  // the switch stays, although the table without rows shows no toolbar
+  fireEvent.click(screen.getByRole('checkbox'));
+  expect(screen.getByText('CVE-1')).toBeTruthy();
+});
+
+it.each([
+  { search: '?filtered', filtered: true },
+  { search: '', filtered: false },
+])(
+  'reads the SBOM choice from the router location, which may differ from window.location ($search)',
+  ({ search, filtered }) => {
+    render(
+      <MemoryRouter initialEntries={[`/sbom/relevant-reports/relevant-123${search}`]}>
+        <SBOMDetail />
+      </MemoryRouter>
+    );
+    expect(window.location.search).toBe('');
+    expect(mocks.sbomFilteredGet).toHaveBeenCalledTimes(filtered ? 1 : 0);
+    expect(mocks.sbomGet).toHaveBeenCalledTimes(filtered ? 0 : 1);
+  }
+);
+
+it('shows an SBOM without artifacts', async () => {
+  let receive: (item: any) => void = () => {};
+  mocks.sbomFilteredGet.mockImplementation((callback: typeof receive) => {
+    receive = callback;
+  });
+  render(
+    <MemoryRouter initialEntries={['/sbom/relevant-reports/relevant-123?filtered']}>
+      <SBOMDetail />
+    </MemoryRouter>
+  );
+  const noPackagesInUse = {
+    metadata: { annotations: { 'kubescape.io/image-tag': 'example:latest' } },
+    spec: {
+      metadata: { report: { createdAt: T1 } },
+      syft: { distro: { name: 'debian' }, artifacts: null },
+    },
+  };
+  await act(async () => receive({ jsonData: noPackagesInUse }));
+  expect(screen.getByText('Showing in use artifacts only')).toBeTruthy();
+  expect(valueFor('Components').textContent).toBe('0');
+});
+
+it('downloads the SBOM as Syft JSON, CycloneDX and a CSV of its packages', async () => {
+  let receive: (item: any) => void = () => {};
+  mocks.sbomGet.mockImplementation((callback: typeof receive) => {
+    receive = callback;
+  });
+  render(
+    <MemoryRouter initialEntries={['/sbom/kubescape/docker.io-velero-velero-v1.18.1-b55b90']}>
+      <SBOMDetail />
+    </MemoryRouter>
+  );
+  await act(async () => receive({ jsonData: sbom() }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Download Syft JSON' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Download CycloneDX' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+
+  const [syft, cycloneDx, csv] = mocks.saveToFile.mock.calls;
+  expect(syft[1]).toBe('docker.io-velero-velero-v1.18.1-b55b90.syft.json');
+  expect(JSON.parse(syft[0]).artifacts).toHaveLength(2);
+  expect(cycloneDx[1]).toBe('docker.io-velero-velero-v1.18.1-b55b90.cdx.json');
+  expect(JSON.parse(cycloneDx[0]).bomFormat).toBe('CycloneDX');
+  expect(csv[1]).toBe('docker.io-velero-velero-v1.18.1-b55b90-packages.csv');
+  expect(csv[0]).toContain(
+    'pkg:golang/golang.org/x/net@v0.38.0,golang.org/x/net,v0.38.0,go-module,'
+  );
 });
 
 it('updates a mounted workload view on a new fetch and drops previous-cluster results', async () => {
@@ -232,9 +549,10 @@ it('updates a mounted workload view on a new fetch and drops previous-cluster re
   view.rerender(<WorkloadDetails />);
   await waitFor(() => expect(valueFor('Image last evaluated').textContent).toBe(T2));
   expect(valueFor('Scan record created').textContent).toBe(T0);
-  expect(mocks.request.mock.calls.slice(3).every(call => call[1].cluster === 'cluster-b')).toBe(
-    true
+  const scanCalls = mocks.request.mock.calls.filter(call =>
+    call[0].includes('softwarecomposition')
   );
+  expect(scanCalls.slice(3).every(call => call[1].cluster === 'cluster-b')).toBe(true);
 });
 
 it('keeps colliding image records separate and associates only their own workloads and links', () => {
@@ -323,6 +641,21 @@ it('retains legacy workload findings and shows Unknown for both evaluation times
   expect(screen.getByText('CVE-1')).toBeTruthy();
 });
 
+it('shows when kubevuln scanned, where its reports have no evaluation time', async () => {
+  const s = summary();
+  s.metadata.annotations = { ...s.metadata.annotations, 'kubescape.io/timestamp': '1793384272' };
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? s : manifest(null)
+  );
+  render(<WorkloadDetails />);
+
+  await waitFor(() =>
+    expect(valueFor('Last scanned').textContent).toBe('2026-10-30T18:17:52.000Z')
+  );
+  expect(screen.queryByText('Image last evaluated')).toBeNull();
+  expect(screen.queryByText('Relevant findings last evaluated')).toBeNull();
+});
+
 it('skips empty references and missing reference containers without fetching reports', async () => {
   const s = summary();
   s.spec.vulnerabilitiesRef.all!.name = '';
@@ -354,6 +687,167 @@ it('keeps workload navigation on the source cluster and uses the relevant SBOM n
     '/cluster-b/workload/workloads/workload-123'
   );
   expect(screen.getByText('SBOM').getAttribute('href')).toBe(
-    '/cluster-b/sbom/relevant-reports/relevant-123'
+    '/cluster-b/sbom/relevant-reports/relevant-123?filtered'
   );
+  expect(screen.getByLabelText('1 High findings').getAttribute('href')).toBe(
+    '/cluster-b/workload/workloads/workload-123?severity=High'
+  );
+});
+
+it('links image severity counts to the findings of that severity', () => {
+  const image = toImageScan(manifest());
+  image.matches = [match('CVE-1'), match('CVE-2')];
+  image.matches[1].vulnerability.severity = 'Critical';
+  const s = summary();
+  render(
+    <ImageList workloadScans={[toWorkloadScan(s, new Map([[getImageScanKey(image), image]]))]} />
+  );
+  expect(screen.getByLabelText('1 High findings').getAttribute('href')).toBe(
+    '/cluster-a/image/reports/image-123?severity=High'
+  );
+  expect(screen.getByLabelText('0 Low findings').getAttribute('href')).toBe(
+    '/cluster-a/image/reports/image-123?severity=Low'
+  );
+});
+
+it('shows only findings of the linked severity, including irrelevant ones', async () => {
+  const all = manifest();
+  all.spec.payload.matches = [match('CVE-1'), match('CVE-2')];
+  all.spec.payload.matches[1].vulnerability.severity = 'Low';
+  mocks.severity = 'Low';
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? summary() : url.endsWith('/image-123') ? all : manifest(T2)
+  );
+  render(<WorkloadDetails />);
+  // CVE-2 is not in the relevant manifest, so the Relevant CVE switch must start off
+  await waitFor(() => expect(screen.getByText('CVE-2')).toBeTruthy());
+  expect(screen.queryByText('CVE-1')).toBeNull();
+  expect(screen.getByText('Only Low findings')).toBeTruthy();
+  expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false);
+});
+
+it('filters image findings by the linked severity', async () => {
+  let receive: (item: any) => void = () => {};
+  mocks.imageGet.mockImplementation((callback: typeof receive) => {
+    receive = callback;
+  });
+  mocks.severity = 'Critical';
+  render(<ImageDetails />);
+  const report = manifest();
+  report.spec.payload.matches = [match('CVE-1'), match('CVE-2')];
+  report.spec.payload.matches[1].vulnerability.severity = 'Critical';
+  await act(async () => receive({ metadata: report.metadata, jsonData: report }));
+  expect(screen.getByText('CVE-2')).toBeTruthy();
+  expect(screen.queryByText('CVE-1')).toBeNull();
+});
+
+it('lists the workloads that run the image, with when it was last scanned', async () => {
+  let receive: (item: any) => void = () => {};
+  mocks.imageGet.mockImplementation((callback: typeof receive) => {
+    receive = callback;
+  });
+  mocks.request.mockImplementation(async (url: string) => ({
+    items: url.includes('vulnerabilitymanifestsummaries?labelSelector=')
+      ? [
+          {
+            metadata: {
+              name: 'deployment-ci-ci',
+              namespace: 'ci',
+              labels: {
+                'kubescape.io/workload-kind': 'deployment',
+                'kubescape.io/workload-name': 'ci',
+                'kubescape.io/workload-namespace': 'ci',
+                'kubescape.io/workload-container-name': 'server',
+              },
+              annotations: { 'kubescape.io/timestamp': '1793384272' },
+            },
+          },
+        ]
+      : [],
+  }));
+  render(<ImageDetails />);
+  const report = manifest(null);
+  report.metadata.labels = { 'kubescape.io/image-id': 'docker-io-ci-sha256-e62c' };
+  await act(async () => receive({ metadata: report.metadata, jsonData: report }));
+
+  const workload = await screen.findByText('ci', { selector: 'a' });
+  expect(workload.getAttribute('href')).toBe('/cluster-a/deployment/ci/ci');
+  expect(screen.getByText('Findings', { selector: 'a' }).getAttribute('href')).toBe(
+    '/cluster-a/workload/ci/deployment-ci-ci'
+  );
+  expect(screen.getByText('server')).toBeTruthy();
+  expect(mocks.request.mock.calls.map(([url]) => decodeURIComponent(url))).toContainEqual(
+    expect.stringContaining('labelSelector=kubescape.io/image-id=docker-io-ci-sha256-e62c')
+  );
+  expect(valueFor('Last scanned').textContent).toBe('2026-10-30T18:17:52.000Z');
+});
+
+it('links the image of a workload to its page and to the tags in its registry', async () => {
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? summary() : manifest()
+  );
+  render(<WorkloadDetails />);
+  const image = await screen.findByText('example:latest', { selector: 'a' });
+  expect(image.getAttribute('href')).toBe('/cluster-a/image/reports/image-123');
+  expect(screen.getByRole('link', { name: /Docker Hub/ }).getAttribute('href')).toBe(
+    'https://hub.docker.com/_/example/tags'
+  );
+});
+
+it('shows the newest version of the image of a workload and the end of its release line', async () => {
+  mocks.lookupImageVersion.mockResolvedValue({
+    latest: { latest: '2.0.1', source: { name: 'GitHub', url: 'https://github.com/o/r/releases' } },
+    line: {
+      product: 'example',
+      name: '1',
+      latest: '1.9.0',
+      eol: true,
+      eolFrom: '2025-01-31',
+      url: 'https://endoflife.date/example',
+    },
+  });
+  const workload = summary();
+  workload.metadata.annotations['kubescape.io/image-tag'] = 'example:1.2.3';
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? workload : manifest()
+  );
+  render(<WorkloadDetails />);
+
+  await waitFor(() => expect(valueFor('Latest version').textContent).toContain('2.0.1'));
+  expect(mocks.lookupImageVersion).toHaveBeenCalledWith('example:1.2.3', {
+    latest: true,
+    endOfLife: true,
+    possiblyPrivate: undefined,
+  });
+  expect(valueFor('Latest version').textContent).toContain(
+    'GitHub has 2.0.1, which is newer than 1.2.3. The newest of 1 is 1.9.0.'
+  );
+  expect(
+    within(valueFor('Latest version') as HTMLElement)
+      .getByRole('link')
+      .getAttribute('href')
+  ).toBe('https://github.com/o/r/releases');
+  expect(valueFor('End of life').textContent).toContain('Ended 2025-01-31');
+  expect(valueFor('End of life').textContent).toContain(
+    'example 1 reached its end of life on 2025-01-31 and gets no more fixes.'
+  );
+});
+
+it('offers a rescan only for workloads whose scan names the workload', async () => {
+  const withWlid = summary();
+  withWlid.metadata.annotations['kubescape.io/wlid'] =
+    'wlid://cluster-prod/namespace-workloads/deployment-workload';
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? withWlid : manifest()
+  );
+  const view = render(<WorkloadDetails />);
+  expect(await screen.findByRole('button', { name: 'Rescan' })).toBeTruthy();
+  view.unmount();
+
+  mocks.request.mockImplementation(async (url: string) =>
+    url.includes('summaries/') ? summary() : manifest()
+  );
+  render(<WorkloadDetails />);
+  await waitFor(() => expect(valueFor('Image last evaluated').textContent).toBe(T1));
+  expect(screen.queryByRole('button', { name: 'Rescan' })).toBeNull();
 });

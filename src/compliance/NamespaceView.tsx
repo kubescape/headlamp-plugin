@@ -4,9 +4,10 @@
 import {
   Link as HeadlampLink,
   SectionBox,
-  Table,
   TableColumn,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { useMemo } from 'react';
+import Table from '../common/Table';
 import { RoutingName, useHLSelectedClusters } from '../index';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 
@@ -37,6 +38,10 @@ export default function NamespaceView(
 ) {
   const clusters = useHLSelectedClusters();
   const { workloadScanData } = props;
+  const namespaceResults = useMemo(
+    () => (workloadScanData ? getNamespaceResults(workloadScanData) : []),
+    [workloadScanData]
+  );
   if (!workloadScanData) {
     return <></>;
   }
@@ -44,7 +49,7 @@ export default function NamespaceView(
   return (
     <SectionBox>
       <Table
-        data={getNamespaceResults(workloadScanData)}
+        data={namespaceResults}
         columns={[
           {
             id: 'Namespace',
@@ -143,17 +148,19 @@ export default function NamespaceView(
 function getNamespaceResults(
   workloadScanData: WorkloadConfigurationScanSummary[]
 ): NamespaceResult[] {
-  const namespaces: NamespaceResult[] = [];
+  // the same namespace in two clusters is two rows
+  const namespaces = new Map<string, NamespaceResult>();
 
   for (const scan of workloadScanData) {
-    let namespaceResult = namespaces.find(ns => ns.namespace === scan.metadata.namespace);
+    const key = `${scan.metadata.cluster}/${scan.metadata.namespace}`;
+    let namespaceResult = namespaces.get(key);
     if (!namespaceResult) {
       namespaceResult = new NamespaceResult(scan.metadata.namespace, scan.metadata.cluster);
-      namespaces.push(namespaceResult);
-      namespaceResult.exceptedNamespace = !workloadScanData
-        .filter(w => w.metadata.namespace === scan.metadata.namespace)
-        .some(w => !w.exceptedByPolicy);
+      // excepted while all its workloads are
+      namespaceResult.exceptedNamespace = true;
+      namespaces.set(key, namespaceResult);
     }
+    if (!scan.exceptedByPolicy) namespaceResult.exceptedNamespace = false;
 
     for (const controlResult of Object.values(scan.spec.controls)) {
       namespaceResult.total++;
@@ -190,5 +197,5 @@ function getNamespaceResults(
     }
   }
 
-  return namespaces;
+  return [...namespaces.values()];
 }

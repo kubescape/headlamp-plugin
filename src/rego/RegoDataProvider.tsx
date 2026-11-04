@@ -30,7 +30,7 @@ const RegoDataContext = createContext<RegoData>({
 // Reset to null on failure so a subsequent mount can retry.
 let cachedPromise: Promise<RegoData> | null = null;
 
-function fetchRegoData(): Promise<RegoData> {
+export function fetchRegoData(): Promise<RegoData> {
   if (cachedPromise) return cachedPromise;
 
   const fetchJson = (baseUrl: string, path: string) =>

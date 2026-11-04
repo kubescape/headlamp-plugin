@@ -1,8 +1,11 @@
 /* 
   List configuration scans for all workloads.  
 */
-import { Link, Table, TableColumn } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { Box, Stack, Tooltip } from '@mui/material';
+import { Link, TableColumn } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { Box, Stack } from '@mui/material';
+import { useMemo } from 'react';
+import { severityColors, SeverityCountStack } from '../common/SeverityCountBox';
+import Table from '../common/Table';
 import { RoutingName, useHLSelectedClusters } from '../index';
 import { FrameWork } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
@@ -17,15 +20,50 @@ export default function KubescapeWorkloadConfigurationScanList(
   const clusters = useHLSelectedClusters();
 
   const { workloadScanData, framework, isFailedControlSwitchChecked } = props;
-  if (!workloadScanData) {
+  // the same rows on every render, so the table does not compute its cells again
+  const workloads = useMemo(
+    () =>
+      workloadScanData && isFailedControlSwitchChecked
+        ? getWorkloadsWithFindings(workloadScanData)
+        : workloadScanData,
+    [workloadScanData, isFailedControlSwitchChecked]
+  );
+  if (!workloadScanData || !workloads) {
     return <></>;
   }
 
-  const workloadsWithFindings = getWorkloadsWithFindings(workloadScanData);
+  const labels = (w: WorkloadConfigurationScanSummary) => w.metadata.labels;
   return (
     <Box>
       <Table
-        data={isFailedControlSwitchChecked ? workloadsWithFindings : workloadScanData}
+        csvExport={{
+          fileName: 'kubescape-compliance-resources.csv',
+          header: [
+            'Name',
+            'Kind',
+            'Namespace',
+            'Cluster',
+            'Excluded',
+            ...Object.keys(severityColors).map(severity => `${severity} failed controls`),
+            'Failed controls',
+          ],
+          rows: () =>
+            workloads.map(w => [
+              labels(w)['kubescape.io/workload-name'],
+              labels(w)['kubescape.io/workload-kind'],
+              labels(w)['kubescape.io/workload-namespace'],
+              w.metadata.cluster,
+              w.exceptedByPolicy ? 'Yes' : 'No',
+              ...Object.keys(severityColors).map(
+                severity =>
+                  failedControls(w).filter(scan => scan.severity.severity === severity).length
+              ),
+              failedControls(w)
+                .map(scan => scan.controlID)
+                .join('; '),
+            ]),
+        }}
+        data={workloads}
         columns={[
           {
             header: 'Name',
@@ -151,45 +189,23 @@ function controlsList(
   }
 }
 
-function resultStack(workloadScan: WorkloadConfigurationScanSummary, framework: FrameWork) {
-  function box(color: string, severity: string) {
-    return (
-      <Box
-        sx={{
-          borderLeft: 2,
-          borderTop: 1,
-          borderRight: 1,
-          borderBottom: 1,
-          borderColor: `gray gray gray ${color}`,
-          textAlign: 'center',
-          width: 20,
-        }}
-      >
-        <Tooltip title={controlsList(workloadScan, framework, severity)}>
-          <Box>
-            {
-              Object.values(workloadScan.spec.controls)
-                .filter(w => !w.exceptedByPolicy)
-                .filter(
-                  scan =>
-                    !scan.exceptedByPolicy &&
-                    scan.status.status === WorkloadConfigurationScanSummary.Status.Failed &&
-                    scan.severity.severity === severity
-                ).length
-            }
-          </Box>
-        </Tooltip>
-      </Box>
-    );
-  }
+// Failed controls of a resource that no exception applies to
+function failedControls(workloadScan: WorkloadConfigurationScanSummary) {
+  return Object.values(workloadScan.spec.controls).filter(
+    scan =>
+      !scan.exceptedByPolicy &&
+      scan.status.status === WorkloadConfigurationScanSummary.Status.Failed
+  );
+}
 
+function resultStack(workloadScan: WorkloadConfigurationScanSummary, framework: FrameWork) {
   return (
-    <Stack direction="row" spacing={1}>
-      {box('purple', 'Critical')}
-      {box('red', 'High')}
-      {box('orange', 'Medium')}
-      {box('yellow', 'Low')}
-    </Stack>
+    <SeverityCountStack
+      count={severity =>
+        failedControls(workloadScan).filter(scan => scan.severity.severity === severity).length
+      }
+      tooltip={severity => controlsList(workloadScan, framework, severity)}
+    />
   );
 }
 

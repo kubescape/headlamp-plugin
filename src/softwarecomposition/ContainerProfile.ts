@@ -7,6 +7,8 @@ export interface ContainerProfile {
     namespace: string;
     labels?: Record<string, string>;
     annotations?: Record<string, string>;
+    creationTimestamp?: string;
+    cluster?: string; // for multi cluster support
   };
   spec?: ContainerProfileSpec;
 }

@@ -1,9 +1,10 @@
 /* 
   Information about a namespace and failed workloads. 
 */
-import { SectionBox, Table, TableColumn } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { SectionBox, TableColumn } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { useMemo } from 'react';
 import { kubescapeConfigStore } from '../common/config-store';
+import Table from '../common/Table';
 import { defaultFrameworkNames, FrameWork, useRegoData } from '../rego';
 import { WorkloadConfigurationScanSummary } from '../softwarecomposition/WorkloadConfigurationScanSummary';
 import { frameworkComplianceScore } from './workload-scanning';

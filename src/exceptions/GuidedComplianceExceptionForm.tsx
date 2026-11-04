@@ -18,6 +18,12 @@ import {
 import { FormControlLabel } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
+import { SetupCheck } from '../common/SetupCheck';
+import {
+  ClusterSecurityException,
+  SecurityException,
+} from '../softwarecomposition/SecurityException';
+import { recordChangeByCurrentUser } from './history';
 import { ContextBadge, MetadataFields, sanitizeName } from './shared';
 
 export interface GuidedComplianceFormProps {
@@ -95,21 +101,24 @@ export function GuidedComplianceExceptionForm(props: Readonly<GuidedComplianceFo
 
     try {
       if (isCluster) {
-        await post('/apis/kubescape.io/v1beta1/clustersecurityexceptions', {
-          apiVersion: 'kubescape.io/v1beta1',
-          kind: 'ClusterSecurityException',
-          metadata: { name },
-          spec,
-        });
+        await post(
+          '/apis/kubescape.io/v1beta1/clustersecurityexceptions',
+          await recordChangeByCurrentUser<ClusterSecurityException>({
+            apiVersion: 'kubescape.io/v1beta1',
+            kind: 'ClusterSecurityException',
+            metadata: { name },
+            spec,
+          })
+        );
       } else {
         await post(
           `/apis/kubescape.io/v1beta1/namespaces/${workloadNamespace}/securityexceptions`,
-          {
+          await recordChangeByCurrentUser<SecurityException>({
             apiVersion: 'kubescape.io/v1beta1',
             kind: 'SecurityException',
             metadata: { name, namespace: workloadNamespace },
             spec,
-          }
+          })
         );
       }
       enqueueSnackbar('Security exception created', { variant: 'success' });
@@ -123,6 +132,7 @@ export function GuidedComplianceExceptionForm(props: Readonly<GuidedComplianceFo
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Create Posture Exception</DialogTitle>
       <DialogContent>
+        <SetupCheck features={['exceptions']} />
         <Stack spacing={2} sx={{ mt: 1 }}>
           <MetadataFields
             name={name}

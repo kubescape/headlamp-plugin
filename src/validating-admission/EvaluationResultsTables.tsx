@@ -3,6 +3,7 @@ import { TabContext, TabList } from '@mui/lab';
 import { Box, Tab, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material';
 import { useState } from 'react';
 import { TabPanel } from '../common/TabPanel';
+import { useDarkMode } from '../common/theme';
 
 interface EvalResult {
   index: number;
@@ -66,7 +67,7 @@ export function EvaluationResultsTables(props: { evaluationResult: EvaluationRes
 function EvaluationResult(props: { results: EvalResult[] }) {
   const { results } = props;
 
-  const bgColor = localStorage.headlampThemePreference === 'dark' ? 'black' : 'white';
+  const bgColor = useDarkMode() ? 'black' : 'white';
 
   return (
     <Box sx={{ pt: 2 }}>

@@ -1,32 +1,39 @@
-import { NameValueTable, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+/*
+  The profile Kubescape learned for a version of a workload: its behaviour and network traffic,
+  as YAML and, for the whole workload, as the diagram of the Network Policies page.
+*/
+import { Router } from '@kinvolk/headlamp-plugin/lib';
+import {
+  NameValueTable,
+  SectionBox,
+  Tabs as HeadlampTabs,
+} from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/KubeObject';
 import Editor from '@monaco-editor/react';
-import { Alert, Typography } from '@mui/material';
+import { Alert, Box, Typography } from '@mui/material';
 import * as yaml from 'js-yaml';
 import { useEffect, useState } from 'react';
+import { useHistory } from 'react-router-dom';
+import { useEditorTheme } from '../common/theme';
 import { getURLSegments } from '../common/url';
-import {
-  applicationProfileClass,
-  containerProfileClass,
-  networkNeighborhoodsClass,
-} from '../model';
+import { RoutingName } from '../index';
+import { applicationProfileClass, containerProfileClass } from '../model';
+import { WorkloadNetworkGraph } from '../networkpolicies/Diagram';
 import { ContainerProfile, getProfileContainers } from '../softwarecomposition/ContainerProfile';
-import {
-  discoverProfileResource,
-  ProfileResource,
-  ProfileView,
-} from '../softwarecomposition/profileApi';
+import { discoverProfileResource, ProfileResource } from '../softwarecomposition/profileApi';
 import { behaviorBaseline, networkBaseline } from './profileViews';
+import { isPartial, workloadOfProfile } from './relearn';
+import { RelearnButton } from './RelearnDialog';
 
-export function ContainerProfileDetail({ view }: Readonly<{ view: ProfileView }>) {
+const { createRouteURL } = Router;
+
+export function ContainerProfileDetail() {
   const [source, setSource] = useState<ProfileResource | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
-    setSource(null);
-    setError('');
-    discoverProfileResource(view)
+    discoverProfileResource('behavior')
       .then(result => {
         if (active) setSource(result);
       })
@@ -36,27 +43,48 @@ export function ContainerProfileDetail({ view }: Readonly<{ view: ProfileView }>
     return () => {
       active = false;
     };
-  }, [view]);
+  }, []);
 
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!source) return <Typography variant="body2">Loading profile API...</Typography>;
 
-  return <ResolvedProfileDetail key={source.plural} view={view} source={source} />;
+  return <ResolvedProfileDetail key={source.plural} source={source} />;
 }
 
-function ResolvedProfileDetail({
-  view,
-  source,
-}: Readonly<{ view: ProfileView; source: ProfileResource }>) {
+function YamlEditor(props: Readonly<{ value: unknown }>) {
+  const editorTheme = useEditorTheme();
+  return (
+    <Box sx={{ pt: 2 }}>
+      <Editor
+        language="yaml"
+        theme={editorTheme}
+        value={yaml.dump(props.value)}
+        height="60vh"
+        options={{
+          readOnly: true,
+          lineNumbers: 'off',
+          automaticLayout: true,
+          minimap: { enabled: false },
+        }}
+      />
+    </Box>
+  );
+}
+
+function count(containers: ReturnType<typeof getProfileContainers>, field: string) {
+  return String(containers.reduce((n, c) => n + ((c as any)[field]?.length ?? 0), 0));
+}
+
+function ResolvedProfileDetail({ source }: Readonly<{ source: ProfileResource }>) {
   const [name, namespace] = getURLSegments(-1, -2);
+  const history = useHistory();
   const [item, setItem] = useState<KubeObject | null>(null);
   const [error, setError] = useState('');
+  // the graph is laid out once it is shown, so it is only drawn on its tab
+  const [tab, setTab] = useState(0);
 
-  const resourceClass = source.modern
-    ? containerProfileClass
-    : view === 'behavior'
-    ? applicationProfileClass
-    : networkNeighborhoodsClass;
+  // older Storage releases keep the behaviour in an ApplicationProfile of its own
+  const resourceClass = source.modern ? containerProfileClass : applicationProfileClass;
   resourceClass.useApiGet(
     object => {
       setItem(object);
@@ -72,80 +100,96 @@ function ResolvedProfileDetail({
 
   const profile = item.jsonData as ContainerProfile;
   const containers = getProfileContainers(profile);
-  const behavior = view === 'behavior';
-  const baseline = source.modern
-    ? behavior
-      ? behaviorBaseline(profile)
-      : networkBaseline(profile)
-    : profile;
+  const workload = workloadOfProfile(profile);
+
+  const tabs = [
+    {
+      label: 'Behaviour',
+      component: <YamlEditor value={source.modern ? behaviorBaseline(profile) : profile} />,
+    },
+    ...(workload
+      ? [
+          {
+            label: 'Network graph',
+            render: () => (
+              <WorkloadNetworkGraph
+                kind={workload.kind}
+                name={workload.name}
+                namespace={workload.namespace}
+                cluster={profile.metadata.cluster}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(source.modern
+      ? [
+          { label: 'Network', component: <YamlEditor value={networkBaseline(profile)} /> },
+          { label: 'Full YAML', component: <YamlEditor value={profile} /> },
+        ]
+      : []),
+  ].map((entry: any, index) => ({
+    label: entry.label,
+    component: entry.render ? (tab === index ? entry.render() : null) : entry.component,
+  }));
 
   return (
-    <>
-      <SectionBox title={behavior ? 'Application Profile' : 'Network Neighborhood'} backLink>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          {behavior ? 'Behavior' : 'Network'} baseline from{' '}
-          {source.modern ? 'ContainerProfile' : resourceClass.kind} {profile.metadata.name}.
-        </Typography>
-        <NameValueTable
-          rows={[
-            {
-              name: 'Workload',
-              value:
-                profile.metadata.labels?.['kubescape.io/workload-name'] ?? profile.metadata.name,
-            },
-            {
-              name: 'Kind',
-              value: profile.metadata.labels?.['kubescape.io/workload-kind'] ?? '—',
-            },
-            { name: 'Namespace', value: profile.metadata.namespace },
-            {
-              name: 'Containers',
-              value: containers.map(container => container.name).join(', ') || '—',
-            },
-            { name: 'Status', value: profile.metadata.annotations?.['kubescape.io/status'] ?? '—' },
-            ...(behavior
-              ? [
-                  {
-                    name: 'Execs',
-                    value: String(containers.reduce((n, c) => n + (c.execs?.length ?? 0), 0)),
-                  },
-                  {
-                    name: 'Opens',
-                    value: String(containers.reduce((n, c) => n + (c.opens?.length ?? 0), 0)),
-                  },
-                ]
-              : [
-                  {
-                    name: 'Ingress',
-                    value: String(containers.reduce((n, c) => n + (c.ingress?.length ?? 0), 0)),
-                  },
-                  {
-                    name: 'Egress',
-                    value: String(containers.reduce((n, c) => n + (c.egress?.length ?? 0), 0)),
-                  },
-                ]),
-          ]}
-        />
-      </SectionBox>
-      <Editor
-        language="yaml"
-        theme={localStorage.headlampThemePreference === 'dark' ? 'vs-dark' : ''}
-        value={yaml.dump(baseline)}
-        height="60vh"
-        width="60vw"
-        options={{
-          readOnly: true,
-          lineNumbers: 'off',
-          automaticLayout: true,
-          minimap: { enabled: false },
-        }}
+    <SectionBox
+      title="Application Profile"
+      backLink
+      headerProps={{
+        actions: [
+          <RelearnButton
+            key="relearn"
+            text
+            profile={profile}
+            source={source}
+            // the profile is gone or no longer used
+            onDone={() => history.push(createRouteURL(RoutingName.ApplicationProfiles))}
+          />,
+        ],
+      }}
+    >
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        What Kubescape learned from {source.modern ? 'ContainerProfile' : resourceClass.kind}{' '}
+        {profile.metadata.name}.
+      </Typography>
+      <NameValueTable
+        rows={[
+          {
+            name: 'Workload',
+            value: profile.metadata.labels?.['kubescape.io/workload-name'] ?? profile.metadata.name,
+          },
+          {
+            name: 'Kind',
+            value: profile.metadata.labels?.['kubescape.io/workload-kind'] ?? '—',
+          },
+          { name: 'Namespace', value: profile.metadata.namespace },
+          {
+            name: 'Containers',
+            value: containers.map(container => container.name).join(', ') || '—',
+          },
+          { name: 'Status', value: profile.metadata.annotations?.['kubescape.io/status'] ?? '—' },
+          ...(isPartial(profile)
+            ? [
+                {
+                  name: 'Completion',
+                  value:
+                    'Partial: Kubescape began to watch the container after it had started, so it did not learn the start',
+                },
+              ]
+            : []),
+          { name: 'Execs', value: count(containers, 'execs') },
+          { name: 'Opens', value: count(containers, 'opens') },
+          ...(source.modern
+            ? [
+                { name: 'Ingress', value: count(containers, 'ingress') },
+                { name: 'Egress', value: count(containers, 'egress') },
+              ]
+            : []),
+        ]}
       />
-      {source.modern && (
-        <details>
-          <summary>Full ContainerProfile YAML</summary>
-          <pre style={{ maxHeight: '50vh', overflow: 'auto' }}>{yaml.dump(profile)}</pre>
-        </details>
-      )}
-    </>
+      <HeadlampTabs tabs={tabs} onTabChanged={setTab} ariaLabel="Profile views" />
+    </SectionBox>
   );
 }

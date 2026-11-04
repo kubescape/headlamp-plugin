@@ -1,25 +1,28 @@
 import { Icon } from '@iconify/react';
 import { remove } from '@kinvolk/headlamp-plugin/lib/ApiProxy';
-import {
-  Link as HeadlampLink,
-  SectionBox,
-  Table,
-} from '@kinvolk/headlamp-plugin/lib/CommonComponents';
+import { Link as HeadlampLink, SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { KubeObject } from '@kinvolk/headlamp-plugin/lib/k8s/cluster';
-import { Button, IconButton, Tooltip } from '@mui/material';
+import { Button } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
+import { AccessCheck, PermittedIconButton } from '../common/permissions';
+import { SetupCheck } from '../common/SetupCheck';
+import Table from '../common/Table';
 import { RoutingName } from '../index';
 import { clusterSecurityExceptionClass, securityExceptionClass } from '../model';
 import {
   ClusterSecurityException,
   SecurityException,
 } from '../softwarecomposition/SecurityException';
+import { exceptionHistory } from './history';
 import { SecurityExceptionForm } from './SecurityExceptionForm';
 
 interface Row {
   name: string;
   namespace: string;
+  author: string;
+  // who changed the exception last, according to its history
+  lastChange: string;
   reason: string;
   expiresAt: string;
   postureCount: number;
@@ -29,11 +32,30 @@ interface Row {
   obj: KubeObject;
 }
 
+// Changing or deleting the exception of the row
+function exceptionCheck(row: Row, verb: 'update' | 'delete'): AccessCheck {
+  return row.isCluster
+    ? { group: 'kubescape.io', resource: 'clustersecurityexceptions', verb, name: row.name }
+    : {
+        group: 'kubescape.io',
+        resource: 'securityexceptions',
+        verb,
+        namespace: row.namespace,
+        name: row.name,
+      };
+}
+
 function toRow(obj: KubeObject, isCluster: boolean): Row {
   const spec = obj.jsonData?.spec ?? {};
+  const lastEntry = exceptionHistory(obj.jsonData).at(-1);
   return {
     name: obj.metadata.name,
     namespace: isCluster ? 'Cluster-scoped' : obj.metadata.namespace ?? '',
+    author: spec.author ?? '',
+    lastChange:
+      lastEntry?.action === 'changed'
+        ? `${lastEntry.user ?? 'unknown user'}, ${new Date(lastEntry.time).toLocaleString()}`
+        : '',
     reason: spec.reason ?? '',
     expiresAt: spec.expiresAt ?? '',
     postureCount: spec.posture?.length ?? 0,
@@ -93,6 +115,7 @@ export function SecurityExceptions() {
         ],
       }}
     >
+      <SetupCheck features={['exceptions']} />
       <Table
         data={rows}
         columns={[
@@ -121,6 +144,14 @@ export function SecurityExceptions() {
             accessorKey: 'namespace',
           },
           {
+            header: 'Author',
+            accessorKey: 'author',
+          },
+          {
+            header: 'Last changed by',
+            accessorKey: 'lastChange',
+          },
+          {
             header: 'Reason',
             accessorKey: 'reason',
           },
@@ -134,6 +165,7 @@ export function SecurityExceptions() {
               return (
                 <span style={expired ? { color: 'red', fontWeight: 'bold' } : {}}>
                   {new Date(val).toLocaleDateString()}
+                  {expired && ' (expired, no longer applied)'}
                 </span>
               );
             },
@@ -162,16 +194,20 @@ export function SecurityExceptions() {
             header: '',
             accessorFn: (row: Row) => (
               <>
-                <Tooltip title="Edit">
-                  <IconButton size="small" onClick={() => setEditObj(row.obj)}>
-                    <Icon icon="mdi:pencil" />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Delete">
-                  <IconButton size="small" onClick={() => handleDelete(row)}>
-                    <Icon icon="mdi:delete" />
-                  </IconButton>
-                </Tooltip>
+                <PermittedIconButton
+                  check={exceptionCheck(row, 'update')}
+                  title="Edit"
+                  onClick={() => setEditObj(row.obj)}
+                >
+                  <Icon icon="mdi:pencil" />
+                </PermittedIconButton>
+                <PermittedIconButton
+                  check={exceptionCheck(row, 'delete')}
+                  title="Delete"
+                  onClick={() => handleDelete(row)}
+                >
+                  <Icon icon="mdi:delete" />
+                </PermittedIconButton>
               </>
             ),
             gridTemplate: 'auto',

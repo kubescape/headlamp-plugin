@@ -6,10 +6,11 @@ import {
   Link as HeadlampLink,
   NameValueTable,
   SectionBox,
-  Table as HeadlampTable,
 } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { IconButton, Link, Tooltip } from '@mui/material';
+import { Link } from '@mui/material';
 import { useState } from 'react';
+import { createExceptionCheck, PermittedIconButton } from '../common/permissions';
+import HeadlampTable from '../common/Table';
 import { getURLSegments } from '../common/url';
 import { GuidedVulnerabilityExceptionForm } from '../exceptions/GuidedVulnerabilityExceptionForm';
 import { RoutingName } from '../index';
@@ -129,11 +130,14 @@ function Workloads(props: Readonly<{ cve: string; workloads: WorkloadScan[] }>) 
           {
             header: '',
             accessorFn: (workload: WorkloadScan) => (
-              <Tooltip title="Create Security Exception">
-                <IconButton size="small" onClick={() => setExceptionFormWorkload(workload)}>
-                  <Icon icon="mdi:shield-plus-outline" />
-                </IconButton>
-              </Tooltip>
+              <PermittedIconButton
+                check={createExceptionCheck(workload.namespace)}
+                cluster={workload.cluster}
+                title="Create Security Exception"
+                onClick={() => setExceptionFormWorkload(workload)}
+              >
+                <Icon icon="mdi:shield-plus-outline" />
+              </PermittedIconButton>
             ),
             gridTemplate: 'auto',
           },
@@ -141,7 +145,7 @@ function Workloads(props: Readonly<{ cve: string; workloads: WorkloadScan[] }>) 
       />
       {exceptionFormWorkload && (
         <GuidedVulnerabilityExceptionForm
-          cveId={cve}
+          cveIds={[cve]}
           imageRef={exceptionFormWorkload.imageScan?.imageName}
           workloadName={exceptionFormWorkload.name}
           workloadNamespace={exceptionFormWorkload.namespace}
