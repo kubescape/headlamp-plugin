@@ -125,53 +125,64 @@ function FrameworkEditor(
     if (!frameworkControls || frameworkControls.length === 0) {
       return setErrorMessage('Select one or more controls');
     }
-    if (!(await checkUniqueness(framework.name, configMap?.metadata.uid, 'framework'))) {
-      return setErrorMessage('Please provide a unique name for the framework.');
-    }
+    try {
+      if (!(await checkUniqueness(framework.name, configMap?.metadata.uid, 'framework'))) {
+        return setErrorMessage('Please provide a unique name for the framework.');
+      }
 
-    function updateConfigMapData(configMap: KubeConfigMap) {
-      configMap.data = {
-        name: framework.name,
-        description: framework.description ?? '',
-        controlsIDs: JSON.stringify(frameworkControls.map(c => c.controlID)),
-      };
-    }
+      function updateConfigMapData(configMap: KubeConfigMap) {
+        configMap.data = {
+          name: framework.name,
+          description: framework.description ?? '',
+          controlsIDs: JSON.stringify(frameworkControls.map(c => c.controlID)),
+        };
+      }
 
-    if (!configMap?.metadata.uid) {
-      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      if (!configMap?.metadata.uid) {
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        // The name passed the check above, so this only leaves lowercase letters, digits and
+        // dashes. Label values are limited to 63 characters and must end alphanumeric.
+        const kubernetesName = framework.name
+          .toLocaleLowerCase()
+          .replace(/\s+/g, '-')
+          .substring(0, 63)
+          .replace(/-+$/, '');
 
-      const configMapNew: KubeConfigMap = {
-        apiVersion: 'v1',
-        kind: 'ConfigMap',
-        metadata: {
-          creationTimestamp: new Date().toISOString(),
-          uid: '',
-          name: `${framework.name.replace(' ', '')?.toLocaleLowerCase()}-framework-${randomSuffix}`,
-          namespace: kubeScapeNamespace,
-          labels: {
-            [customObjectLabel]: 'framework',
-            'app.kubernetes.io/name': framework.name,
-            'app.kubernetes.io/managed-by': 'headlamp',
+        const configMapNew: KubeConfigMap = {
+          apiVersion: 'v1',
+          kind: 'ConfigMap',
+          metadata: {
+            creationTimestamp: new Date().toISOString(),
+            uid: '',
+            name: `${kubernetesName}-framework-${randomSuffix}`,
+            namespace: kubeScapeNamespace,
+            labels: {
+              [customObjectLabel]: 'framework',
+              'app.kubernetes.io/name': kubernetesName,
+              'app.kubernetes.io/managed-by': 'headlamp',
+            },
           },
-        },
-        data: {},
-      };
-      updateConfigMapData(configMapNew);
-      const configMapUpdated = await post(
-        `/api/v1/namespaces/${configMapNew.metadata.namespace}/configmaps`,
-        configMapNew
-      );
-      setConfigMap(configMapUpdated);
-    } else {
-      updateConfigMapData(configMap);
-      const configMapUpdated = await put(
-        `/api/v1/namespaces/${configMap.metadata.namespace}/configmaps/${configMap.metadata.name}`,
-        configMap
-      );
-      setConfigMap(configMapUpdated);
+          data: {},
+        };
+        updateConfigMapData(configMapNew);
+        const configMapUpdated = await post(
+          `/api/v1/namespaces/${configMapNew.metadata.namespace}/configmaps`,
+          configMapNew
+        );
+        setConfigMap(configMapUpdated);
+      } else {
+        updateConfigMapData(configMap);
+        const configMapUpdated = await put(
+          `/api/v1/namespaces/${configMap.metadata.namespace}/configmaps/${configMap.metadata.name}`,
+          configMap
+        );
+        setConfigMap(configMapUpdated);
+      }
+      enqueueSnackbar(`${framework.name} saved successfully`, { variant: 'success' });
+      setErrorMessage('');
+    } catch (err: any) {
+      setErrorMessage(`Failed to save ${framework.name}: ${err?.message ?? err}`);
     }
-    enqueueSnackbar(`${framework.name} saved successfully`, { variant: 'success' });
-    setErrorMessage('');
   };
 
   const handleDownload = async () => {
